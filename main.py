@@ -4,12 +4,14 @@ from core.logger_config import logger
 from core.config import config
 from core.automator import WarpAutomator
 from core.audio_engine import get_audio_stream, load_wakeword_model
+from core.ui import JarvisUI
 
 def main():
     # Initialize components
     automator = WarpAutomator(config)
     model, wakeword_name = load_wakeword_model()
     pa, stream = get_audio_stream()
+    ui = JarvisUI(wakeword_name)
     
     logger.info(f"Jarvis is listening for '{wakeword_name}'...")
     
@@ -19,40 +21,57 @@ def main():
     cooldown_seconds = config.get('cooldown_seconds', 5)
 
     try:
-        while True:
-            try:
-                # Read audio from microphone
+        with ui.get_live() as live:
+            while True:
                 try:
-                    audio_data = stream.read(1280, exception_on_overflow=False)
-                    pcm = np.frombuffer(audio_data, dtype=np.int16)
+                    # Update UI status
+                    current_status = "Listening" if time.time() > cooldown else "Cooldown"
+                    ui.update(status=current_status)
 
-                    # Apply volume multiplier
-                    if volume_multiplier != 1.0:
-                        pcm = (pcm * volume_multiplier).clip(-32768, 32767).astype(np.int16)
-
-                except Exception as e:
-                    logger.error(f"Microphone stream error: {e}. Attempting to reconnect...")
+                    # Read audio from microphone
                     try:
-                        stream.stop_stream()
-                        stream.close()
-                    except:
-                        pass
-                    time.sleep(2)
-                    _, stream = get_audio_stream()
-                    continue
+                        audio_data = stream.read(1280, exception_on_overflow=False)
+                        pcm = np.frombuffer(audio_data, dtype=np.int16)
 
-                # Prediction
-                prediction = model.predict(pcm)
-                hey_jarvis_key = next((k for k in prediction.keys() if wakeword_name in k), None)
+                        # Apply volume multiplier
+                        if volume_multiplier != 1.0:
+                            pcm = (pcm * volume_multiplier).clip(-32768, 32767).astype(np.int16)
 
-                if hey_jarvis_key and prediction[hey_jarvis_key] > threshold and time.time() > cooldown:
-                    logger.info(f"Wake word detected! (Score: {prediction[hey_jarvis_key]:.2f})")
-                    automator.run_workflow()
-                    cooldown = time.time() + cooldown_seconds
+                        # Update UI volume
+                        ui.update(volume=pcm)
+
+                    except Exception as e:
+                        logger.error(f"Microphone stream error: {e}. Attempting to reconnect...")
+                        ui.update(status="Stream Error")
+                        try:
+                            stream.stop_stream()
+                            stream.close()
+                        except:
+                            pass
+                        time.sleep(2)
+                        _, stream = get_audio_stream()
+                        continue
+
+                    # Prediction
+                    prediction = model.predict(pcm)
+                    hey_jarvis_key = next((k for k in prediction.keys() if wakeword_name in k), None)
                     
-            except Exception as e:
-                logger.error(f"Unexpected error in loop: {e}")
-                time.sleep(1)
+                    score = 0.0
+                    if hey_jarvis_key:
+                        score = float(prediction[hey_jarvis_key])
+                    
+                    ui.update(score=score)
+
+                    if hey_jarvis_key and score > threshold and time.time() > cooldown:
+                        logger.info(f"Wake word detected! (Score: {score:.2f})")
+                        ui.update(status="Detected!", score=score)
+                        automator.run_workflow()
+                        cooldown = time.time() + cooldown_seconds
+                        
+                except Exception as e:
+                    logger.error(f"Unexpected error in loop: {e}")
+                    ui.update(status="Loop Error")
+                    time.sleep(1)
 
     except KeyboardInterrupt:
         logger.info("Stopping Jarvis...")
