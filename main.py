@@ -8,10 +8,31 @@ from core.ui import JarvisUI
 from core.notifications import JarvisNotifier
 from core.tray import JarvisTray
 import threading
+import queue
+
+def command_worker(task_queue, automator, notifier, stop_event):
+    """Worker thread that executes commands from the queue."""
+    while not stop_event.is_set():
+        try:
+            # Wait for a task with a timeout to allow checking the stop_event
+            score = task_queue.get(timeout=1.0)
+            
+            # Show notification
+            notifier.notify("Jarvis", f"I'm on it! (Score: {score:.2f})")
+            
+            # Execute the heavy workflow in this thread
+            automator.run_workflow()
+            
+            task_queue.task_done()
+        except queue.Empty:
+            continue
+        except Exception as e:
+            logger.error(f"Error in command worker: {e}")
 
 def main():
     # Stop event for thread synchronization
     stop_event = threading.Event()
+    task_queue = queue.Queue()
     
     def on_stop():
         stop_event.set()
@@ -23,6 +44,14 @@ def main():
     ui = JarvisUI(wakeword_name)
     notifier = JarvisNotifier()
     tray = JarvisTray(on_stop_callback=on_stop)
+    
+    # Start Worker Thread for commands
+    worker_thread = threading.Thread(
+        target=command_worker, 
+        args=(task_queue, automator, notifier, stop_event),
+        daemon=True
+    )
+    worker_thread.start()
     
     # Start Tray in background
     tray.start()
@@ -39,7 +68,7 @@ def main():
             while not stop_event.is_set():
                 try:
                     # Update UI status
-                    current_status = "Listening" if time.time() > cooldown else "Cooldown"
+                    current_status = "Listening" if time.time() > cooldown else "Cooldown/Executing"
                     ui.update(status=current_status)
 
                     # Read audio from microphone
@@ -82,10 +111,10 @@ def main():
                         logger.info(f"Wake word detected! (Score: {score:.2f})")
                         ui.update(status="Detected!", score=score)
                         
-                        # Show notification
-                        notifier.notify("Jarvis", f"I'm on it! (Score: {score:.2f})")
+                        # Add task to queue instead of running synchronously
+                        task_queue.put(score)
                         
-                        automator.run_workflow()
+                        # Cooldown still applies to avoid double detection
                         cooldown = time.time() + cooldown_seconds
                         
                 except Exception as e:
@@ -101,6 +130,7 @@ def main():
     finally:
         # Cleanup
         logger.info("Cleaning up...")
+        stop_event.set()
         tray.stop()
         try:
             stream.stop_stream()
