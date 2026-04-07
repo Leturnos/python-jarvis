@@ -67,93 +67,120 @@ stream = start_stream()
 
 logger.info("Jarvis is listening for 'hey jarvis'...")
 
-warp_path = config['warp_path']
+class WarpAutomator:
+    def __init__(self, config):
+        self.config = config
+        self.warp_path = config['warp_path']
+        self.commands = config['commands']
 
-def warp_aberto():
-    try:
-        for p in psutil.process_iter(['name']):
-            if p.info['name'] and "warp" in p.info['name'].lower():
-                return True
-    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-        pass
-    return False
-
-import win32process
-
-def encontrar_janela_warp():
-    try:
-        # 1. Pegar todos os PIDs de processos que são "warp"
-        warp_pids = set()
-        for p in psutil.process_iter(['pid', 'name']):
-            if p.info['name'] and "warp" in p.info['name'].lower():
-                warp_pids.add(p.info['pid'])
-        
-        if not warp_pids:
-            return None
-
-        # 2. Procurar uma janela que pertença a um desses PIDs
-        for w in gw.getAllWindows():
-            if w._hWnd:
-                try:
-                    _, pid = win32process.GetWindowThreadProcessId(w._hWnd)
-                    if pid in warp_pids and w.title:
-                        # Filtra janelas fantasmas ou sem título (opcional)
-                        return w
-                except:
-                    continue
-    except Exception as e:
-        logger.error(f"Error searching for Warp window: {e}")
-                
-    # fallback para busca por título se o método por PID falhar
-    palavras_chave = ('warp', 'ready', 'working', 'mvp')
-    for w in gw.getAllWindows():
-        if w.title and any(kw in w.title.lower() for kw in palavras_chave):
-            return w
-            
-    return None
-
-def ativar_janela(win):
-    try:
-        # Usar win32gui diretamente para restaurar — mais confiável que win.restore()
-        hwnd = win._hWnd
-        
-        # Se estiver minimizada, restaura
-        if win32gui.IsIconic(hwnd):
-            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        else:
-            win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-        
-        time.sleep(0.5)
-
+    def is_open(self):
         try:
-            # Truque para permitir SetForegroundWindow: simular pressionar a tecla ALT
-            import win32com.client
-            shell = win32com.client.Dispatch("WScript.Shell")
-            shell.SendKeys('%') 
+            for p in psutil.process_iter(['name']):
+                if p.info['name'] and "warp" in p.info['name'].lower():
+                    return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+        return False
+
+    def find_window(self):
+        try:
+            # 1. Get all PIDs for processes named "warp"
+            warp_pids = set()
+            for p in psutil.process_iter(['pid', 'name']):
+                if p.info['name'] and "warp" in p.info['name'].lower():
+                    warp_pids.add(p.info['pid'])
             
-            win32gui.SetForegroundWindow(hwnd)
+            if not warp_pids:
+                return None
+
+            # 2. Search for a window belonging to one of these PIDs
+            import win32process
+            for w in gw.getAllWindows():
+                if w._hWnd:
+                    try:
+                        _, pid = win32process.GetWindowThreadProcessId(w._hWnd)
+                        if pid in warp_pids and w.title:
+                            return w
+                    except:
+                        continue
         except Exception as e:
-            logger.warning(f"Erro ao dar foco via SetForegroundWindow: {e}")
-            win.activate()
+            logger.error(f"Error searching for Warp window: {e}")
+                    
+        # Fallback to title search
+        palavras_chave = ('warp', 'ready', 'working', 'mvp')
+        for w in gw.getAllWindows():
+            if w.title and any(kw in w.title.lower() for kw in palavras_chave):
+                return w
+                
+        return None
 
-        time.sleep(0.4)
+    def activate_window(self, win):
+        try:
+            hwnd = win._hWnd
+            
+            if win32gui.IsIconic(hwnd):
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            else:
+                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+            
+            time.sleep(0.5)
 
-        # Clicar no centro para garantir foco no terminal
-        centro_x = win.left + win.width // 2
-        centro_y = win.top + win.height // 2
-        pyautogui.click(centro_x, centro_y)
-        time.sleep(0.3)
-    except Exception as e:
-        logger.error(f"Error activating window: {e}")
+            try:
+                import win32com.client
+                shell = win32com.client.Dispatch("WScript.Shell")
+                shell.SendKeys('%') 
+                win32gui.SetForegroundWindow(hwnd)
+            except Exception as e:
+                logger.warning(f"Focus error: {e}")
+                win.activate()
 
-def digitar(texto):
-    """Cola texto via clipboard — resolve problemas com caracteres especiais como \\"""
-    try:
-        pyperclip.copy(texto)
-        pyautogui.hotkey('ctrl', 'v')
-        time.sleep(0.2)
-    except Exception as e:
-        logger.error(f"Error typing text: {e}")
+            time.sleep(0.4)
+            centro_x = win.left + win.width // 2
+            centro_y = win.top + win.height // 2
+            pyautogui.click(centro_x, centro_y)
+            time.sleep(0.3)
+            return True
+        except Exception as e:
+            logger.error(f"Error activating window: {e}")
+            return False
+
+    def type_text(self, text):
+        try:
+            pyperclip.copy(text)
+            pyautogui.hotkey('ctrl', 'v')
+            time.sleep(0.2)
+        except Exception as e:
+            logger.error(f"Error typing text: {e}")
+
+    def run_workflow(self):
+        if not self.is_open():
+            logger.info("Opening Warp...")
+            subprocess.Popen(self.warp_path)
+            time.sleep(4)
+
+        if self.is_open():
+            win = self.find_window()
+            if win:
+                logger.info(f"Activating window: {win.title}")
+                if self.activate_window(win):
+                    # Open new tab
+                    pyautogui.hotkey('ctrl', 'shift', 't')
+                    time.sleep(0.8)
+
+                    try:
+                        for cmd in self.commands:
+                            self.type_text(cmd)
+                            pyautogui.press("enter")
+                            time.sleep(0.5)
+                        logger.info("Commands executed successfully.")
+                    except Exception as e:
+                        logger.error(f"Error executing commands: {e}")
+            else:
+                logger.warning("Warp window not found.")
+        else:
+            logger.warning("Warp did not open in time.")
+
+automator = WarpAutomator(config)
 
 cooldown = 0
 
@@ -181,36 +208,7 @@ while True:
 
         if hey_jarvis_key and prediction[hey_jarvis_key] > config['threshold'] and time.time() > cooldown:
             logger.info(f"Jarvis detected! (Score: {prediction[hey_jarvis_key]:.2f})")
-
-            if not warp_aberto():
-                logger.info("Opening Warp...")
-                subprocess.Popen(warp_path)
-                time.sleep(4)
-
-            if warp_aberto():
-                win = encontrar_janela_warp()
-
-                if win:
-                    logger.info(f"Activating window: {win.title}")
-                    ativar_janela(win)
-
-                    # Abrir nova aba
-                    pyautogui.hotkey('ctrl', 'shift', 't')
-                    time.sleep(0.8)
-
-                    try:
-                        for cmd in config['commands']:
-                            digitar(cmd)
-                            pyautogui.press("enter")
-                            time.sleep(0.5)
-                        logger.info("Commands executed successfully.")
-                    except Exception as e:
-                        logger.error(f"Error executing commands in Warp: {e}")
-                else:
-                    logger.warning("Warp window not found.")
-            else:
-                logger.warning("Warp did not open in time, skipping commands.")
-
+            automator.run_workflow()
             cooldown = time.time() + config['cooldown_seconds']
             
     except KeyboardInterrupt:
