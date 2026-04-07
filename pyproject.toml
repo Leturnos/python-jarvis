@@ -1,0 +1,16 @@
+[project]
+name = "python-jarvis"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.4.4",
+    "openwakeword>=0.4.0",
+    "psutil>=7.2.2",
+    "pyaudio>=0.2.14",
+    "pyautogui>=0.9.54",
+    "pygetwindow>=0.0.9",
+    "pyperclip>=1.11.0",
+    "pywin32>=311",
+]
