@@ -80,25 +80,20 @@ class WarpAutomator:
         self.config = config
         self.warp_path = config['warp_path']
         self.commands = config['commands']
-        
-        # Initialize TTS engine
-        try:
-            self.engine = pyttsx3.init()
-            # Set voice properties
-            self.engine.setProperty('rate', 180) 
-            self.engine.setProperty('volume', 0.9)
-        except Exception as e:
-            logger.error(f"Error initializing TTS engine: {e}")
-            self.engine = None
 
     def speak(self, text):
-        if self.engine:
-            logger.info(f"Jarvis says: {text}")
-            try:
-                self.engine.say(text)
-                self.engine.runAndWait()
-            except Exception as e:
-                logger.error(f"TTS error: {e}")
+        logger.info(f"Jarvis says: {text}")
+        try:
+            # Criar uma instância temporária para cada fala (evita travar no Windows)
+            engine = pyttsx3.init()
+            engine.setProperty('rate', 190)
+            engine.setProperty('volume', 1.0)
+            engine.say(text)
+            engine.runAndWait()
+            # Tenta encerrar o motor para liberar o recurso de áudio
+            del engine
+        except Exception as e:
+            logger.error(f"TTS error: {e}")
 
     def is_open(self):
         try:
