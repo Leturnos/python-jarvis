@@ -14,13 +14,28 @@ import win32con
 
 import yaml
 
+import logging
+import os
+
+# Configuração de Logging
+log_format = "%(asctime)s - %(levelname)s - %(message)s"
+logging.basicConfig(
+    level=logging.INFO,
+    format=log_format,
+    handlers=[
+        logging.FileHandler("jarvis.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("Jarvis")
+
 # Load configuration from config.yaml
 def load_config():
     try:
         with open("config.yaml", "r") as f:
             return yaml.safe_load(f)
     except Exception as e:
-        print(f"Error loading config.yaml: {e}")
+        logger.error(f"Error loading config.yaml: {e}")
         return {
             'warp_path': r"C:\Users\Leandro\AppData\Local\Programs\Warp\Warp.exe",
             'threshold': 0.4,
@@ -50,7 +65,7 @@ def start_stream():
 
 stream = start_stream()
 
-print("Ouvindo por 'hey jarvis'...")
+logger.info("Jarvis is listening for 'hey jarvis'...")
 
 warp_path = config['warp_path']
 
@@ -87,7 +102,7 @@ def encontrar_janela_warp():
                 except:
                     continue
     except Exception as e:
-        print(f"Error searching for Warp window: {e}")
+        logger.error(f"Error searching for Warp window: {e}")
                 
     # fallback para busca por título se o método por PID falhar
     palavras_chave = ('warp', 'ready', 'working', 'mvp')
@@ -118,7 +133,7 @@ def ativar_janela(win):
             
             win32gui.SetForegroundWindow(hwnd)
         except Exception as e:
-            print(f"Aviso: Erro ao dar foco via SetForegroundWindow: {e}")
+            logger.warning(f"Erro ao dar foco via SetForegroundWindow: {e}")
             win.activate()
 
         time.sleep(0.4)
@@ -129,7 +144,7 @@ def ativar_janela(win):
         pyautogui.click(centro_x, centro_y)
         time.sleep(0.3)
     except Exception as e:
-        print(f"Error activating window: {e}")
+        logger.error(f"Error activating window: {e}")
 
 def digitar(texto):
     """Cola texto via clipboard — resolve problemas com caracteres especiais como \\"""
@@ -138,7 +153,7 @@ def digitar(texto):
         pyautogui.hotkey('ctrl', 'v')
         time.sleep(0.2)
     except Exception as e:
-        print(f"Error typing text: {e}")
+        logger.error(f"Error typing text: {e}")
 
 cooldown = 0
 
@@ -149,7 +164,7 @@ while True:
             audio_data = stream.read(1280, exception_on_overflow=False)
             pcm = np.frombuffer(audio_data, dtype=np.int16)
         except Exception as e:
-            print(f"Microphone stream error: {e}. Attempting to reconnect...")
+            logger.error(f"Microphone stream error: {e}. Attempting to reconnect...")
             try:
                 stream.stop_stream()
                 stream.close()
@@ -165,10 +180,10 @@ while True:
         hey_jarvis_key = next((k for k in prediction.keys() if "hey_jarvis" in k), None)
 
         if hey_jarvis_key and prediction[hey_jarvis_key] > config['threshold'] and time.time() > cooldown:
-            print(f"Jarvis detectado! (Score: {prediction[hey_jarvis_key]:.2f})")
+            logger.info(f"Jarvis detected! (Score: {prediction[hey_jarvis_key]:.2f})")
 
             if not warp_aberto():
-                print("Abrindo Warp...")
+                logger.info("Opening Warp...")
                 subprocess.Popen(warp_path)
                 time.sleep(4)
 
@@ -176,7 +191,7 @@ while True:
                 win = encontrar_janela_warp()
 
                 if win:
-                    print(f"Ativando janela: {win.title}")
+                    logger.info(f"Activating window: {win.title}")
                     ativar_janela(win)
 
                     # Abrir nova aba
@@ -188,22 +203,30 @@ while True:
                             digitar(cmd)
                             pyautogui.press("enter")
                             time.sleep(0.5)
-                        print("Comandos executados com sucesso.")
+                        logger.info("Commands executed successfully.")
                     except Exception as e:
-                        print(f"Erro ao executar comandos no Warp: {e}")
+                        logger.error(f"Error executing commands in Warp: {e}")
                 else:
-                    print("Janela do Warp não encontrada.")
+                    logger.warning("Warp window not found.")
             else:
-                print("Warp não abriu a tempo, pulando comandos.")
+                logger.warning("Warp did not open in time, skipping commands.")
 
             cooldown = time.time() + config['cooldown_seconds']
             
     except KeyboardInterrupt:
-        print("\nStopping Jarvis...")
+        logger.info("Stopping Jarvis...")
         break
     except Exception as e:
-        print(f"Unexpected error in main loop: {e}")
+        logger.error(f"Unexpected error in main loop: {e}")
         time.sleep(1)
+
+# Limpeza ao fechar
+try:
+    stream.stop_stream()
+    stream.close()
+    pa.terminate()
+except:
+    pass
 
 # Limpeza ao fechar
 try:
