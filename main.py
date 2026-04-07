@@ -12,6 +12,24 @@ import pygetwindow as gw
 import win32gui
 import win32con
 
+import yaml
+
+# Load configuration from config.yaml
+def load_config():
+    try:
+        with open("config.yaml", "r") as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        print(f"Error loading config.yaml: {e}")
+        return {
+            'warp_path': r"C:\Users\Leandro\AppData\Local\Programs\Warp\Warp.exe",
+            'threshold': 0.4,
+            'cooldown_seconds': 5,
+            'commands': [r"cd C:\Programacao\MVP", "gemini"]
+        }
+
+config = load_config()
+
 # carregar modelo (baixa automaticamente se necessário)
 import openwakeword
 model_paths = openwakeword.get_pretrained_model_paths()
@@ -30,7 +48,7 @@ stream = pa.open(
 
 print("Ouvindo por 'hey jarvis'...")
 
-warp_path = r"C:\Users\Leandro\AppData\Local\Programs\Warp\Warp.exe"
+warp_path = config['warp_path']
 
 def warp_aberto():
     for p in psutil.process_iter(['name']):
@@ -118,7 +136,7 @@ while True:
     # Vamos procurar qualquer chave que contenha 'hey_jarvis'.
     hey_jarvis_key = next((k for k in prediction.keys() if "hey_jarvis" in k), None)
 
-    if hey_jarvis_key and prediction[hey_jarvis_key] > 0.4 and time.time() > cooldown:
+    if hey_jarvis_key and prediction[hey_jarvis_key] > config['threshold'] and time.time() > cooldown:
         print(f"Jarvis detectado! (Score: {prediction[hey_jarvis_key]:.2f})")
 
         if not warp_aberto():
@@ -138,11 +156,10 @@ while True:
                 time.sleep(0.8)
 
                 try:
-                    digitar(r"cd C:\Programacao\MVP")
-                    pyautogui.press("enter")
-                    time.sleep(0.5)
-                    digitar("gemini")
-                    pyautogui.press("enter")
+                    for cmd in config['commands']:
+                        digitar(cmd)
+                        pyautogui.press("enter")
+                        time.sleep(0.5)
                     print("Comandos executados com sucesso.")
                 except Exception as e:
                     print(f"Erro ao executar comandos no Warp: {e}")
@@ -152,4 +169,4 @@ while True:
         else:
             print("Warp não abriu a tempo, pulando comandos.")
 
-        cooldown = time.time() + 5
+        cooldown = time.time() + config['cooldown_seconds']
