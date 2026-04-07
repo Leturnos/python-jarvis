@@ -73,11 +73,32 @@ stream = start_stream()
 
 logger.info("Jarvis is listening for 'hey jarvis'...")
 
+import pyttsx3
+
 class WarpAutomator:
     def __init__(self, config):
         self.config = config
         self.warp_path = config['warp_path']
         self.commands = config['commands']
+        
+        # Initialize TTS engine
+        try:
+            self.engine = pyttsx3.init()
+            # Set voice properties
+            self.engine.setProperty('rate', 180) 
+            self.engine.setProperty('volume', 0.9)
+        except Exception as e:
+            logger.error(f"Error initializing TTS engine: {e}")
+            self.engine = None
+
+    def speak(self, text):
+        if self.engine:
+            logger.info(f"Jarvis says: {text}")
+            try:
+                self.engine.say(text)
+                self.engine.runAndWait()
+            except Exception as e:
+                logger.error(f"TTS error: {e}")
 
     def is_open(self):
         try:
@@ -159,6 +180,8 @@ class WarpAutomator:
             logger.error(f"Error typing text: {e}")
 
     def run_workflow(self):
+        self.speak("Sim?")
+        
         if not self.is_open():
             logger.info("Opening Warp...")
             subprocess.Popen(self.warp_path)
@@ -179,12 +202,16 @@ class WarpAutomator:
                             pyautogui.press("enter")
                             time.sleep(0.5)
                         logger.info("Commands executed successfully.")
+                        self.speak("Pronto!")
                     except Exception as e:
                         logger.error(f"Error executing commands: {e}")
+                        self.speak("Erro ao executar comandos.")
             else:
                 logger.warning("Warp window not found.")
+                self.speak("Não encontrei a janela do Warp.")
         else:
             logger.warning("Warp did not open in time.")
+            self.speak("O Warp demorou muito para abrir.")
 
 automator = WarpAutomator(config)
 
