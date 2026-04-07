@@ -6,14 +6,26 @@ from core.automator import WarpAutomator
 from core.audio_engine import get_audio_stream, load_wakeword_model
 from core.ui import JarvisUI
 from core.notifications import JarvisNotifier
+from core.tray import JarvisTray
+import threading
 
 def main():
+    # Stop event for thread synchronization
+    stop_event = threading.Event()
+    
+    def on_stop():
+        stop_event.set()
+
     # Initialize components
     automator = WarpAutomator(config)
     model, wakeword_name = load_wakeword_model()
     pa, stream = get_audio_stream()
     ui = JarvisUI(wakeword_name)
     notifier = JarvisNotifier()
+    tray = JarvisTray(on_stop_callback=on_stop)
+    
+    # Start Tray in background
+    tray.start()
     
     logger.info(f"Jarvis is listening for '{wakeword_name}'...")
     
@@ -24,7 +36,7 @@ def main():
 
     try:
         with ui.get_live() as live:
-            while True:
+            while not stop_event.is_set():
                 try:
                     # Update UI status
                     current_status = "Listening" if time.time() > cooldown else "Cooldown"
@@ -43,6 +55,8 @@ def main():
                         ui.update(volume=pcm)
 
                     except Exception as e:
+                        if stop_event.is_set():
+                            break
                         logger.error(f"Microphone stream error: {e}. Attempting to reconnect...")
                         ui.update(status="Stream Error")
                         try:
@@ -75,20 +89,26 @@ def main():
                         cooldown = time.time() + cooldown_seconds
                         
                 except Exception as e:
-                    logger.error(f"Unexpected error in loop: {e}")
-                    ui.update(status="Loop Error")
-                    time.sleep(1)
+                    if not stop_event.is_set():
+                        logger.error(f"Unexpected error in loop: {e}")
+                        ui.update(status="Loop Error")
+                        time.sleep(1)
+                    else:
+                        break
 
     except KeyboardInterrupt:
-        logger.info("Stopping Jarvis...")
+        logger.info("Stopping Jarvis (KeyboardInterrupt)...")
     finally:
         # Cleanup
+        logger.info("Cleaning up...")
+        tray.stop()
         try:
             stream.stop_stream()
             stream.close()
             pa.terminate()
         except:
             pass
+        logger.info("Jarvis stopped.")
 
 if __name__ == "__main__":
     main()
