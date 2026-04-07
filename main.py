@@ -5,6 +5,7 @@ from core.config import config
 from core.automator import WarpAutomator
 from core.audio_engine import get_audio_stream, load_wakeword_model
 from core.ui import JarvisUI
+from core.notifications import JarvisNotifier
 
 def main():
     # Initialize components
@@ -12,6 +13,7 @@ def main():
     model, wakeword_name = load_wakeword_model()
     pa, stream = get_audio_stream()
     ui = JarvisUI(wakeword_name)
+    notifier = JarvisNotifier()
     
     logger.info(f"Jarvis is listening for '{wakeword_name}'...")
     
@@ -65,6 +67,10 @@ def main():
                     if hey_jarvis_key and score > threshold and time.time() > cooldown:
                         logger.info(f"Wake word detected! (Score: {score:.2f})")
                         ui.update(status="Detected!", score=score)
+                        
+                        # Show notification
+                        notifier.notify("Jarvis", f"I'm on it! (Score: {score:.2f})")
+                        
                         automator.run_workflow()
                         cooldown = time.time() + cooldown_seconds
                         
