@@ -6,50 +6,58 @@ O projeto utiliza inteligência artificial local para detecção de comandos de 
 
 ## ✨ Funcionalidades
 
--   **Detecção de Wake Word Offline:** Utiliza o `openwakeword` para ouvir o comando "Hey Jarvis" em tempo real, sem necessidade de conexão com a internet.
--   **Gerenciamento Inteligente de Janelas:** Localiza, restaura e foca na janela do terminal Warp automaticamente, mesmo que ele esteja minimizado ou fechado.
--   **Automação de Comandos:**
-    -   Abre automaticamente uma nova aba no Warp (`Ctrl + Shift + T`).
-    -   Navega para diretórios específicos (ex: `C:\Programacao\MVP`).
-    -   Executa ferramentas de produtividade (ex: comando `gemini`).
--   **Digitação Segura:** Utiliza manipulação de clipboard para garantir que caracteres especiais e caminhos do Windows sejam inseridos corretamente no terminal.
+- **Detecção de Wake Word Offline:** Utiliza o `openwakeword` para ouvir o comando "Hey Jarvis" em tempo real, sem necessidade de conexão com a internet.
+- **Interface Visual (Rich):** Painel interativo no terminal que exibe o status do microfone, volume e pontuação da detecção em tempo real.
+- **Gerenciamento Inteligente de Janelas:** Localiza, restaura e foca na janela do terminal Warp automaticamente.
+- **Notificações Nativas:** Alertas de balão (Toast) no Windows para confirmar a ativação da automação.
+- **Ícone na Bandeja (System Tray):** O Jarvis pode ser minimizado para perto do relógio, permitindo que rode silenciosamente em segundo plano com opção de saída rápida.
+- **Automação de Comandos:**
+    - Abre automaticamente uma nova aba no Warp (`Ctrl + Shift + T`).
+    - Navega para diretórios configurados e executa ferramentas de produtividade.
 
 ## 🚀 Tecnologias
 
--   **Linguagem:** [Python 3.13+](https://www.python.org/)
--   **IA/Voz:** `openwakeword` (baseado em modelos TFLite).
--   **Automação de Interface:** `pyautogui`, `pygetwindow` e `pywin32`.
--   **Gerenciamento de Processos:** `psutil`.
--   **Gerenciador de Pacotes:** [uv](https://github.com/astral-sh/uv) (extremamente rápido e moderno).
+- **Linguagem:** [Python 3.13+](https://www.python.org/)
+- **IA/Voz:** `openwakeword` (modelos TFLite).
+- **Interface & UI:** `rich` (Terminal), `plyer` (Notificações), `pystray` & `Pillow` (System Tray).
+- **Automação de Interface:** `pyautogui`, `pygetwindow` e `pywin32`.
+- **Gerenciador de Pacotes:** [uv](https://github.com/astral-sh/uv).
 
 ## 📋 Pré-requisitos
 
-1.  **Sistema Operacional:** Windows (devido às APIs de manipulação de janelas `win32gui`).
-2.  **Terminal Warp:** Certifique-se de que o [Warp](https://www.warp.dev/) está instalado.
-3.  **Microfone:** Um dispositivo de entrada de áudio configurado como padrão.
+1. **Sistema Operacional:** Windows 10/11.
+2. **Terminal Warp:** Certifique-se de que o [Warp](https://www.warp.dev/) está instalado.
+3. **Microfone:** Dispositivo de entrada de áudio configurado como padrão.
 
 ## 🛠️ Instalação e Uso
 
-Este projeto utiliza o `uv` para gerenciar dependências de forma simplificada.
+1. **Instale as dependências:**
+   ```bash
+   uv sync
+   ```
 
-1.  **Instale as dependências:**
-    ```bash
-    uv sync
-    ```
+2. **Execute o assistente:**
+   ```bash
+   uv run main.py
+   ```
 
-2.  **Execute o assistente:**
-    ```bash
-    uv run main.py
-    ```
-
-O script ficará em modo de escuta. Assim que detectar "Hey Jarvis", ele iniciará a sequência de automação configurada.
+O Jarvis iniciará com uma interface visual no terminal e um ícone na bandeja do sistema.
 
 ## ⚙️ Customização
 
-Para adaptar o Jarvis ao seu fluxo, você pode editar o arquivo `main.py`:
+Diferente de versões anteriores, agora toda a configuração é feita via **`config.yaml`**. Você não precisa mais mexer no código principal para ajustar o comportamento:
 
--   **Caminho do Warp:** Altere a variável `warp_path` caso seu executável esteja em outro local.
--   **Comandos:** Modifique as linhas dentro do bloco `try` no loop principal para alterar os comandos enviados ao terminal (ex: trocar o diretório ou o comando final).
+- **`warp_path`**: Caminho do executável do Warp.
+- **`working_directory`**: Pasta onde os comandos serão executados.
+- **`commands`**: Lista de comandos que o Jarvis deve digitar ao ser ativado.
+- **`threshold`**: Sensibilidade da detecção (padrão: 0.4).
+
+## 🗺️ Evolução do Projeto
+
+O Jarvis é um projeto em constante evolução. Para entender a visão de longo prazo e o progresso técnico, consulte os arquivos de documentação detalhada:
+
+- **[ROADMAP.md](./ROADMAP.md)**: Planejamento estratégico das fases de desenvolvimento (Estabilidade, UX, Performance, Inteligência).
+- **[TODO.md](./TODO.md)**: Checklist técnico em tempo real das tarefas concluídas e pendentes.
 
 ---
 *Desenvolvido para facilitar a rotina de quem busca produtividade máxima no Windows.*
