@@ -5,14 +5,14 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 ---
 
 ## 🛠️ Fase 1: Refatoração e Estabilidade (O Alicerce)
-- [ ] **Configuração Externa:** Criar um arquivo `config.yaml` ou `.json` para armazenar `warp_path`, `working_directory` e `wakeword_threshold`.
-- [ ] **Tratamento de Erros:** Implementar um bloco `try-except` global para capturar falhas no microfone e tentar reconectar sem fechar o script.
-- [ ] **Logging:** Substituir todos os `print()` por `logging.info()` e `logging.error()`, salvando-os em `jarvis.log`.
-- [ ] **POO Inicial:** Criar a classe `WarpAutomator` para encapsular a lógica de busca e ativação da janela.
-- [ ] **Sensibilidade Dinâmica:** Ajustar o código para ler o threshold de sensibilidade do arquivo de config, facilitando o ajuste fino sem mexer no código.
+- [x] **Configuração Externa:** Criar um arquivo `config.yaml` ou `.json` para armazenar `warp_path`, `working_directory` e `wakeword_threshold`.
+- [x] **Tratamento de Erros:** Implementar um bloco `try-except` global para capturar falhas no microfone e tentar reconectar sem fechar o script.
+- [x] **Logging:** Substituir todos os `print()` por `logging.info()` e `logging.error()`, salvando-os em `jarvis.log`.
+- [x] **POO Inicial:** Criar a classe `WarpAutomator` para encapsular a lógica de busca e ativação da janela.
+- [x] **Sensibilidade Dinâmica:** Ajustar o código para ler o threshold de sensibilidade do arquivo de config, facilitando o ajuste fino sem mexer no código.
 
 ## 🎨 Fase 2: Experiência do Usuário (Dando Vida)
-- [ ] **Feedback de Voz (TTS):** Integrar a biblioteca `pyttsx3` para o Jarvis falar "Sim?" ao detectar o comando e "Pronto!" ao terminar.
+- [x] **Feedback de Voz (TTS):** Integrar a biblioteca `pyttsx3` para o Jarvis falar "Sim?" ao detectar o comando e "Pronto!" ao terminar.
 - [ ] **Interface de Terminal (Rich):** Implementar um painel visual que mostre o status do microfone em tempo real usando a biblioteca `rich`.
 - [ ] **Notificações Nativas:** Adicionar notificações de balão (Toast) no Windows para avisar sobre o status da automação.
 - [ ] **Ícone na Bandeja (System Tray):** Implementar o `pystray` para permitir minimizar o Jarvis para perto do relógio do Windows.
