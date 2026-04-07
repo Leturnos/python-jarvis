@@ -40,15 +40,21 @@ def load_config():
             'warp_path': r"C:\Users\Leandro\AppData\Local\Programs\Warp\Warp.exe",
             'threshold': 0.4,
             'cooldown_seconds': 5,
+            'wakeword_name': 'hey_jarvis',
+            'volume_multiplier': 1.0,
             'commands': [r"cd C:\Programacao\MVP", "gemini"]
         }
 
 config = load_config()
 
+# Wake word settings
+WAKEWORD_NAME = config.get('wakeword_name', 'hey_jarvis')
+VOLUME_MULTIPLIER = config.get('volume_multiplier', 1.0)
+
 # carregar modelo (baixa automaticamente se necessário)
 import openwakeword
 model_paths = openwakeword.get_pretrained_model_paths()
-hey_jarvis_path = [p for p in model_paths if "hey_jarvis" in p]
+hey_jarvis_path = [p for p in model_paths if WAKEWORD_NAME in p]
 model = Model(wakeword_model_paths=hey_jarvis_path)
 
 # iniciar microfone
@@ -190,6 +196,11 @@ while True:
         try:
             audio_data = stream.read(1280, exception_on_overflow=False)
             pcm = np.frombuffer(audio_data, dtype=np.int16)
+
+            # Aplicar multiplicador de volume se necessário
+            if VOLUME_MULTIPLIER != 1.0:
+                pcm = (pcm * VOLUME_MULTIPLIER).clip(-32768, 32767).astype(np.int16)
+
         except Exception as e:
             logger.error(f"Microphone stream error: {e}. Attempting to reconnect...")
             try:
@@ -204,7 +215,7 @@ while True:
         prediction = model.predict(pcm)
 
         # O openwakeword costuma usar o nome do arquivo (sem extensão) como chave.
-        hey_jarvis_key = next((k for k in prediction.keys() if "hey_jarvis" in k), None)
+        hey_jarvis_key = next((k for k in prediction.keys() if WAKEWORD_NAME in k), None)
 
         if hey_jarvis_key and prediction[hey_jarvis_key] > config['threshold'] and time.time() > cooldown:
             logger.info(f"Jarvis detected! (Score: {prediction[hey_jarvis_key]:.2f})")
@@ -217,14 +228,6 @@ while True:
     except Exception as e:
         logger.error(f"Unexpected error in main loop: {e}")
         time.sleep(1)
-
-# Limpeza ao fechar
-try:
-    stream.stop_stream()
-    stream.close()
-    pa.terminate()
-except:
-    pass
 
 # Limpeza ao fechar
 try:

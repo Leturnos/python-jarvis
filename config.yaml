@@ -6,3 +6,5 @@ commands:
   - 'gemini'
 threshold: 0.4
 cooldown_seconds: 5
+wakeword_name: 'hey_jarvis'
+volume_multiplier: 1.0
