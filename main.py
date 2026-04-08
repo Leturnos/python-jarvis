@@ -135,23 +135,25 @@ def main():
                         continue
 
                     # Prediction
-                    prediction = model.predict(pcm)
-                    hey_jarvis_key = next((k for k in prediction.keys() if wakeword_name in k), None)
-                    
                     score = 0.0
-                    if hey_jarvis_key:
-                        score = float(prediction[hey_jarvis_key])
+                    if not tray_muted:
+                        # Simple VAD (Voice Activity Detection) based on RMS
+                        # This avoids running the heavy model on absolute silence
+                        rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
+                        
+                        if rms > 15: # Silence threshold
+                            prediction = model.predict(pcm)
+                            hey_jarvis_key = next((k for k in prediction.keys() if wakeword_name in k), None)
+                            if hey_jarvis_key:
+                                score = float(prediction[hey_jarvis_key])
+                        else:
+                            # Too quiet, definitely not a wake word
+                            score = 0.0
                     
                     ui.update(score=score)
 
-                    if hey_jarvis_key and score > threshold and time.time() > cooldown:
-                        if tray.is_muted():
-                            logger.info(f"Wake word detected but Jarvis is MUTED. (Score: {score:.2f})")
-                            cooldown = time.time() + cooldown_seconds
-                            continue
-
+                    if not tray_muted and score > threshold and time.time() > cooldown:
                         logger.info(f"Wake word detected! (Score: {score:.2f})")
-
                         ui.update(status="Detected!", score=score)
                         
                         # Add task to queue instead of running synchronously
@@ -159,6 +161,9 @@ def main():
                         
                         # Cooldown still applies to avoid double detection
                         cooldown = time.time() + cooldown_seconds
+                    elif tray_muted and score > 0.4: # Log only if it would have detected
+                         logger.info(f"Wake word detected but Jarvis is MUTED. (Score: {score:.2f})")
+                         cooldown = time.time() + cooldown_seconds
                         
                 except Exception as e:
                     if not stop_event.is_set():

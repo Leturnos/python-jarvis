@@ -23,7 +23,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Autostart opcional:** Criar um pequeno script ou comando para adicionar o Jarvis ao "Iniciar" do Windows.
 - [x] **Início Minimizado:** Suporte ao argumento `--minimized` para rodar diretamente na bandeja ao iniciar o Windows.
 - [x] **Instância Única (Mutex):** Impedir múltiplas instâncias e restaurar a janela principal ao tentar abrir novamente.
-- [ ] **Otimização de Recursos:** Garantir que o script use o mínimo de CPU possível quando estiver apenas em modo de escuta.
+- [x] **Otimização de Recursos:** Garantir que o script use o mínimo de CPU possível quando estiver apenas em modo de escuta.
 - [ ] **Validação de Comandos:** Adicionar uma verificação via `pyautogui` para confirmar se a aba do Warp realmente abriu antes de digitar o `cd`.
 
 ## 🧠 Fase 4: Expansão de Inteligência (O Próximo Nível)
