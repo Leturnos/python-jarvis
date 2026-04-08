@@ -16,6 +16,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Interface de Terminal (Rich):** Implementar um painel visual que mostre o status do microfone em tempo real usando a biblioteca `rich`.
 - [x] **Notificações Nativas:** Adicionar notificações de balão (Toast) no Windows para avisar sobre o status da automação.
 - [x] **Ícone na Bandeja (System Tray):** Implementar o `pystray` para permitir minimizar o Jarvis para perto do relógio do Windows.
+- [x] **Temporizador de Desativação (Disable for...):** Opção para silenciar o Jarvis por 30min, 1h ou 3h via menu da bandeja.
 
 ## 🚀 Fase 3: Performance e Background (Profissionalismo)
 - [x] **Threads Separadas:** Mover a detecção de áudio para uma thread e a execução de comandos para outra (evita "surdez" temporária do script).

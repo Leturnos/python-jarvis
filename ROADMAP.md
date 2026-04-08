@@ -25,8 +25,8 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 - **Interface Visual (Rich UI):** Utilizar a biblioteca `rich` para transformar o log do terminal em um painel elegante com status do microfone, nível de confiança da detecção e histórico de comandos.
 
 ### 🔹 Integração com Windows
-- **System Tray (Bandeja do Sistema):** Implementar `pystray` para que o Jarvis rode silenciosamente em segundo plano.
-- **Notificações Toast:** Enviar alertas nativos do Windows 10/11 informando o sucesso ou falha de automações longas.
+- **System Tray (Bandeja do Sistema):** Implementar `pystray` para que o Jarvis rode silenciosamente em segundo plano, incluindo controles de estado (Mute/Disable temporário).
+- **Notificações Toast:** Enviar alertas nativos do Windows 10/11 informando o sucesso ou falha de automações longas, além de confirmações de alteração de estado.
 
 ---
 

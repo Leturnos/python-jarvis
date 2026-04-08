@@ -73,7 +73,7 @@ def main():
     pa, stream = get_audio_stream()
     ui = JarvisUI(wakeword_name)
     notifier = JarvisNotifier()
-    tray = JarvisTray(on_stop_callback=on_stop, start_minimized=is_minimized)
+    tray = JarvisTray(on_stop_callback=on_stop, start_minimized=is_minimized, notifier=notifier)
     
     # Start Worker Thread for commands
     worker_thread = threading.Thread(
@@ -96,9 +96,16 @@ def main():
     try:
         with ui.get_live() as live:
             while not stop_event.is_set():
+                # Check for mute auto-resume background logic
+                tray_muted = tray.is_muted()
+                
                 try:
                     # Update UI status
-                    current_status = "Listening" if time.time() > cooldown else "Cooldown/Executing"
+                    if tray_muted:
+                        current_status = "MUTED/Sleeping"
+                    else:
+                        current_status = "Listening" if time.time() > cooldown else "Cooldown/Executing"
+                    
                     ui.update(status=current_status)
 
                     # Read audio from microphone
@@ -138,7 +145,13 @@ def main():
                     ui.update(score=score)
 
                     if hey_jarvis_key and score > threshold and time.time() > cooldown:
+                        if tray.is_muted():
+                            logger.info(f"Wake word detected but Jarvis is MUTED. (Score: {score:.2f})")
+                            cooldown = time.time() + cooldown_seconds
+                            continue
+
                         logger.info(f"Wake word detected! (Score: {score:.2f})")
+
                         ui.update(status="Detected!", score=score)
                         
                         # Add task to queue instead of running synchronously
