@@ -1,5 +1,15 @@
 import time
 import numpy as np
+import threading
+import queue
+import sys
+import ctypes
+import win32gui
+import win32con
+from win32event import CreateMutex
+from win32api import GetLastError
+from winerror import ERROR_ALREADY_EXISTS
+
 from core.logger_config import logger
 from core.config import config
 from core.automator import WarpAutomator
@@ -7,8 +17,6 @@ from core.audio_engine import get_audio_stream, load_wakeword_model
 from core.ui import JarvisUI
 from core.notifications import JarvisNotifier
 from core.tray import JarvisTray
-import threading
-import queue
 
 def command_worker(task_queue, automator, notifier, stop_event):
     """Worker thread that executes commands from the queue."""
@@ -30,6 +38,28 @@ def command_worker(task_queue, automator, notifier, stop_event):
             logger.error(f"Error in command worker: {e}")
 
 def main():
+    # Set title to be findable by other instances
+    app_title = "Jarvis AI Assistant"
+    ctypes.windll.kernel32.SetConsoleTitleW(app_title)
+
+    # Single Instance Check
+    mutex_name = r"Global\JarvisAI_SingleInstance_Mutex"
+    mutex = CreateMutex(None, False, mutex_name)
+    if GetLastError() == ERROR_ALREADY_EXISTS:
+        # If running and user tries to open again, try to show the window
+        hwnd = win32gui.FindWindow(None, app_title)
+        if hwnd:
+            # Show if hidden and bring to front
+            win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+            win32gui.SetForegroundWindow(hwnd)
+        
+        logger.info("Jarvis is already running. Bringing it to foreground.")
+        time.sleep(1) # Give user time to see the message if they are looking at the console
+        sys.exit(0)
+
+    # Check for --minimized flag
+    is_minimized = "--minimized" in sys.argv
+    
     # Stop event for thread synchronization
     stop_event = threading.Event()
     task_queue = queue.Queue()
@@ -43,7 +73,7 @@ def main():
     pa, stream = get_audio_stream()
     ui = JarvisUI(wakeword_name)
     notifier = JarvisNotifier()
-    tray = JarvisTray(on_stop_callback=on_stop)
+    tray = JarvisTray(on_stop_callback=on_stop, start_minimized=is_minimized)
     
     # Start Worker Thread for commands
     worker_thread = threading.Thread(

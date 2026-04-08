@@ -20,6 +20,8 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 ## 🚀 Fase 3: Performance e Background (Profissionalismo)
 - [x] **Threads Separadas:** Mover a detecção de áudio para uma thread e a execução de comandos para outra (evita "surdez" temporária do script).
 - [x] **Autostart opcional:** Criar um pequeno script ou comando para adicionar o Jarvis ao "Iniciar" do Windows.
+- [x] **Início Minimizado:** Suporte ao argumento `--minimized` para rodar diretamente na bandeja ao iniciar o Windows.
+- [x] **Instância Única (Mutex):** Impedir múltiplas instâncias e restaurar a janela principal ao tentar abrir novamente.
 - [ ] **Otimização de Recursos:** Garantir que o script use o mínimo de CPU possível quando estiver apenas em modo de escuta.
 - [ ] **Validação de Comandos:** Adicionar uma verificação via `pyautogui` para confirmar se a aba do Warp realmente abriu antes de digitar o `cd`.
 
@@ -27,6 +29,12 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [ ] **Múltiplos Comandos de Voz:** Treinar ou adicionar modelos para "Jarvis, fechar tudo" ou "Jarvis, modo trabalho".
 - [ ] **Integração com LLM:** Permitir que, após o comando "Hey Jarvis", o usuário possa falar uma instrução que será processada por uma IA (ex: "Abra o projeto MVP e rode os testes").
 - [ ] **Visão Computacional:** Usar screenshots parciais para identificar se o Warp está travado ou esperando por uma atualização.
+
+## 📦 Fase 5: Distribuição (Entregando o Produto)
+- [ ] **Compilação (.exe):** Usar `Nuitka` ou `PyInstaller` para transformar o projeto em um executável autônomo e otimizado.
+- [ ] **Bundle de Recursos:** Embutir modelos `.tflite`, arquivos de áudio e o ícone `.ico` dentro do binário final.
+- [ ] **Modo "Windowed":** Configurar o build para que o executável rode sem abrir a janela preta do console por padrão.
+- [ ] **Instalador (MSI/EXE):** Criar um setup profissional (ex: Inno Setup) que configure o Autostart e atalhos automaticamente.
 
 ---
 

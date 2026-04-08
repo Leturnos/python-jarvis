@@ -59,7 +59,7 @@ def manage_autostart(enable=True):
         
         # cmd.exe is the engine to run the python environment
         shortcut.Targetpath = "cmd.exe"
-        shortcut.Arguments = f'/c "cd /d {project_dir} && uv run main.py"'
+        shortcut.Arguments = f'/c "cd /d {project_dir} && uv run main.py --minimized"'
         shortcut.WorkingDirectory = project_dir
         shortcut.WindowStyle = 7 # Minimized
         shortcut.IconLocation = f"{icon_path},0"

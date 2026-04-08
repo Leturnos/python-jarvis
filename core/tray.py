@@ -9,8 +9,9 @@ from core.logger_config import logger
 from core.utils import manage_autostart, is_autostart_enabled_check
 
 class JarvisTray:
-    def __init__(self, on_stop_callback):
+    def __init__(self, on_stop_callback, start_minimized=False):
         self.on_stop_callback = on_stop_callback
+        self.start_minimized = start_minimized
         self.icon = None
         self.icon_thread = None
         self.console_window = self._get_console_window()
@@ -34,7 +35,10 @@ class JarvisTray:
         """Toggles the visibility of the console window."""
         if self.console_window:
             window_title = win32gui.GetWindowText(self.console_window)
-            if self.console_visible:
+            # Check actual visibility state
+            is_currently_visible = win32gui.IsWindowVisible(self.console_window)
+            
+            if is_currently_visible:
                 win32gui.ShowWindow(self.console_window, win32con.SW_HIDE)
                 self.console_visible = False
                 logger.info(f"Console hidden (Window: '{window_title}').")
@@ -66,6 +70,12 @@ class JarvisTray:
     def run(self):
         """Initializes and runs the tray icon in its own loop."""
         
+        # Hide console if starting minimized
+        if self.start_minimized and self.console_window:
+            win32gui.ShowWindow(self.console_window, win32con.SW_HIDE)
+            self.console_visible = False
+            logger.info("Jarvis started minimized to tray.")
+
         def is_autostart_enabled(item):
             return is_autostart_enabled_check()
 
