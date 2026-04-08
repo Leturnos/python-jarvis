@@ -4,7 +4,9 @@ import threading
 import ctypes
 import win32gui
 import win32con
+import os
 from core.logger_config import logger
+from core.utils import manage_autostart, is_autostart_enabled_check
 
 class JarvisTray:
     def __init__(self, on_stop_callback):
@@ -44,6 +46,12 @@ class JarvisTray:
         else:
             logger.error("Could not find console window handle.")
 
+    def set_autostart(self, icon, item):
+        """Toggle autostart status."""
+        new_state = not item.checked
+        result = manage_autostart(enable=new_state)
+        logger.info(result)
+
     def on_quit(self, icon, item):
         """Called when 'Quit' is clicked in the tray menu."""
         logger.info("Quitting via System Tray...")
@@ -57,6 +65,10 @@ class JarvisTray:
 
     def run(self):
         """Initializes and runs the tray icon in its own loop."""
+        
+        def is_autostart_enabled(item):
+            return is_autostart_enabled_check()
+
         menu = pystray.Menu(
             pystray.MenuItem('Jarvis AI Assistant', lambda: None, enabled=False),
             pystray.Menu.SEPARATOR,
@@ -64,6 +76,13 @@ class JarvisTray:
                 lambda text: "Show Console" if not self.console_visible else "Hide Console",
                 self.toggle_console
             ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "Autostart",
+                self.set_autostart,
+                checked=is_autostart_enabled
+            ),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem('Quit', self.on_quit)
         )
         

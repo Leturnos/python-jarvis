@@ -19,7 +19,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 
 ## 🚀 Fase 3: Performance e Background (Profissionalismo)
 - [x] **Threads Separadas:** Mover a detecção de áudio para uma thread e a execução de comandos para outra (evita "surdez" temporária do script).
-- [ ] **Autostart opcional:** Criar um pequeno script ou comando para adicionar o Jarvis ao "Iniciar" do Windows.
+- [x] **Autostart opcional:** Criar um pequeno script ou comando para adicionar o Jarvis ao "Iniciar" do Windows.
 - [ ] **Otimização de Recursos:** Garantir que o script use o mínimo de CPU possível quando estiver apenas em modo de escuta.
 - [ ] **Validação de Comandos:** Adicionar uma verificação via `pyautogui` para confirmar se a aba do Warp realmente abriu antes de digitar o `cd`.
 

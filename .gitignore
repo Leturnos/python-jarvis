@@ -1,24 +1,13 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-# Logs
-*.log
-jarvis.log
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 .venv/
-venv/
-ENV/
 
-# OS
-.DS_Store
-Thumbs.db
+# Project Specific
+jarvis.log
+Jarvis.lnk
+
+# IDEs
+.vscode/
+.idea/
