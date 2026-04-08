@@ -24,7 +24,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Início Minimizado:** Suporte ao argumento `--minimized` para rodar diretamente na bandeja ao iniciar o Windows.
 - [x] **Instância Única (Mutex):** Impedir múltiplas instâncias e restaurar a janela principal ao tentar abrir novamente.
 - [x] **Otimização de Recursos:** Garantir que o script use o mínimo de CPU possível quando estiver apenas em modo de escuta.
-- [ ] **Validação de Comandos:** Adicionar uma verificação via `pyautogui` para confirmar se a aba do Warp realmente abriu antes de digitar o `cd`.
+- [x] **Validação de Comandos:** Adicionar uma verificação via `pyautogui` para confirmar se a aba do Warp realmente abriu antes de digitar o `cd`.
 
 ## 🧠 Fase 4: Expansão de Inteligência (O Próximo Nível)
 - [ ] **Múltiplos Comandos de Voz:** Treinar ou adicionar modelos para "Jarvis, fechar tudo" ou "Jarvis, modo trabalho".

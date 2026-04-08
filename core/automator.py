@@ -114,36 +114,66 @@ class WarpAutomator:
             logger.error(f"Error typing text: {e}")
 
     def run_workflow(self):
-        """Executes the full automation workflow."""
+        """Executes the full automation workflow with window validation."""
         self.speak("Sim?")
         
+        # 1. Open Warp if not already running
         if not self.is_open():
             logger.info("Opening Warp...")
             subprocess.Popen(self.warp_path)
-            time.sleep(4)
-
-        if self.is_open():
+            
+            # Wait for process to appear (max 10s)
+            for _ in range(20): 
+                if self.is_open():
+                    break
+                time.sleep(0.5)
+            
+        # 2. Wait for the window to become available
+        win = None
+        for attempt in range(20): # Up to 10 seconds total
             win = self.find_window()
             if win:
-                logger.info(f"Activating window: {win.title}")
-                if self.activate_window(win):
-                    # Open new tab
-                    pyautogui.hotkey('ctrl', 'shift', 't')
-                    time.sleep(0.8)
+                break
+            time.sleep(0.5)
 
-                    try:
-                        for cmd in self.commands:
-                            self.type_text(cmd)
-                            pyautogui.press("enter")
-                            time.sleep(0.5)
-                        logger.info("Commands executed successfully.")
-                        self.speak("Pronto!")
-                    except Exception as e:
-                        logger.error(f"Error executing commands: {e}")
-                        self.speak("Error executing commands.")
-            else:
-                logger.warning("Warp window not found.")
-                self.speak("I couldn't find the Warp window.")
+        if not win:
+            logger.warning("Warp window not found after waiting.")
+            self.speak("Não encontrei a janela do Warp.")
+            return
+
+        # 3. Activate and Validate
+        logger.info(f"Activating window: {win.title}")
+        if self.activate_window(win):
+            # Give Windows a moment to stabilize focus
+            time.sleep(1.0)
+            
+            # Final validation: check if the active window is actually Warp
+            active_hwnd = win32gui.GetForegroundWindow()
+            active_title = win32gui.GetWindowText(active_hwnd).lower()
+            
+            # If the title doesn't match common terminal keywords, abort for safety
+            keywords = ('warp', 'ready', 'working', 'mvp', 'terminal', 'cmd', 'powershell')
+            if not any(kw in active_title for kw in keywords):
+                logger.error(f"Safety Abort: Active window '{active_title}' is not Warp.")
+                self.speak("Abortado por segurança. O terminal não parece estar em foco.")
+                return
+
+            # 4. Execute commands
+            try:
+                # Open new tab (Warp shortcut)
+                pyautogui.hotkey('ctrl', 'shift', 't')
+                time.sleep(1.2) # Wait for tab animation
+
+                for cmd in self.commands:
+                    self.type_text(cmd)
+                    pyautogui.press("enter")
+                    time.sleep(0.6)
+                
+                logger.info("Commands executed successfully.")
+                self.speak("Pronto!")
+            except Exception as e:
+                logger.error(f"Error executing commands: {e}")
+                self.speak("Erro ao executar os comandos.")
         else:
-            logger.warning("Warp did not open in time.")
-            self.speak("Warp took too long to open.")
+            logger.warning("Could not activate Warp window.")
+            self.speak("Não consegui focar na janela do Warp.")
