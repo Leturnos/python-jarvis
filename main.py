@@ -57,8 +57,14 @@ def main():
         time.sleep(1) # Give user time to see the message if they are looking at the console
         sys.exit(0)
 
-    # Check for --minimized flag
-    is_minimized = "--minimized" in sys.argv
+    # Check for --minimized or --hidden flags
+    is_minimized = "--minimized" in sys.argv or "--hidden" in sys.argv
+    
+    # Hide console immediately if starting hidden to avoid flicker
+    if is_minimized:
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
     
     # Stop event for thread synchronization
     stop_event = threading.Event()

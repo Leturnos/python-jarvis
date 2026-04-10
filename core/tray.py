@@ -108,11 +108,11 @@ class JarvisTray:
     def run(self):
         """Initializes and runs the tray icon in its own loop."""
         
-        # Hide console if starting minimized
+        # Hide console if starting hidden
         if self.start_minimized and self.console_window:
             win32gui.ShowWindow(self.console_window, win32con.SW_HIDE)
             self.console_visible = False
-            logger.info("Jarvis started minimized to tray.")
+            logger.info("Jarvis started hidden in tray.")
 
         def is_autostart_enabled(item):
             return is_autostart_enabled_check()

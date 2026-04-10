@@ -35,15 +35,18 @@ def manage_autostart(enable=True):
     """Adds or removes Jarvis from Windows Startup using a Shortcut in the Registry."""
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
     app_name = "JarvisAI"
-    project_dir = str(Path(__file__).parent.parent.absolute())
+    project_dir = Path(__file__).parent.parent.absolute()
     resources_dir = get_resources_dir()
     shortcut_path = str(resources_dir / "Jarvis.lnk")
+    vbs_path = resources_dir / "launcher.vbs"
     icon_path = generate_icon_if_needed()
     
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
         
         if not enable:
+            if vbs_path.exists():
+                vbs_path.unlink()
             try:
                 winreg.DeleteValue(key, app_name)
                 winreg.CloseKey(key)
@@ -53,14 +56,22 @@ def manage_autostart(enable=True):
                 winreg.CloseKey(key)
                 return "Jarvis was not in Startup."
         
+        # Enable: Create the VBS launcher to run uv silently
+        vbs_content = f"""Set objShell = WScript.CreateObject("WScript.Shell")
+objShell.CurrentDirectory = "{str(project_dir)}"
+objShell.Run "uv run main.py --hidden", 0, False
+"""
+        with open(vbs_path, "w") as f:
+            f.write(vbs_content)
+
         # Enable: Create/Update the shortcut
         shell = win32com.client.Dispatch("WScript.Shell")
         shortcut = shell.CreateShortCut(shortcut_path)
         
-        # cmd.exe is the engine to run the python environment
-        shortcut.Targetpath = "cmd.exe"
-        shortcut.Arguments = f'/c "cd /d {project_dir} && uv run main.py --minimized"'
-        shortcut.WorkingDirectory = project_dir
+        # wscript.exe runs the VBS launcher without a console
+        shortcut.Targetpath = "wscript.exe"
+        shortcut.Arguments = f'"{str(vbs_path)}"'
+        shortcut.WorkingDirectory = str(project_dir)
         shortcut.WindowStyle = 7 # Minimized
         shortcut.IconLocation = f"{icon_path},0"
         shortcut.Description = "Jarvis AI Assistant"
@@ -70,7 +81,7 @@ def manage_autostart(enable=True):
         winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, f'"{shortcut_path}"')
         winreg.CloseKey(key)
         
-        logger.info(f"Jarvis added to Startup Registry via shortcut: {shortcut_path}")
+        logger.info(f"Jarvis added to Startup Registry via VBS launcher: {vbs_path}")
         return "Jarvis successfully added to Startup! (Check Settings -> Apps -> Startup)"
         
     except Exception as e:
