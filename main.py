@@ -6,6 +6,7 @@ import sys
 import ctypes
 import win32gui
 import win32con
+import pythoncom
 from win32event import CreateMutex
 from win32api import GetLastError
 from winerror import ERROR_ALREADY_EXISTS
@@ -20,10 +21,19 @@ from core.tray import JarvisTray
 
 def command_worker(task_queue, automator, notifier, stop_event):
     """Worker thread that executes commands from the queue."""
+    # Initialize COM for this thread to allow win32com usage
+    pythoncom.CoInitialize()
+    logger.info("Command worker thread initialized.")
+    
     while not stop_event.is_set():
         try:
             # Wait for a task with a timeout to allow checking the stop_event
-            score = task_queue.get(timeout=1.0)
+            try:
+                score = task_queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
+                
+            logger.info(f"Worker starting execution for score: {score:.2f}")
             
             # Show notification
             notifier.notify("Jarvis", f"I'm on it! (Score: {score:.2f})")
@@ -32,10 +42,12 @@ def command_worker(task_queue, automator, notifier, stop_event):
             automator.run_workflow()
             
             task_queue.task_done()
-        except queue.Empty:
-            continue
+            logger.info("Worker finished task.")
         except Exception as e:
             logger.error(f"Error in command worker: {e}")
+            
+    pythoncom.CoUninitialize()
+    logger.info("Command worker thread stopped.")
 
 def main():
     # Set title to be findable by other instances
@@ -107,10 +119,11 @@ def main():
                 
                 try:
                     # Update UI status
+                    now = time.time()
                     if tray_muted:
                         current_status = "MUTED/Sleeping"
                     else:
-                        current_status = "Listening" if time.time() > cooldown else "Cooldown/Executing"
+                        current_status = "Listening" if now > cooldown else "Cooldown/Executing"
                     
                     ui.update(status=current_status)
 
@@ -143,30 +156,30 @@ def main():
                     # Prediction
                     score = 0.0
                     if not tray_muted:
-                        # Simple VAD (Voice Activity Detection) based on RMS
-                        # This avoids running the heavy model on absolute silence
-                        rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
-                        
-                        if rms > 15: # Silence threshold
-                            prediction = model.predict(pcm)
-                            hey_jarvis_key = next((k for k in prediction.keys() if wakeword_name in k), None)
-                            if hey_jarvis_key:
-                                score = float(prediction[hey_jarvis_key])
-                        else:
-                            # Too quiet, definitely not a wake word
-                            score = 0.0
+                        # Call model directly without RMS filter for maximum sensitivity
+                        prediction = model.predict(pcm)
+                        hey_jarvis_key = next((k for k in prediction.keys() if wakeword_name in k), None)
+                        if hey_jarvis_key:
+                            score = float(prediction[hey_jarvis_key])
+                            if score > 0.1:
+                                logger.debug(f"Prediction debug: {prediction}")
                     
                     ui.update(score=score)
 
-                    if not tray_muted and score > threshold and time.time() > cooldown:
+                    if not tray_muted and score > threshold and now > cooldown:
                         logger.info(f"Wake word detected! (Score: {score:.2f})")
                         ui.update(status="Detected!", score=score)
                         
-                        # Add task to queue instead of running synchronously
+                        # Use the internal non-blocking speak
+                        automator.speak("Sim?")
+                        
+                        # Add task to queue
                         task_queue.put(score)
                         
                         # Cooldown still applies to avoid double detection
                         cooldown = time.time() + cooldown_seconds
+                        logger.debug(f"Cooldown set until {cooldown}")
+                        
                     elif tray_muted and score > 0.4: # Log only if it would have detected
                          logger.info(f"Wake word detected but Jarvis is MUTED. (Score: {score:.2f})")
                          cooldown = time.time() + cooldown_seconds
