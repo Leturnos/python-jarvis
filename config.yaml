@@ -4,7 +4,7 @@ working_directory: 'C:\Programacao\MVP'
 commands:
   - 'cd C:\Programacao\MVP'
   - 'gemini'
-threshold: 0.4
-cooldown_seconds: 5
+threshold: 0.35
+cooldown_seconds: 2.5
 wakeword_name: 'hey_jarvis'
-volume_multiplier: 1.0
+volume_multiplier: 2.0

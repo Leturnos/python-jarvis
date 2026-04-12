@@ -156,14 +156,20 @@ def main():
                     # Prediction
                     score = 0.0
                     if not tray_muted:
-                        # Call model directly without RMS filter for maximum sensitivity
-                        prediction = model.predict(pcm)
-                        hey_jarvis_key = next((k for k in prediction.keys() if wakeword_name in k), None)
-                        if hey_jarvis_key:
-                            score = float(prediction[hey_jarvis_key])
-                            if score > 0.1:
-                                logger.debug(f"Prediction debug: {prediction}")
-                    
+                        # Simple VAD (Voice Activity Detection) based on RMS
+                        # This avoids running the heavy model on absolute silence
+                        rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
+                        
+                        if rms > 20: # Slightly more selective than original 15
+                            prediction = model.predict(pcm)
+                            hey_jarvis_key = next((k for k in prediction.keys() if wakeword_name in k), None)
+                            if hey_jarvis_key:
+                                score = float(prediction[hey_jarvis_key])
+                                if score > 0.1:
+                                    logger.debug(f"Prediction debug (RMS: {rms:.1f}): {prediction}")
+                        else:
+                            # Too quiet, definitely not a wake word
+                            score = 0.0
                     ui.update(score=score)
 
                     if not tray_muted and score > threshold and now > cooldown:
