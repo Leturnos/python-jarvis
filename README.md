@@ -45,12 +45,20 @@ O Jarvis iniciará com uma interface visual no terminal e um ícone na bandeja d
 
 ## ⚙️ Customização
 
-Diferente de versões anteriores, agora toda a configuração é feita via **`config.yaml`**. Você não precisa mais mexer no código principal para ajustar o comportamento:
+Diferente de versões anteriores, toda a configuração é centralizada no arquivo **`config.yaml`**. Você não precisa mais mexer no código principal para ajustar o comportamento:
 
 - **`warp_path`**: Caminho do executável do Warp.
-- **`working_directory`**: Pasta onde os comandos serão executados.
-- **`commands`**: Lista de comandos que o Jarvis deve digitar ao ser ativado.
-- **`threshold`**: Sensibilidade da detecção (padrão: 0.4).
+- **`working_directory`**: Pasta de trabalho principal (opcional, dependendo do uso).
+- **`commands`**: Lista de comandos que o Jarvis deve digitar no terminal ao ser ativado.
+- **`threshold`**: Sensibilidade da detecção (padrão: `0.35`). Valores menores (ex: `0.2`) deixam a IA mais sensível, mas podem captar sons de outros cômodos.
+- **`cooldown_seconds`**: Tempo de "descanso" em segundos após uma detecção antes de ouvir novamente (padrão: `2.5`).
+- **`volume_multiplier`**: Multiplicador de ganho do microfone (padrão: `2.0`). Ideal se o seu microfone capta o áudio de forma muito baixa.
+
+## 🚀 Inicialização Automática (Autostart Invisível)
+
+O Jarvis possui integração com a inicialização do Windows através do menu do System Tray (Bandeja do Sistema). 
+
+Ao ativar o **Autostart**, o Jarvis configura automaticamente a inicialização silenciosa. Esse sistema é responsável por iniciar o assistente usando o `uv` de forma **100% invisível**, garantindo que o projeto rode em segundo plano sem abrir nenhuma janela de terminal (console) no Windows.
 
 ## 🗺️ Evolução do Projeto
 
