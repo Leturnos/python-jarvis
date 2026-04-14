@@ -54,6 +54,18 @@ Diferente de versões anteriores, toda a configuração é centralizada no arqui
 - **`cooldown_seconds`**: Tempo de "descanso" em segundos após uma detecção antes de ouvir novamente (padrão: `2.5`).
 - **`volume_multiplier`**: Multiplicador de ganho do microfone (padrão: `2.0`). Ideal se o seu microfone capta o áudio de forma muito baixa.
 
+## 🧠 Treinando Novos Comandos
+
+O Jarvis suporta múltiplos comandos de voz além do padrão. Para treinar novas palavras-gatilho (arquivos `.tflite`), você pode utilizar o notebook oficial do openWakeWord no Google Colab, que roda 100% na nuvem (não baixa nada na sua máquina):
+🔗 [openWakeWord Training Colab](https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing#scrollTo=1cbqBebHXjFD)
+
+**Passo a passo resumido:**
+1. Faça login com sua conta Google e **faça uma cópia do notebook para o seu Drive** (Arquivo > Salvar uma cópia no Drive) para conseguir editá-lo.
+2. Na variável `target_word` (Fase 3), digite a palavra ou frase que deseja treinar (ex: `"jarvis fechar tudo"`).
+3. Clique em **Ambiente de execução > Executar tudo**. 
+   *(Nota: Na primeira vez, após instalar as bibliotecas na Fase 2, o Colab pode pedir para "Reiniciar a sessão". Se isso ocorrer, reinicie e clique em "Executar tudo" novamente).*
+4. Ao final, baixe o arquivo `.tflite` gerado, coloque-o na pasta `models/` do projeto e configure a nova ação no seu `config.yaml`.
+
 ## 🚀 Inicialização Automática (Autostart Invisível)
 
 O Jarvis possui integração com a inicialização do Windows através do menu do System Tray (Bandeja do Sistema). 

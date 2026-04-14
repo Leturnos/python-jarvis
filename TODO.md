@@ -27,7 +27,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Validação de Comandos:** Adicionar uma verificação via `pyautogui` para confirmar se a aba do Warp realmente abriu antes de digitar o `cd`.
 
 ## 🧠 Fase 4: Expansão de Inteligência (O Próximo Nível)
-- [ ] **Múltiplos Comandos de Voz:** Treinar ou adicionar modelos para "Jarvis, fechar tudo" ou "Jarvis, modo trabalho".
+- [x] **Múltiplos Comandos de Voz:** Treinar ou adicionar modelos para "Jarvis, fechar tudo" ou "Jarvis, modo trabalho".
 - [ ] **Integração com LLM:** Permitir que, após o comando "Hey Jarvis", o usuário possa falar uma instrução que será processada por uma IA (ex: "Abra o projeto MVP e rode os testes").
 - [ ] **Visão Computacional:** Usar screenshots parciais para identificar se o Warp está travado ou esperando por uma atualização.
 
