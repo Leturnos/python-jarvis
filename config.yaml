@@ -1,10 +1,17 @@
 # Jarvis Configuration
-warp_path: 'C:\Users\Leandro\AppData\Local\Programs\Warp\Warp.exe'
-working_directory: 'C:\Programacao\MVP'
-commands:
-  - 'cd C:\Programacao\MVP'
-  - 'gemini'
 threshold: 0.35
 cooldown_seconds: 2.5
-wakeword_name: 'hey_jarvis'
 volume_multiplier: 2.0
+
+wakewords:
+  hey_jarvis:
+    action_type: warp
+    warp_path: 'C:\Users\Leandro\AppData\Local\Programs\Warp\Warp.exe'
+    commands:
+      - 'cd C:\Programacao\MVP'
+      - 'gemini'
+  
+  jarvis_fechar_tudo:
+    action_type: system
+    commands:
+      - 'echo "Simulating close all..."'

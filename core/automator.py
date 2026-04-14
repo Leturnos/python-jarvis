@@ -16,8 +16,8 @@ from core.logger_config import logger
 class WarpAutomator:
     def __init__(self, config):
         self.config = config
-        self.warp_path = config['warp_path']
-        self.commands = config['commands']
+        self.warp_path = ""
+        self.commands = []
 
         # Dedicated TTS Thread to avoid blocking and thread-safety issues
         self._speech_queue = queue.Queue()
