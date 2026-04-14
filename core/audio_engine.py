@@ -1,3 +1,5 @@
+import os
+import glob
 import pyaudio
 import numpy as np
 import openwakeword
@@ -18,8 +20,44 @@ def get_audio_stream():
     return pa, stream
 
 def load_wakeword_model():
-    """Loads the openWakeWord model based on configuration."""
-    wakeword_name = config.get('wakeword_name', 'hey_jarvis')
-    model_paths = openwakeword.get_pretrained_model_paths()
-    hey_jarvis_path = [p for p in model_paths if wakeword_name in p]
-    return Model(wakeword_model_paths=hey_jarvis_path), wakeword_name
+    """Loads openWakeWord models based on configuration wakewords."""
+    wakewords = config.get('wakewords', {})
+    if not wakewords:
+        logger.error("No wakewords found in config!")
+        return None, []
+        
+    target_wakewords = list(wakewords.keys())
+    
+    # Pre-trained paths
+    pretrained_paths = openwakeword.get_pretrained_model_paths()
+    
+    # Custom paths from models/
+    custom_paths = glob.glob(os.path.join("models", "*.tflite"))
+    
+    all_available_paths = pretrained_paths + custom_paths
+    
+    selected_paths = []
+    loaded_names = []
+    
+    for ww_name in target_wakewords:
+        # Find path that contains the wakeword name
+        found = False
+        for p in all_available_paths:
+            if ww_name in os.path.basename(p):
+                selected_paths.append(p)
+                loaded_names.append(ww_name)
+                found = True
+                break
+                
+        if not found:
+            logger.warning(f"Model for wakeword '{ww_name}' not found in pretrained or models/ folder. It will be ignored.")
+            
+    if not selected_paths:
+        logger.error("No valid models found to load. Falling back to default hey_jarvis if possible.")
+        fallback = [p for p in pretrained_paths if "hey_jarvis" in p]
+        if fallback:
+            return Model(wakeword_model_paths=fallback), ["hey_jarvis"]
+        return None, []
+        
+    logger.info(f"Loading wakeword models: {loaded_names}")
+    return Model(wakeword_model_paths=selected_paths), loaded_names
