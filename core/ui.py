@@ -10,7 +10,10 @@ import numpy as np
 class JarvisUI:
     def __init__(self, wakeword_name):
         self.console = Console()
-        self.wakeword_name = wakeword_name
+        if isinstance(wakeword_name, list):
+            self.wakeword_name = ", ".join(wakeword_name)
+        else:
+            self.wakeword_name = wakeword_name
         self.status = "Initializing..."
         self.score = 0.0
         self.volume = 0
