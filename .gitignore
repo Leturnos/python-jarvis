@@ -12,3 +12,6 @@ resources/launcher.vbs
 # IDEs
 .vscode/
 .idea/
+
+# OpenWakeWord Models
+*.tflite
