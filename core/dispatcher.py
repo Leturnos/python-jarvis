@@ -25,6 +25,25 @@ class ActionDispatcher:
         else:
             logger.error(f"Unknown action_type: {action_type}")
             self.automator.speak("Tipo de ação desconhecida.")
+
+    def handle_dynamic(self, action_config):
+        """Executes a dynamically generated action dictionary from the LLM."""
+        logger.info(f"Dispatching dynamic action: {action_config}")
+        
+        if not action_config or not isinstance(action_config, dict):
+            logger.error("Invalid dynamic action config.")
+            self.automator.speak("Não consegui processar a ação.")
+            return
+            
+        action_type = action_config.get('action_type')
+        
+        if action_type == 'warp':
+            self._handle_warp(action_config)
+        elif action_type == 'system':
+            self._handle_system(action_config)
+        else:
+            logger.error(f"Unknown action_type in dynamic config: {action_type}")
+            self.automator.speak("Ação dinâmica desconhecida.")
             
     def _handle_warp(self, action_config):
         # Update automator config dynamically before running
