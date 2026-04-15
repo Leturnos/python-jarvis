@@ -15,7 +15,9 @@ from core.logger_config import logger
 from core.config import config
 from core.automator import WarpAutomator
 from core.dispatcher import ActionDispatcher
-from core.audio_engine import get_audio_stream, load_wakeword_model
+from core.audio_engine import get_audio_stream, load_wakeword_model, record_command_audio
+from core.stt_engine import stt_engine
+from core.llm_agent import llm_agent
 from core.ui import JarvisUI
 from core.notifications import JarvisNotifier
 from core.tray import JarvisTray
@@ -32,12 +34,37 @@ def command_worker(task_queue, dispatcher, notifier, stop_event):
             except queue.Empty:
                 continue
                 
-            wakeword_name, score = task_data
-            logger.info(f"Worker starting execution for '{wakeword_name}' (Score: {score:.2f})")
+            task_type, payload = task_data
             
-            notifier.notify("Jarvis", f"Comando '{wakeword_name}' detectado! (Score: {score:.2f})")
-            
-            dispatcher.handle(wakeword_name)
+            if task_type == 'llm_dynamic':
+                audio_bytes = payload
+                notifier.notify("Jarvis", "Processando áudio...")
+                
+                # STT
+                text = stt_engine.transcribe(audio_bytes)
+                if not text:
+                    dispatcher.automator.speak("Desculpe, não entendi.")
+                    task_queue.task_done()
+                    continue
+                    
+                notifier.notify("Jarvis", f"Entendi: '{text}'. Pensando...")
+                
+                # LLM
+                action_json = llm_agent.process_instruction(text)
+                if not action_json:
+                    dispatcher.automator.speak("Erro ao processar instrução.")
+                    task_queue.task_done()
+                    continue
+                    
+                # Dispatch
+                dispatcher.handle_dynamic(action_json)
+                
+            else:
+                wakeword_name = task_type
+                score = payload
+                logger.info(f"Worker starting execution for '{wakeword_name}' (Score: {score:.2f})")
+                notifier.notify("Jarvis", f"Comando '{wakeword_name}' detectado! (Score: {score:.2f})")
+                dispatcher.handle(wakeword_name)
             
             task_queue.task_done()
             logger.info("Worker finished task.")
@@ -172,9 +199,14 @@ def main():
                         logger.info(f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})")
                         ui.update(status=f"Detected: {ww_name_clean}", score=highest_score)
                         
-                        automator.speak("Sim?")
-                        
-                        task_queue.put((ww_name_clean, highest_score))
+                        if ww_name_clean == 'hey_jarvis':
+                            ui.update(status="Gravando...")
+                            automator.speak("Sim?")
+                            audio_bytes = record_command_audio(stream)
+                            task_queue.put(('llm_dynamic', audio_bytes))
+                        else:
+                            automator.speak("Sim?")
+                            task_queue.put((ww_name_clean, highest_score))
                         
                         cooldown = time.time() + cooldown_seconds
                         logger.debug(f"Cooldown set until {cooldown}")
