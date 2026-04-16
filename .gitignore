@@ -15,3 +15,6 @@ resources/launcher.vbs
 
 # OpenWakeWord Models
 *.tflite
+
+# Environment Variables
+.env

@@ -6,7 +6,8 @@ O projeto utiliza inteligência artificial local para detecção de comandos de 
 
 ## ✨ Funcionalidades
 
-- **Detecção de Wake Word Offline:** Utiliza o `openwakeword` para ouvir o comando "Hey Jarvis" em tempo real, sem necessidade de conexão com a internet.
+- **Detecção de Wake Word Offline:** Utiliza o `openwakeword` para ouvir o comando "Hey Jarvis" em tempo real.
+- **Roteamento Inteligente (NLP):** Após a ativação, você pode falar naturalmente. O Jarvis utiliza um pipeline (Match Exato -> Fuzzy Match -> LLM Gemini) para entender e executar sua intenção sem que você precise configurar cada variação.
 - **Interface Visual (Rich):** Painel interativo no terminal que exibe o status do microfone, volume e pontuação da detecção em tempo real.
 - **Gerenciamento Inteligente de Janelas:** Localiza, restaura e foca na janela do terminal Warp automaticamente.
 - **Notificações Nativas:** Alertas de balão (Toast) no Windows para confirmar a ativação da automação.
@@ -45,18 +46,39 @@ O Jarvis iniciará com uma interface visual no terminal e um ícone na bandeja d
 
 ## ⚙️ Customização
 
-Diferente de versões anteriores, toda a configuração é centralizada no arquivo **`config.yaml`**. Você não precisa mais mexer no código principal para ajustar o comportamento:
+Diferente de versões anteriores, a configuração é separada em dois arquivos para facilitar o versionamento e proteger dados sensíveis.
 
-- **`warp_path`**: Caminho do executável do Warp.
-- **`working_directory`**: Pasta de trabalho principal (opcional, dependendo do uso).
-- **`commands`**: Lista de comandos que o Jarvis deve digitar no terminal ao ser ativado.
-- **`threshold`**: Sensibilidade da detecção (padrão: `0.35`). Valores menores (ex: `0.2`) deixam a IA mais sensível, mas podem captar sons de outros cômodos.
-- **`cooldown_seconds`**: Tempo de "descanso" em segundos após uma detecção antes de ouvir novamente (padrão: `2.5`).
-- **`volume_multiplier`**: Multiplicador de ganho do microfone (padrão: `2.0`). Ideal se o seu microfone capta o áudio de forma muito baixa.
+1. **Crie o arquivo de ambiente local (`.env`)**:
+   Copie o arquivo de exemplo fornecido no projeto:
+   ```bash
+   cp .env.example .env
+   ```
+   Edite o `.env` com as suas variáveis:
+   - **`GEMINI_API_KEY`**: Chave de API do Google Gemini.
+   - **`WARP_PATH`**: Caminho local do executável do Warp.
+   - **`PROJECT_PATH`**: Caminho do projeto base que os comandos automatizados utilizarão.
 
-## 🧠 Treinando Novos Comandos
+2. **Configure o comportamento no `config.yaml`**:
+   O arquivo principal é estruturado em blocos lógicos:
+   
+   - **`jarvis`**:
+     - `threshold`: Sensibilidade da detecção (padrão: `0.35`). Valores menores deixam a IA mais sensível.
+     - `cooldown_seconds`: Tempo de "descanso" em segundos (padrão: `2.5`).
+     - `volume_multiplier`: Multiplicador de ganho do microfone (padrão: `2.0`).
 
-O Jarvis suporta múltiplos comandos de voz além do padrão. Para treinar novas palavras-gatilho (arquivos `.tflite`), você pode utilizar o notebook oficial do openWakeWord no Google Colab, que roda 100% na nuvem (não baixa nada na sua máquina):
+   - **`integrations`**: 
+     - Configurações de integrações, referenciando as variáveis de ambiente (ex: `"${WARP_PATH}"`).
+     
+   - **`wakewords`**: 
+     - Cada chave é o nome de um modelo `.tflite`.
+     - `action`: Pode ser `warp` ou `system`.
+     - `commands`: Lista de comandos a serem digitados. Utiliza expansão de variáveis (ex: `${PROJECT_PATH}`).
+
+## 🧠 Treinando Novos Comandos (Opcional)
+
+Graças ao **Roteamento Inteligente**, você não precisa mais treinar um arquivo `.tflite` para cada comando. Basta configurar a chave no `config.yaml` e o Jarvis entenderá quando você disser a frase após o "Hey Jarvis".
+
+O treinamento manual ainda é útil se você desejar uma ativação **instantânea e offline** para um comando específico (sem passar pelo STT/LLM). Para isso, utilize o notebook oficial:
 🔗 [openWakeWord Training Colab](https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing#scrollTo=1cbqBebHXjFD)
 
 **Passo a passo resumido:**

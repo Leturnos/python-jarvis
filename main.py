@@ -7,6 +7,7 @@ import ctypes
 import win32gui
 import win32con
 import pythoncom
+import difflib
 from win32event import CreateMutex
 from win32api import GetLastError
 from winerror import ERROR_ALREADY_EXISTS
@@ -15,10 +16,13 @@ from core.logger_config import logger
 from core.config import config
 from core.automator import WarpAutomator
 from core.dispatcher import ActionDispatcher
-from core.audio_engine import get_audio_stream, load_wakeword_model
+from core.audio_engine import get_audio_stream, load_wakeword_model, record_command_audio
+from core.stt_engine import stt_engine
+from core.llm_agent import llm_agent
 from core.ui import JarvisUI
 from core.notifications import JarvisNotifier
 from core.tray import JarvisTray
+from core.utils import normalize_text
 
 def command_worker(task_queue, dispatcher, notifier, stop_event):
     """Worker thread that executes commands from the queue."""
@@ -32,12 +36,60 @@ def command_worker(task_queue, dispatcher, notifier, stop_event):
             except queue.Empty:
                 continue
                 
-            wakeword_name, score = task_data
-            logger.info(f"Worker starting execution for '{wakeword_name}' (Score: {score:.2f})")
+            task_type, payload = task_data
             
-            notifier.notify("Jarvis", f"Comando '{wakeword_name}' detectado! (Score: {score:.2f})")
-            
-            dispatcher.handle(wakeword_name)
+            if task_type == 'llm_dynamic':
+                audio_bytes = payload
+                notifier.notify("Jarvis", "Processando áudio...")
+                
+                # 1. STT
+                text = stt_engine.transcribe(audio_bytes)
+                if not text:
+                    dispatcher.automator.speak("Desculpe, não entendi.")
+                    task_queue.task_done()
+                    continue
+                    
+                notifier.notify("Jarvis", f"Entendi: '{text}'.")
+                
+                # 2. Preparation
+                wakewords_config = config.get('wakewords', {})
+                available_commands = [k for k in wakewords_config.keys() if k != 'hey_jarvis']
+                normalized = normalize_text(text)
+                
+                # 3. Stage 1: Exact Match
+                if normalized in available_commands:
+                    logger.info(f"Exact match found: {normalized}")
+                    dispatcher.handle(normalized)
+                    task_queue.task_done()
+                    continue
+                
+                # 4. Stage 2: Fuzzy Match (difflib)
+                matches = difflib.get_close_matches(normalized, available_commands, n=1, cutoff=0.7)
+                if matches:
+                    match = matches[0]
+                    logger.info(f"Fuzzy match found: {match} for {normalized}")
+                    dispatcher.handle(match)
+                    task_queue.task_done()
+                    continue
+
+                # 5. Stage 3: LLM Fallback (Gemini)
+                notifier.notify("Jarvis", "Pensando...")
+                action_json = llm_agent.process_instruction(text, context_commands=available_commands)
+                
+                if not action_json:
+                    dispatcher.automator.speak("Erro ao processar instrução.")
+                    task_queue.task_done()
+                    continue
+                    
+                # 6. Dispatch
+                dispatcher.handle_dynamic(action_json)
+                
+            else:
+                wakeword_name = task_type
+                score = payload
+                logger.info(f"Worker starting execution for '{wakeword_name}' (Score: {score:.2f})")
+                notifier.notify("Jarvis", f"Comando '{wakeword_name}' detectado! (Score: {score:.2f})")
+                dispatcher.handle(wakeword_name)
             
             task_queue.task_done()
             logger.info("Worker finished task.")
@@ -101,9 +153,9 @@ def main():
     logger.info(f"Jarvis is listening for {loaded_names}...")
     
     cooldown = 0
-    volume_multiplier = config.get('volume_multiplier', 1.0)
-    threshold = config.get('threshold', 0.4)
-    cooldown_seconds = config.get('cooldown_seconds', 5)
+    volume_multiplier = config.get('jarvis', {}).get('volume_multiplier', 1.0)
+    threshold = config.get('jarvis', {}).get('threshold', 0.4)
+    cooldown_seconds = config.get('jarvis', {}).get('cooldown_seconds', 5)
 
     try:
         with ui.get_live() as live:
@@ -172,9 +224,14 @@ def main():
                         logger.info(f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})")
                         ui.update(status=f"Detected: {ww_name_clean}", score=highest_score)
                         
-                        automator.speak("Sim?")
-                        
-                        task_queue.put((ww_name_clean, highest_score))
+                        if ww_name_clean == 'hey_jarvis':
+                            ui.update(status="Gravando...")
+                            automator.speak("Sim?")
+                            audio_bytes = record_command_audio(stream)
+                            task_queue.put(('llm_dynamic', audio_bytes))
+                        else:
+                            automator.speak("Sim?")
+                            task_queue.put((ww_name_clean, highest_score))
                         
                         cooldown = time.time() + cooldown_seconds
                         logger.debug(f"Cooldown set until {cooldown}")

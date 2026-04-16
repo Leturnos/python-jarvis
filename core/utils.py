@@ -2,9 +2,16 @@ import os
 import sys
 import winreg
 import win32com.client
+import re
 from pathlib import Path
 from PIL import Image, ImageDraw
 from core.logger_config import logger
+
+def normalize_text(text):
+    """Normalizes text for matching: lowercase, remove punctuation, spaces to underscores."""
+    text = text.lower()
+    text = re.sub(r'[^\w\s]', '', text)
+    return text.strip().replace(" ", "_")
 
 def get_resources_dir():
     """Returns and ensures the resources directory exists."""

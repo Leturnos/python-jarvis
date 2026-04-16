@@ -16,21 +16,47 @@ class ActionDispatcher:
             return
             
         action_config = wakewords[wakeword_name]
-        action_type = action_config.get('action_type')
+        action_type = action_config.get('action')
         
         if action_type == 'warp':
             self._handle_warp(action_config)
         elif action_type == 'system':
             self._handle_system(action_config)
         else:
-            logger.error(f"Unknown action_type: {action_type}")
+            logger.error(f"Unknown action: {action_type}")
             self.automator.speak("Tipo de ação desconhecida.")
+
+    def handle_dynamic(self, action_config):
+        """Executes a dynamically generated action dictionary from the LLM."""
+        logger.info(f"Dispatching dynamic action: {action_config}")
+        
+        if not action_config or not isinstance(action_config, dict):
+            logger.error("Invalid dynamic action config.")
+            self.automator.speak("Não consegui processar a ação.")
+            return
             
+        type_hint = action_config.get('type', 'action')
+        
+        if type_hint == 'chat':
+            message = action_config.get('message', 'Sem resposta.')
+            self.automator.speak(message)
+            return
+
+        action_type = action_config.get('action')
+
+        if action_type == 'warp':
+            self._handle_warp(action_config)
+        elif action_type == 'system':
+            self._handle_system(action_config)
+        else:
+            logger.error(f"Unknown action in dynamic config: {action_type}")
+            self.automator.speak("Ação dinâmica desconhecida.")
+
     def _handle_warp(self, action_config):
         # Update automator config dynamically before running
-        self.automator.warp_path = action_config.get('warp_path', self.automator.warp_path)
-        self.automator.commands = action_config.get('commands', [])
-        
+        default_warp_path = self.config.get('integrations', {}).get('warp', {}).get('path', self.automator.warp_path)
+        self.automator.warp_path = action_config.get('warp_path', default_warp_path)
+        self.automator.commands = action_config.get('commands', [])        
         self.automator.run_workflow()
         
     def _handle_system(self, action_config):
