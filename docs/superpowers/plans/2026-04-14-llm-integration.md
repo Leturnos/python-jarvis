@@ -1,6 +1,6 @@
 # Jarvis LLM Integration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Integrate a local Speech-to-Text (STT) engine using Whisper and a Cloud LLM (Google Gemini) to process free-form voice commands dynamically.
 
@@ -20,18 +20,18 @@
 - Modify: `pyproject.toml` (if using uv) or install via terminal.
 - Modify: `.env` or `config.yaml` to include API keys.
 
-- [ ] **Step 1: Install new dependencies**
+- [x] **Step 1: Install new dependencies**
 ```bash
 uv pip install openai-whisper SpeechRecognition google-generativeai soundfile
 ```
 
-- [ ] **Step 2: Add API Key Placeholder to Config**
+- [x] **Step 2: Add API Key Placeholder to Config**
 Add `gemini_api_key: ""` to the `config.yaml` root level.
 
-- [ ] **Step 3: Update `core/config.py`**
+- [x] **Step 3: Update `core/config.py`**
 Modify `core/config.py` to load `gemini_api_key` from YAML or environment variable (`os.getenv`).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 ```bash
 git add pyproject.toml uv.lock config.yaml core/config.py
 git commit -m "chore(deps): add whisper, speechrecognition, and generativeai dependencies"
@@ -42,7 +42,7 @@ git commit -m "chore(deps): add whisper, speechrecognition, and generativeai dep
 **Files:**
 - Modify: `core/audio_engine.py`
 
-- [ ] **Step 1: Implement `record_command_audio` in `core/audio_engine.py`**
+- [x] **Step 1: Implement `record_command_audio` in `core/audio_engine.py`**
 Create a function that takes the PyAudio `stream`, reads frames continuously until the RMS energy drops below a silence threshold (e.g., 10) for 1.5 seconds or reaches 10 seconds maximum. It should return a raw audio buffer (bytes) or a numpy array.
 
 ```python
@@ -77,7 +77,7 @@ def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_t
     return b"".join(frames)
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 ```bash
 git add core/audio_engine.py
 git commit -m "feat(audio): add continuous audio recording for commands"
@@ -88,7 +88,7 @@ git commit -m "feat(audio): add continuous audio recording for commands"
 **Files:**
 - Create: `core/stt_engine.py`
 
-- [ ] **Step 1: Implement `transcribe_audio`**
+- [x] **Step 1: Implement `transcribe_audio`**
 Create a Singleton or lazy-loaded instance of the Whisper model (`tiny` or `base`) to transcribe the bytes.
 
 ```python
@@ -120,7 +120,7 @@ class STTEngine:
 stt_engine = STTEngine("tiny")
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 ```bash
 git add core/stt_engine.py
 git commit -m "feat(stt): implement local whisper transcription engine"
@@ -131,7 +131,7 @@ git commit -m "feat(stt): implement local whisper transcription engine"
 **Files:**
 - Create: `core/llm_agent.py`
 
-- [ ] **Step 1: Implement `LLMAgent`**
+- [x] **Step 1: Implement `LLMAgent`**
 Use `google.generativeai` to send the transcription and request JSON output.
 
 ```python
@@ -185,7 +185,7 @@ class LLMAgent:
 llm_agent = LLMAgent()
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 ```bash
 git add core/llm_agent.py
 git commit -m "feat(llm): add Gemini AI agent for parsing natural language to JSON"
@@ -196,7 +196,7 @@ git commit -m "feat(llm): add Gemini AI agent for parsing natural language to JS
 **Files:**
 - Modify: `core/dispatcher.py`
 
-- [ ] **Step 1: Add `handle_dynamic` method**
+- [x] **Step 1: Add `handle_dynamic` method**
 Add a method to execute the JSON object directly, bypassing the YAML lookup.
 
 ```python
@@ -220,7 +220,7 @@ Add a method to execute the JSON object directly, bypassing the YAML lookup.
             self.automator.speak("Ação dinâmica desconhecida.")
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 ```bash
 git add core/dispatcher.py
 git commit -m "feat(core): extend ActionDispatcher to support dynamic JSON execution"
@@ -231,7 +231,7 @@ git commit -m "feat(core): extend ActionDispatcher to support dynamic JSON execu
 **Files:**
 - Modify: `main.py`
 
-- [ ] **Step 1: Wire it up in `command_worker` or the `main` loop**
+- [x] **Step 1: Wire it up in `command_worker` or the `main` loop**
 When `hey_jarvis` is detected, stop feeding audio to openwakeword and start `record_command_audio`. Pass the buffer to STT, then to LLM, then to Dispatcher.
 Wait, since `hey_jarvis` is a wakeword, we already have it in the main loop!
 Modify the loop in `main.py`:
@@ -288,7 +288,7 @@ def command_worker(task_queue, dispatcher, notifier, stop_event):
                 dispatcher.handle(wakeword_name)
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 ```bash
 git add main.py
 git commit -m "feat(main): integrate active listening, STT, and LLM processing"
