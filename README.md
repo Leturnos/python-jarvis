@@ -6,7 +6,8 @@ O projeto utiliza inteligência artificial local para detecção de comandos de 
 
 ## ✨ Funcionalidades
 
-- **Detecção de Wake Word Offline:** Utiliza o `openwakeword` para ouvir o comando "Hey Jarvis" em tempo real, sem necessidade de conexão com a internet.
+- **Detecção de Wake Word Offline:** Utiliza o `openwakeword` para ouvir o comando "Hey Jarvis" em tempo real.
+- **Roteamento Inteligente (NLP):** Após a ativação, você pode falar naturalmente. O Jarvis utiliza um pipeline (Match Exato -> Fuzzy Match -> LLM Gemini) para entender e executar sua intenção sem que você precise configurar cada variação.
 - **Interface Visual (Rich):** Painel interativo no terminal que exibe o status do microfone, volume e pontuação da detecção em tempo real.
 - **Gerenciamento Inteligente de Janelas:** Localiza, restaura e foca na janela do terminal Warp automaticamente.
 - **Notificações Nativas:** Alertas de balão (Toast) no Windows para confirmar a ativação da automação.
@@ -73,9 +74,11 @@ Diferente de versões anteriores, a configuração é separada em dois arquivos 
      - `action`: Pode ser `warp` ou `system`.
      - `commands`: Lista de comandos a serem digitados. Utiliza expansão de variáveis (ex: `${PROJECT_PATH}`).
 
-## 🧠 Treinando Novos Comandos
+## 🧠 Treinando Novos Comandos (Opcional)
 
-O Jarvis suporta múltiplos comandos de voz além do padrão. Para treinar novas palavras-gatilho (arquivos `.tflite`), você pode utilizar o notebook oficial do openWakeWord no Google Colab, que roda 100% na nuvem (não baixa nada na sua máquina):
+Graças ao **Roteamento Inteligente**, você não precisa mais treinar um arquivo `.tflite` para cada comando. Basta configurar a chave no `config.yaml` e o Jarvis entenderá quando você disser a frase após o "Hey Jarvis".
+
+O treinamento manual ainda é útil se você desejar uma ativação **instantânea e offline** para um comando específico (sem passar pelo STT/LLM). Para isso, utilize o notebook oficial:
 🔗 [openWakeWord Training Colab](https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing#scrollTo=1cbqBebHXjFD)
 
 **Passo a passo resumido:**

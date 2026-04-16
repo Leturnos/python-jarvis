@@ -35,6 +35,13 @@ class ActionDispatcher:
             self.automator.speak("Não consegui processar a ação.")
             return
             
+        type_hint = action_config.get('type', 'action')
+        
+        if type_hint == 'chat':
+            message = action_config.get('message', 'Sem resposta.')
+            self.automator.speak(message)
+            return
+
         action_type = action_config.get('action')
 
         if action_type == 'warp':

@@ -7,6 +7,7 @@ import ctypes
 import win32gui
 import win32con
 import pythoncom
+import difflib
 from win32event import CreateMutex
 from win32api import GetLastError
 from winerror import ERROR_ALREADY_EXISTS
@@ -21,6 +22,7 @@ from core.llm_agent import llm_agent
 from core.ui import JarvisUI
 from core.notifications import JarvisNotifier
 from core.tray import JarvisTray
+from core.utils import normalize_text
 
 def command_worker(task_queue, dispatcher, notifier, stop_event):
     """Worker thread that executes commands from the queue."""
@@ -40,23 +42,46 @@ def command_worker(task_queue, dispatcher, notifier, stop_event):
                 audio_bytes = payload
                 notifier.notify("Jarvis", "Processando áudio...")
                 
-                # STT
+                # 1. STT
                 text = stt_engine.transcribe(audio_bytes)
                 if not text:
                     dispatcher.automator.speak("Desculpe, não entendi.")
                     task_queue.task_done()
                     continue
                     
-                notifier.notify("Jarvis", f"Entendi: '{text}'. Pensando...")
+                notifier.notify("Jarvis", f"Entendi: '{text}'.")
                 
-                # LLM
-                action_json = llm_agent.process_instruction(text)
+                # 2. Preparation
+                wakewords_config = config.get('wakewords', {})
+                available_commands = [k for k in wakewords_config.keys() if k != 'hey_jarvis']
+                normalized = normalize_text(text)
+                
+                # 3. Stage 1: Exact Match
+                if normalized in available_commands:
+                    logger.info(f"Exact match found: {normalized}")
+                    dispatcher.handle(normalized)
+                    task_queue.task_done()
+                    continue
+                
+                # 4. Stage 2: Fuzzy Match (difflib)
+                matches = difflib.get_close_matches(normalized, available_commands, n=1, cutoff=0.7)
+                if matches:
+                    match = matches[0]
+                    logger.info(f"Fuzzy match found: {match} for {normalized}")
+                    dispatcher.handle(match)
+                    task_queue.task_done()
+                    continue
+
+                # 5. Stage 3: LLM Fallback (Gemini)
+                notifier.notify("Jarvis", "Pensando...")
+                action_json = llm_agent.process_instruction(text, context_commands=available_commands)
+                
                 if not action_json:
                     dispatcher.automator.speak("Erro ao processar instrução.")
                     task_queue.task_done()
                     continue
                     
-                # Dispatch
+                # 6. Dispatch
                 dispatcher.handle_dynamic(action_json)
                 
             else:

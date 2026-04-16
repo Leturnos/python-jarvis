@@ -13,22 +13,34 @@ class LLMAgent:
         self.client = genai.Client(api_key=api_key)
         self.model_id = "gemini-2.0-flash"
         
-    def process_instruction(self, text):
+    def process_instruction(self, text, context_commands=None):
+        commands_list = ", ".join(context_commands) if context_commands else "Nenhum comando mapeado."
+        
         prompt = f"""
         Você é o Jarvis, um assistente de terminal no Windows.
         O usuário falou: "{text}"
-        O usuário está controlando um computador por voz.
-        Se a transcrição estiver estranha, tente inferir a intenção mais provável.
-        Retorne um JSON estrito contendo a ação a ser executada.
-        O formato deve ser OBRIGATORIAMENTE este:
+        Os comandos locais disponíveis são: [{commands_list}]
+        
+        Sua tarefa é decidir se o usuário quer executar uma ação técnica ou apenas conversar.
+        Retorne um JSON estrito seguindo um destes formatos:
+
+        1. Se for uma AÇÃO (comando de sistema ou terminal):
         {{
+            "type": "action",
             "action": "warp" ou "system",
-            "commands": ["comando 1", "comando 2"],
-            "warp_path": "caminho/para/warp.exe" (apenas se action for warp)
+            "commands": ["comando 1", "comando 2"]
         }}
-        Se a ação for de terminal (Warp), use comandos bash/powershell adequados (ex: npm start, cd path).
-        Se a ação for de sistema, use comandos válidos de Windows CMD.
-        Retorne APENAS o JSON, sem crases markdown (```json).
+
+        2. Se for um CHAT (conversa, pergunta, saudação):
+        {{
+            "type": "chat",
+            "message": "Sua resposta curta e natural aqui."
+        }}
+
+        Regras:
+        - Se a ação for de terminal (Warp), use comandos bash/powershell.
+        - Se for de sistema, use comandos válidos de Windows CMD.
+        - Retorne APENAS o JSON, sem crases markdown (```json).
         """
         
         try:

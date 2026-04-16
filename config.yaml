@@ -1,7 +1,7 @@
 jarvis:
-  threshold: 0.35
+  threshold: 0.5
   cooldown_seconds: 2.5
-  volume_multiplier: 2.0
+  volume_multiplier: 1.0
 
 integrations:
   warp:
@@ -14,7 +14,7 @@ wakewords:
       - 'cd ${PROJECT_PATH}'
       - 'gemini'
   
-  jarvis_fechar_tudo:
+  fechar_tudo:
     action: system
     commands:
       - 'echo "Simulating close all..."'
