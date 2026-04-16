@@ -45,14 +45,33 @@ O Jarvis iniciará com uma interface visual no terminal e um ícone na bandeja d
 
 ## ⚙️ Customização
 
-Diferente de versões anteriores, toda a configuração é centralizada no arquivo **`config.yaml`**. Você não precisa mais mexer no código principal para ajustar o comportamento:
+Diferente de versões anteriores, a configuração é separada em dois arquivos para facilitar o versionamento e proteger dados sensíveis.
 
-- **`warp_path`**: Caminho do executável do Warp.
-- **`working_directory`**: Pasta de trabalho principal (opcional, dependendo do uso).
-- **`commands`**: Lista de comandos que o Jarvis deve digitar no terminal ao ser ativado.
-- **`threshold`**: Sensibilidade da detecção (padrão: `0.35`). Valores menores (ex: `0.2`) deixam a IA mais sensível, mas podem captar sons de outros cômodos.
-- **`cooldown_seconds`**: Tempo de "descanso" em segundos após uma detecção antes de ouvir novamente (padrão: `2.5`).
-- **`volume_multiplier`**: Multiplicador de ganho do microfone (padrão: `2.0`). Ideal se o seu microfone capta o áudio de forma muito baixa.
+1. **Crie o arquivo de ambiente local (`.env`)**:
+   Copie o arquivo de exemplo fornecido no projeto:
+   ```bash
+   cp .env.example .env
+   ```
+   Edite o `.env` com as suas variáveis:
+   - **`GEMINI_API_KEY`**: Chave de API do Google Gemini.
+   - **`WARP_PATH`**: Caminho local do executável do Warp.
+   - **`PROJECT_PATH`**: Caminho do projeto base que os comandos automatizados utilizarão.
+
+2. **Configure o comportamento no `config.yaml`**:
+   O arquivo principal é estruturado em blocos lógicos:
+   
+   - **`jarvis`**:
+     - `threshold`: Sensibilidade da detecção (padrão: `0.35`). Valores menores deixam a IA mais sensível.
+     - `cooldown_seconds`: Tempo de "descanso" em segundos (padrão: `2.5`).
+     - `volume_multiplier`: Multiplicador de ganho do microfone (padrão: `2.0`).
+
+   - **`integrations`**: 
+     - Configurações de integrações, referenciando as variáveis de ambiente (ex: `"${WARP_PATH}"`).
+     
+   - **`wakewords`**: 
+     - Cada chave é o nome de um modelo `.tflite`.
+     - `action`: Pode ser `warp` ou `system`.
+     - `commands`: Lista de comandos a serem digitados. Utiliza expansão de variáveis (ex: `${PROJECT_PATH}`).
 
 ## 🧠 Treinando Novos Comandos
 

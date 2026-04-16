@@ -128,9 +128,9 @@ def main():
     logger.info(f"Jarvis is listening for {loaded_names}...")
     
     cooldown = 0
-    volume_multiplier = config.get('volume_multiplier', 1.0)
-    threshold = config.get('threshold', 0.4)
-    cooldown_seconds = config.get('cooldown_seconds', 5)
+    volume_multiplier = config.get('jarvis', {}).get('volume_multiplier', 1.0)
+    threshold = config.get('jarvis', {}).get('threshold', 0.4)
+    cooldown_seconds = config.get('jarvis', {}).get('cooldown_seconds', 5)
 
     try:
         with ui.get_live() as live:

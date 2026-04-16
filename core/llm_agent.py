@@ -1,11 +1,12 @@
 import json
+import os
 import google.generativeai as genai
 from core.logger_config import logger
 from core.config import config
 
 class LLMAgent:
     def __init__(self):
-        api_key = config.get("gemini_api_key", "")
+        api_key = os.getenv("GEMINI_API_KEY", "")
         if not api_key:
             logger.warning("GEMINI_API_KEY is not set.")
         genai.configure(api_key=api_key)
@@ -21,7 +22,7 @@ class LLMAgent:
         {{
             "action_type": "warp" ou "system",
             "commands": ["comando 1", "comando 2"],
-            "warp_path": "C:\\Users\\Leandro\\AppData\\Local\\Programs\\Warp\\Warp.exe" (apenas se action_type for warp)
+            "warp_path": "caminho/para/warp.exe" (apenas se action_type for warp)
         }}
         Se a ação for de terminal (Warp), use comandos bash/powershell adequados (ex: npm start, cd path).
         Se a ação for de sistema, use comandos válidos de Windows CMD.
