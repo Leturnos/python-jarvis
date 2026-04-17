@@ -61,7 +61,7 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 ### 🔹 Compilação para Executável (.exe)
 - **Nuitka / PyInstaller:** Pesquisar e implementar a compilação do projeto para um único arquivo executável (binário estático). Preferência pelo `Nuitka` pela performance superior e proteção de código.
 - **Modo "Windowed" (No Console):** Configurar o binário para rodar como um aplicativo de janela nativo do Windows, eliminando a necessidade de uma janela de terminal visível por padrão.
-- **Resource Embedding:** Utilizar técnicas de inclusão de arquivos (Data Files) para embutir os modelos `.tflite` do OpenWakeWord, o ícone `icon.ico` e possíveis arquivos de áudio de resposta diretamente no `.exe`.
+- **Resource Embedding:** Utilizar técnicas de inclusão de arquivos (Data Files) para embutir os modelos `.onnx` do OpenWakeWord, o ícone `icon.ico` e possíveis arquivos de áudio de resposta diretamente no `.exe`.
 
 ### 🔹 Instalador e Autostart Nativo
 - **Setup Profissional (Inno Setup / Wix):** Criar um instalador que gerencie a pasta de instalação em `AppData` ou `Program Files`.

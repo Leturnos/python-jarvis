@@ -19,7 +19,7 @@ O projeto utiliza inteligência artificial local para detecção de comandos de 
 ## 🚀 Tecnologias
 
 - **Linguagem:** [Python 3.13+](https://www.python.org/)
-- **IA/Voz:** `openwakeword` (modelos TFLite).
+- **IA/Voz:** `openwakeword` (modelos ONNX).
 - **Interface & UI:** `rich` (Terminal), `plyer` (Notificações), `pystray` & `Pillow` (System Tray).
 - **Automação de Interface:** `pyautogui`, `pygetwindow` e `pywin32`.
 - **Gerenciador de Pacotes:** [uv](https://github.com/astral-sh/uv).
@@ -70,13 +70,13 @@ Diferente de versões anteriores, a configuração é separada em dois arquivos 
      - Configurações de integrações, referenciando as variáveis de ambiente (ex: `"${WARP_PATH}"`).
      
    - **`wakewords`**: 
-     - Cada chave é o nome de um modelo `.tflite`.
+     - Cada chave é o nome de um modelo `.onnx`.
      - `action`: Pode ser `warp` ou `system`.
      - `commands`: Lista de comandos a serem digitados. Utiliza expansão de variáveis (ex: `${PROJECT_PATH}`).
 
 ## 🧠 Treinando Novos Comandos (Opcional)
 
-Graças ao **Roteamento Inteligente**, você não precisa mais treinar um arquivo `.tflite` para cada comando. Basta configurar a chave no `config.yaml` e o Jarvis entenderá quando você disser a frase após o "Hey Jarvis".
+Graças ao **Roteamento Inteligente**, você não precisa mais treinar um arquivo `.onnx` para cada comando. Basta configurar a chave no `config.yaml` e o Jarvis entenderá quando você disser a frase após o "Hey Jarvis".
 
 O treinamento manual ainda é útil se você desejar uma ativação **instantânea e offline** para um comando específico (sem passar pelo STT/LLM). Para isso, utilize o notebook oficial:
 🔗 [openWakeWord Training Colab](https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb?usp=sharing#scrollTo=1cbqBebHXjFD)
@@ -86,7 +86,7 @@ O treinamento manual ainda é útil se você desejar uma ativação **instantân
 2. Na variável `target_word` (Fase 3), digite a palavra ou frase que deseja treinar (ex: `"jarvis fechar tudo"`).
 3. Clique em **Ambiente de execução > Executar tudo**. 
    *(Nota: Na primeira vez, após instalar as bibliotecas na Fase 2, o Colab pode pedir para "Reiniciar a sessão". Se isso ocorrer, reinicie e clique em "Executar tudo" novamente).*
-4. Ao final, baixe o arquivo `.tflite` gerado, coloque-o na pasta `models/` do projeto e configure a nova ação no seu `config.yaml`.
+4. Ao final, baixe o arquivo `.onnx` gerado, coloque-o na pasta `models/` do projeto e configure a nova ação no seu `config.yaml`.
 
 ## 🚀 Inicialização Automática (Autostart Invisível)
 

@@ -33,7 +33,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 
 ## 📦 Fase 5: Distribuição (Entregando o Produto)
 - [ ] **Compilação (.exe):** Usar `Nuitka` ou `PyInstaller` para transformar o projeto em um executável autônomo e otimizado.
-- [ ] **Bundle de Recursos:** Embutir modelos `.tflite`, arquivos de áudio e o ícone `.ico` dentro do binário final.
+- [ ] **Bundle de Recursos:** Embutir modelos `.onnx`, arquivos de áudio e o ícone `.ico` dentro do binário final.
 - [ ] **Modo "Windowed":** Configurar o build para que o executável rode sem abrir a janela preta do console por padrão.
 - [ ] **Instalador (MSI/EXE):** Criar um setup profissional (ex: Inno Setup) que configure o Autostart e atalhos automaticamente.
 

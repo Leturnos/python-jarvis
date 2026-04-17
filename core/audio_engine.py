@@ -33,7 +33,7 @@ def load_wakeword_model():
     pretrained_paths = openwakeword.get_pretrained_model_paths()
     
     # Custom paths from models/
-    custom_paths = glob.glob(os.path.join("models", "*.tflite"))
+    custom_paths = glob.glob(os.path.join("models", "*.onnx"))
     
     all_available_paths = pretrained_paths + custom_paths
     
