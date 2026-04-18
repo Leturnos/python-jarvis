@@ -22,3 +22,6 @@ resources/launcher.vbs
 
 # Superpowers Plans
 docs/superpowers/plans/
+
+# Worktrees
+.worktrees/
