@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 .venv/
@@ -14,7 +15,10 @@ resources/launcher.vbs
 .idea/
 
 # OpenWakeWord Models
-*.tflite
+*.onnx
 
 # Environment Variables
 .env
+
+# Superpowers Plans
+docs/superpowers/plans/

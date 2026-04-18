@@ -28,7 +28,8 @@ class LLMAgent:
         {{
             "type": "action",
             "action": "warp" ou "system",
-            "commands": ["comando 1", "comando 2"]
+            "commands": ["comando 1", "comando 2"],
+            "risk_level": "safe", "dangerous" ou "blocked"
         }}
 
         2. Se for um CHAT (conversa, pergunta, saudação):
@@ -36,6 +37,11 @@ class LLMAgent:
             "type": "chat",
             "message": "Sua resposta curta e natural aqui."
         }}
+
+        Tiers de risk_level:
+        - "safe": Ações comuns, consultas, abrir pastas. Use como padrão para qualquer ação que não seja claramente perigosa ou bloqueada.
+        - "dangerous": Fechar janelas, deletar arquivos específicos, alterar configurações do sistema.
+        - "blocked": Formatar discos, deletar pastas do sistema (Windows, System32), apagar recursivamente o disco C:, ou qualquer ação catastrófica.
 
         Regras:
         - Se a ação for de terminal (Warp), use comandos bash/powershell.
@@ -58,6 +64,11 @@ class LLMAgent:
                 result = result[3:-3].strip()
                 
             json_data = json.loads(result)
+            ALLOWED_RISKS = ["safe", "dangerous", "blocked"]
+            if json_data.get("type") == "action":
+                if json_data.get("risk_level") not in ALLOWED_RISKS:
+                    json_data["risk_level"] = "safe"
+            
             logger.info(f"LLM Response: {json_data}")
             return json_data
         except Exception as e:

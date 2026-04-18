@@ -8,13 +8,15 @@ integrations:
     path: "${WARP_PATH}"
 
 wakewords:
-  hey_jarvis:
-    action: warp
-    commands:
-      - 'cd ${PROJECT_PATH}'
-      - 'gemini'
-  
+  programar:
+     action: warp
+     commands:
+       - 'cd ${PROJECT_PATH}'
+       - 'code .'
+       - 'gemini'
+       
   fechar_tudo:
     action: system
+    risk_level: "dangerous"
     commands:
       - 'echo "Simulating close all..."'

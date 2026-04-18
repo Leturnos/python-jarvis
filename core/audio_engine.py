@@ -63,13 +63,16 @@ def load_wakeword_model():
     logger.info(f"Loading wakeword models: {loaded_names}")
     return Model(wakeword_model_paths=selected_paths), loaded_names
 
-def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_threshold=15.0):
+def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_threshold=15.0, stop_event=None):
     logger.info("Recording command...")
     frames = []
     start_time = time.time()
     silence_start = None
     
     while time.time() - start_time < max_seconds:
+        if stop_event and stop_event.is_set():
+            logger.info("Stop event detected. Stopping recording.")
+            break
         try:
             data = stream.read(1280, exception_on_overflow=False)
             frames.append(data)

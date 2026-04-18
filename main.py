@@ -24,29 +24,35 @@ from core.notifications import JarvisNotifier
 from core.tray import JarvisTray
 from core.utils import normalize_text
 
-def command_worker(task_queue, dispatcher, notifier, stop_event):
+def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
     """Worker thread that executes commands from the queue."""
     pythoncom.CoInitialize()
     logger.info("Command worker thread initialized.")
     
     while not stop_event.is_set():
         try:
-            try:
-                task_data = task_queue.get(timeout=1.0)
-            except queue.Empty:
-                continue
-                
+            task_data = task_queue.get(timeout=1.0)
+        except queue.Empty:
+            continue
+            
+        try:
             task_type, payload = task_data
             
             if task_type == 'llm_dynamic':
                 audio_bytes = payload
                 notifier.notify("Jarvis", "Processando áudio...")
                 
+                # Check for silence to prevent Whisper from hanging
+                pcm = np.frombuffer(audio_bytes, dtype=np.int16)
+                if len(pcm) == 0 or np.max(np.abs(pcm)) < 50:
+                    logger.warning("Áudio silencioso detectado. Pulando STT para evitar travamento.")
+                    dispatcher.automator.speak("Desculpe, não ouvi nada.")
+                    continue
+                
                 # 1. STT
                 text = stt_engine.transcribe(audio_bytes)
                 if not text:
                     dispatcher.automator.speak("Desculpe, não entendi.")
-                    task_queue.task_done()
                     continue
                     
                 notifier.notify("Jarvis", f"Entendi: '{text}'.")
@@ -60,7 +66,6 @@ def command_worker(task_queue, dispatcher, notifier, stop_event):
                 if normalized in available_commands:
                     logger.info(f"Exact match found: {normalized}")
                     dispatcher.handle(normalized)
-                    task_queue.task_done()
                     continue
                 
                 # 4. Stage 2: Fuzzy Match (difflib)
@@ -69,7 +74,6 @@ def command_worker(task_queue, dispatcher, notifier, stop_event):
                     match = matches[0]
                     logger.info(f"Fuzzy match found: {match} for {normalized}")
                     dispatcher.handle(match)
-                    task_queue.task_done()
                     continue
 
                 # 5. Stage 3: LLM Fallback (Gemini)
@@ -78,7 +82,6 @@ def command_worker(task_queue, dispatcher, notifier, stop_event):
                 
                 if not action_json:
                     dispatcher.automator.speak("Erro ao processar instrução.")
-                    task_queue.task_done()
                     continue
                     
                 # 6. Dispatch
@@ -91,14 +94,15 @@ def command_worker(task_queue, dispatcher, notifier, stop_event):
                 notifier.notify("Jarvis", f"Comando '{wakeword_name}' detectado! (Score: {score:.2f})")
                 dispatcher.handle(wakeword_name)
             
-            task_queue.task_done()
-            logger.info("Worker finished task.")
         except Exception as e:
             logger.error(f"Error in command worker: {e}")
-            
-    pythoncom.CoUninitialize()
-    logger.info("Command worker thread stopped.")
+        finally:
+            task_queue.task_done()
+            worker_busy.clear()
+            logger.info("Worker finished task and cleared busy flag.")
 
+            pythoncom.CoUninitialize()
+            logger.info("Command worker thread stopped.")
 def main():
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
@@ -123,27 +127,28 @@ def main():
             win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
     
     stop_event = threading.Event()
+    worker_busy = threading.Event()
     task_queue = queue.Queue()
     
     def on_stop():
         stop_event.set()
 
     automator = WarpAutomator(config)
-    dispatcher = ActionDispatcher(config, automator)
+    pa, stream = get_audio_stream()
+    dispatcher = ActionDispatcher(config, automator, stream)
     model, loaded_names = load_wakeword_model()
     
     if not model:
         logger.error("Failed to load any wakeword models. Exiting.")
         sys.exit(1)
         
-    pa, stream = get_audio_stream()
     ui = JarvisUI(loaded_names)
     notifier = JarvisNotifier()
     tray = JarvisTray(on_stop_callback=on_stop, start_minimized=is_minimized, notifier=notifier)
     
     worker_thread = threading.Thread(
         target=command_worker, 
-        args=(task_queue, dispatcher, notifier, stop_event),
+        args=(task_queue, dispatcher, notifier, stop_event, worker_busy),
         daemon=True
     )
     worker_thread.start()
@@ -157,9 +162,26 @@ def main():
     threshold = config.get('jarvis', {}).get('threshold', 0.4)
     cooldown_seconds = config.get('jarvis', {}).get('cooldown_seconds', 5)
 
+    was_busy = False
+
     try:
         with ui.get_live() as live:
             while not stop_event.is_set():
+                if worker_busy.is_set():
+                    ui.update(status="Processando...")
+                    was_busy = True
+                    time.sleep(0.2)
+                    continue
+
+                if was_busy:
+                    was_busy = False
+                    try:
+                        model.reset() # Reset openwakeword state to prevent false positives from old audio
+                        stream.stop_stream()
+                        stream.start_stream()
+                    except Exception as e:
+                        logger.error(f"Error resetting stream: {e}")
+
                 tray_muted = tray.is_muted()
                 
                 try:
@@ -224,6 +246,7 @@ def main():
                         logger.info(f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})")
                         ui.update(status=f"Detected: {ww_name_clean}", score=highest_score)
                         
+                        worker_busy.set()
                         if ww_name_clean == 'hey_jarvis':
                             ui.update(status="Gravando...")
                             automator.speak("Sim?")

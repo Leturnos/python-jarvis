@@ -23,3 +23,8 @@ dependencies = [
     "rich>=14.3.3",
     "setuptools>=82.0.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
