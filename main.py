@@ -16,7 +16,7 @@ from core.logger_config import logger
 from core.config import config
 from core.automator import WarpAutomator
 from core.dispatcher import ActionDispatcher
-from core.audio_engine import get_audio_stream, load_wakeword_model, record_command_audio
+from core.audio_engine import get_audio_stream, load_wakeword_model
 from core.stt_engine import stt_engine
 from core.llm_agent import llm_agent
 from core.ui import JarvisUI
@@ -101,8 +101,9 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
             worker_busy.clear()
             logger.info("Worker finished task and cleared busy flag.")
 
-            pythoncom.CoUninitialize()
-            logger.info("Command worker thread stopped.")
+    pythoncom.CoUninitialize()
+    logger.info("Command worker thread stopped.")
+
 def main():
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
@@ -164,6 +165,11 @@ def main():
 
     was_busy = False
 
+    is_recording_command = False
+    command_frames = []
+    silence_start = None
+    command_start_time = None
+
     try:
         with ui.get_live() as live:
             while not stop_event.is_set():
@@ -216,6 +222,32 @@ def main():
                         _, stream = get_audio_stream()
                         continue
 
+                    if is_recording_command:
+                        ui.update(status="Gravando...")
+                        command_frames.append(audio_data)
+                        rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
+                        
+                        if rms < 15.0: # Silence threshold
+                            if silence_start is None:
+                                silence_start = time.time()
+                            elif time.time() - silence_start > 1.5:
+                                # Silence detected, end recording
+                                is_recording_command = False
+                                audio_bytes = b"".join(command_frames)
+                                worker_busy.set()
+                                task_queue.put(('llm_dynamic', audio_bytes))
+                        else:
+                            silence_start = None
+                            
+                        if time.time() - command_start_time > 10.0:
+                            # Max timeout
+                            is_recording_command = False
+                            audio_bytes = b"".join(command_frames)
+                            worker_busy.set()
+                            task_queue.put(('llm_dynamic', audio_bytes))
+                            
+                        continue # Pula o processamento do openwakeword enquanto grava comando
+
                     # Prediction
                     highest_score = 0.0
                     detected_wakeword = None
@@ -246,13 +278,16 @@ def main():
                         logger.info(f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})")
                         ui.update(status=f"Detected: {ww_name_clean}", score=highest_score)
                         
-                        worker_busy.set()
                         if ww_name_clean == 'hey_jarvis':
-                            ui.update(status="Gravando...")
                             automator.speak("Sim?")
-                            audio_bytes = record_command_audio(stream)
-                            task_queue.put(('llm_dynamic', audio_bytes))
+                            is_recording_command = True
+                            command_frames = []
+                            silence_start = None
+                            command_start_time = time.time()
+                            ui.update(status="Gravando...")
+                            continue 
                         else:
+                            worker_busy.set()
                             automator.speak("Sim?")
                             task_queue.put((ww_name_clean, highest_score))
                         
