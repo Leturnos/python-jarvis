@@ -59,8 +59,18 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                 notifier.notify("Jarvis", f"Entendi: '{text}'.")
                 
                 # 2. Preparation
-                intents = palette.all_commands # Reuse palette's loaded intent structures
-                available_commands = [i['intent'] for i in intents]
+                from core.plugin_manager import plugin_manager
+                intents = plugin_manager.get_intents()
+                
+                # Build a mapping of possible phrases to their intent
+                available_commands_map = {}
+                for i in intents:
+                    intent_name = i['intent']
+                    available_commands_map[normalize_text(intent_name)] = intent_name
+                    for phrase in i.get('phrases', []):
+                        available_commands_map[normalize_text(phrase)] = intent_name
+                
+                available_commands = list(available_commands_map.keys())
                 normalized = normalize_text(text)
                 
                 dispatcher.last_input_text = text
@@ -68,13 +78,14 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                 
                 # 3. Stage 1: Exact Match
                 if normalized in available_commands:
-                    logger.info(f"Exact match found: {normalized}")
+                    matched_intent = available_commands_map[normalized]
+                    logger.info(f"Exact match found: {normalized} -> {matched_intent}")
                     dispatcher.last_input_source = "voice_exact"
                     dispatcher.last_confidence = 1.0
                     action_config = {
                         "action": "plugin",
-                        "intent": normalized,
-                        "risk_level": next((i['risk_level'] for i in intents if i['intent'] == normalized), "safe")
+                        "intent": matched_intent,
+                        "risk_level": next((i['risk_level'] for i in intents if i['intent'] == matched_intent), "safe")
                     }
                     dispatcher._handle_plugin(action_config)
                     continue
@@ -92,13 +103,14 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                         best_match = cmd
                 
                 if best_match and highest_ratio > 0.7:
-                    logger.info(f"Fuzzy match found: {best_match} for {normalized} (Score: {highest_ratio:.2f})")
+                    matched_intent = available_commands_map[best_match]
+                    logger.info(f"Fuzzy match found: {best_match} for {normalized} (Score: {highest_ratio:.2f}) -> {matched_intent}")
                     dispatcher.last_input_source = "voice_fuzzy"
                     dispatcher.last_confidence = highest_ratio
                     action_config = {
                         "action": "plugin",
-                        "intent": best_match,
-                        "risk_level": next((i['risk_level'] for i in intents if i['intent'] == best_match), "safe")
+                        "intent": matched_intent,
+                        "risk_level": next((i['risk_level'] for i in intents if i['intent'] == matched_intent), "safe")
                     }
                     dispatcher._handle_plugin(action_config)
                     continue
@@ -106,7 +118,7 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                 # 5. Stage 3: LLM Fallback (Gemini)
                 notifier.notify("Jarvis", "Pensando...")
                 dispatcher.last_confidence = 1.0 # Gemini confidence is opaque for now
-                action_json = llm_agent.process_instruction(text, context_commands=available_commands)
+                action_json = llm_agent.process_instruction(text, context_commands=list(set(available_commands_map.values())))
                 
                 if not action_json:
                     dispatcher.automator.speak("Erro ao processar instrução.")

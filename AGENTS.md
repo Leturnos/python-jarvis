@@ -26,15 +26,17 @@ O Jarvis é um assistente minimalista controlado por voz para Windows, projetado
    - O loop principal gerencia a captura de áudio e a detecção da palavra de ativação.
    - O processamento de comandos (STT, LLM, Dispatch) roda em uma thread separada chamada `command_worker` para evitar o bloqueio do stream de áudio.
    - **Crucial:** Sempre use `pythoncom.CoInitialize()` no início de novas threads que interagem com objetos COM do Windows (como SAPI5 para TTS) e `pythoncom.CoUninitialize()` no final.
-2. **Configuração:** 
+2. **Normalização Simétrica (NLP):**
+   - **Regra:** Sempre aplique `normalize_text` em ambos os lados da comparação (input do usuário E strings de comando/frases dos plugins). Isso evita falhas causadas por espaços vs underscores ou capitalização.
+3. **Configuração:** 
    - Nunca coloque chaves de API ou caminhos (paths) fixos no código (hardcode). Use `core/config.py` que mescla os arquivos `.env` e `config.yaml`.
-3. **Roteamento de Comandos:**
+4. **Roteamento de Comandos:**
    - Prefira o match local (Exato ou Fuzzy via `difflib`) em vez de chamadas ao LLM pela velocidade e confiabilidade.
    - O agente LLM retorna um formato JSON estrito com um discriminador `type` (`"action"` ou `"chat"`).
-4. **UI e Logs:**
+5. **UI e Logs:**
    - Use `core.logger_config.logger` para todos os registros (logs).
    - A interface do terminal é gerenciada por `core.ui.JarvisUI`. Não use `print` diretamente no console dentro do loop principal para não quebrar a exibição ao vivo (Live) do `rich`.
-5. **Idioma:**
+6. **Idioma:**
    - O usuário interage em Português. O TTS (texto para fala), prompts do LLM e documentações internas (como esta) devem usar o Português como padrão. Para o restante, incluindo código e comentários, utilize inglês.
 
 ## 🧪 Testes
@@ -42,3 +44,11 @@ O Jarvis é um assistente minimalista controlado por voz para Windows, projetado
 - Rode os testes usando `uv run python -m unittest discover tests/`.
 
 Sempre revise os arquivos `AGENTS.md` específicos em subdiretórios para obter um contexto mais localizado.
+
+## 🐛 Histórico de Bugs e Causa Raiz (Knowledge Base)
+
+| Bug | Causa Raiz | Solução Arquitetural |
+| :--- | :--- | :--- |
+| `NameError: 'palette' is not defined` | Acesso a variáveis de UI (Main Thread) dentro da Thread de Áudio (Worker) sem injeção de dependência. | Injetar dependências via construtor ou usar Singletons como `plugin_manager` para lógica de negócios. |
+| Falha no Match de frases com espaço (ex: "hora de trabalhar") | O texto do STT era normalizado ("hora_de_trabalhar"), mas as frases do YAML não, causando mismatch. | **Normalização Simétrica:** Aplicar o mesmo transformador de texto no carregamento dos plugins e no processamento do input. |
+| Crash `No wakewords found` | `audio_engine` dependia estritamente de chaves deletadas no `config.yaml`. | Implementar Descoberta Dinâmica: varrer pastas físicas (ex: `models/`) em vez de confiar apenas em manifestos de configuração. |
