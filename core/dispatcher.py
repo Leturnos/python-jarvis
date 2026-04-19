@@ -204,6 +204,10 @@ class ActionDispatcher:
                     self.automator.type_text(text)
                     import pyautogui
                     pyautogui.press('enter')
+                elif a_type == 'system_exec':
+                    command = action.get('command', '')
+                    logger.info(f"system_exec: {command}")
+                    subprocess.run(command, shell=True, check=True)
                 else:
                     logger.warning(f"Unknown plugin action type: {a_type}")
             except Exception as e:

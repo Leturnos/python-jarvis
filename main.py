@@ -59,14 +59,19 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                 notifier.notify("Jarvis", f"Entendi: '{text}'.")
                 
                 # 2. Preparation
-                wakewords_config = config.get('wakewords', {})
-                available_commands = [k for k in wakewords_config.keys() if k != 'hey_jarvis']
+                intents = palette.all_commands # Reuse palette's loaded intent structures
+                available_commands = [i['intent'] for i in intents]
                 normalized = normalize_text(text)
                 
                 # 3. Stage 1: Exact Match
                 if normalized in available_commands:
                     logger.info(f"Exact match found: {normalized}")
-                    dispatcher.handle(normalized)
+                    action_config = {
+                        "action": "plugin",
+                        "intent": normalized,
+                        "risk_level": next((i['risk_level'] for i in intents if i['intent'] == normalized), "safe")
+                    }
+                    dispatcher._handle_plugin(action_config)
                     continue
                 
                 # 4. Stage 2: Fuzzy Match (difflib)
@@ -74,7 +79,12 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                 if matches:
                     match = matches[0]
                     logger.info(f"Fuzzy match found: {match} for {normalized}")
-                    dispatcher.handle(match)
+                    action_config = {
+                        "action": "plugin",
+                        "intent": match,
+                        "risk_level": next((i['risk_level'] for i in intents if i['intent'] == match), "safe")
+                    }
+                    dispatcher._handle_plugin(action_config)
                     continue
 
                 # 5. Stage 3: LLM Fallback (Gemini)

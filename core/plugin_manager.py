@@ -7,7 +7,7 @@ from core.config import config
 class PluginManager:
     def __init__(self, plugins_dir="plugins"):
         self.plugins_dir = plugins_dir
-        self.intents = {}  # Map of intent_name -> { description, risk_level, actions, plugin_name }
+        self.intents = {}  # Map of intent_name -> { description, risk_level, actions, phrases, plugin_name }
         self.load_plugins()
 
     def _expand_vars(self, data):
@@ -20,6 +20,20 @@ class PluginManager:
             return os.path.expandvars(data)
         else:
             return data
+
+    def _resolve_actions(self, actions, shared_actions, plugin_name):
+        """Resolves 'include' actions by replacing them with shared actions."""
+        resolved = []
+        for action in actions:
+            if action.get("type") == "include":
+                ref_name = action.get("name")
+                if ref_name in shared_actions:
+                    resolved.extend(shared_actions[ref_name])
+                else:
+                    logger.error(f"Plugin '{plugin_name}': Shared action '{ref_name}' not found.")
+            else:
+                resolved.append(action)
+        return resolved
 
     def load_plugins(self):
         """Loads all YAML/JSON plugin files from the plugins directory."""
@@ -42,6 +56,8 @@ class PluginManager:
                     continue
 
                 plugin_name = plugin_data.get("name", os.path.basename(file_path))
+                raw_shared_actions = plugin_data.get("shared_actions", {})
+                shared_actions = self._expand_vars(raw_shared_actions)
                 commands = self._expand_vars(plugin_data["commands"])
 
                 for cmd in commands:
@@ -53,10 +69,13 @@ class PluginManager:
                     if intent in self.intents:
                         logger.warning(f"Intent '{intent}' is being overwritten by plugin '{plugin_name}'")
 
+                    resolved_actions = self._resolve_actions(cmd.get("actions", []), shared_actions, plugin_name)
+
                     self.intents[intent] = {
                         "description": cmd.get("description", ""),
                         "risk_level": cmd.get("risk_level", "safe"),
-                        "actions": cmd.get("actions", []),
+                        "phrases": cmd.get("phrases", []),
+                        "actions": resolved_actions,
                         "plugin_name": plugin_name
                     }
                 logger.info(f"Loaded plugin '{plugin_name}' with {len(commands)} intents.")
@@ -67,8 +86,8 @@ class PluginManager:
         logger.info(f"PluginManager initialization complete. Loaded {len(self.intents)} intents total.")
 
     def get_intents(self):
-        """Returns a list of all loaded intent names and their descriptions."""
-        return [{"intent": k, "description": v["description"], "risk_level": v["risk_level"]} 
+        """Returns a list of all loaded intent names, descriptions and phrases."""
+        return [{"intent": k, "description": v["description"], "phrases": v.get("phrases", []), "risk_level": v["risk_level"]} 
                 for k, v in self.intents.items()]
 
     def get_actions_for_intent(self, intent_name):

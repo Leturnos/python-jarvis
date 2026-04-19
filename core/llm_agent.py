@@ -19,7 +19,11 @@ class LLMAgent:
         
         intents = plugin_manager.get_intents()
         if intents:
-            intents_str = "\n".join([f"        - Intent: '{i['intent']}' | Descrição: {i['description']} | Risco: {i['risk_level']}" for i in intents])
+            intents_list = []
+            for i in intents:
+                phrases_str = f" | Frases: {', '.join(i['phrases'])}" if i.get('phrases') else ""
+                intents_list.append(f"        - Intent: '{i['intent']}' | Descrição: {i['description']}{phrases_str} | Risco: {i['risk_level']}")
+            intents_str = "\n".join(intents_list)
         else:
             intents_str = "        Nenhum comando de plugin carregado."
 

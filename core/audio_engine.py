@@ -21,14 +21,7 @@ def get_audio_stream():
     return pa, stream
 
 def load_wakeword_model():
-    """Loads openWakeWord models based on configuration wakewords."""
-    wakewords = config.get('wakewords', {})
-    if not wakewords:
-        logger.error("No wakewords found in config!")
-        return None, []
-        
-    target_wakewords = list(wakewords.keys())
-    
+    """Loads openWakeWord models (defaults and custom from models/ folder)."""
     # Pre-trained paths
     pretrained_paths = openwakeword.get_pretrained_model_paths()
     
@@ -40,24 +33,22 @@ def load_wakeword_model():
     selected_paths = []
     loaded_names = []
     
-    for ww_name in target_wakewords:
-        # Find path that contains the wakeword name
-        found = False
-        for p in all_available_paths:
-            if ww_name in os.path.basename(p):
-                selected_paths.append(p)
-                loaded_names.append(ww_name)
-                found = True
-                break
-                
-        if not found:
-            logger.warning(f"Model for wakeword '{ww_name}' not found in pretrained or models/ folder. It will be ignored.")
+    # Always load 'hey_jarvis'
+    for p in pretrained_paths:
+        if "hey_jarvis" in os.path.basename(p):
+            selected_paths.append(p)
+            loaded_names.append("hey_jarvis")
+            break
+            
+    # Load any user-provided models from 'models/' directory for offline shortcuts
+    for p in custom_paths:
+        name = os.path.splitext(os.path.basename(p))[0]
+        if name not in loaded_names:
+            selected_paths.append(p)
+            loaded_names.append(name)
             
     if not selected_paths:
-        logger.error("No valid models found to load. Falling back to default hey_jarvis if possible.")
-        fallback = [p for p in pretrained_paths if "hey_jarvis" in p]
-        if fallback:
-            return Model(wakeword_model_paths=fallback), ["hey_jarvis"]
+        logger.error("No valid models found to load.")
         return None, []
         
     logger.info(f"Loading wakeword models: {loaded_names}")

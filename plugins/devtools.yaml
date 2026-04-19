@@ -2,18 +2,60 @@ name: "DevTools Automations"
 description: "Automações para ferramentas de desenvolvimento"
 version: "1.0.0"
 
+shared_actions:
+  preparar_ambiente:
+    - type: "system_open"
+      target: "${WARP_PATH}"
+    - type: "wait"
+      duration: 0.5
+    - type: "keyboard_shortcut"
+      keys: ["ctrl", "shift", "t"]
+    - type: "wait"
+      duration: 1.0
+    - type: "type_and_enter"
+      text: "cd ${PROJECT_PATH}"
+    - type: "wait"
+      duration: 0.5
+
 commands:
-  - intent: "open_warp_and_start_backend"
-    description: "Abre o terminal Warp na pasta do projeto e roda o servidor"
+  - intent: "iniciar_backend"
+    phrases: 
+      - "ligar o servidor"
+      - "rodar o backend"
+      - "iniciar projeto"
+      - "subir o sistema"
+    description: "Abre o terminal na pasta do projeto e roda o servidor Node/Python"
     risk_level: "safe"
     actions:
-      - type: "system_open"
-        target: "${WARP_PATH}"
+      - type: "include"
+        name: "preparar_ambiente"
+      - type: "type_and_enter"
+        text: "npm run dev"
+
+  - intent: "programar"
+    phrases:
+      - "hora de trabalhar"
+      - "preparar ambiente de código"
+      - "abrir vscode e terminal"
+    description: "Prepara o ambiente de trabalho: abre o terminal e o VS Code"
+    risk_level: "safe"
+    actions:
+      - type: "include"
+        name: "preparar_ambiente"
+      - type: "type_and_enter"
+        text: "code ."
       - type: "wait"
         duration: 0.5
-      - type: "keyboard_shortcut"
-        keys: ["ctrl", "shift", "t"]
-      - type: "wait"
-        duration: 1.2
       - type: "type_and_enter"
-        text: "cd ${PROJECT_PATH} && npm run dev"
+        text: "gemini"
+
+  - intent: "fechar_tudo"
+    phrases:
+      - "encerrar expediente"
+      - "fechar programas"
+      - "modo descanso"
+    description: "Simula o encerramento do ambiente"
+    risk_level: "dangerous"
+    actions:
+      - type: "system_exec"
+        command: 'echo "Simulating close all..."'
