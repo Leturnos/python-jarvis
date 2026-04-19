@@ -3,6 +3,7 @@ import os
 from google import genai
 from core.logger_config import logger
 from core.config import config
+from core.plugin_manager import plugin_manager
 
 class LLMAgent:
     def __init__(self):
@@ -16,15 +17,33 @@ class LLMAgent:
     def process_instruction(self, text, context_commands=None):
         commands_list = ", ".join(context_commands) if context_commands else "Nenhum comando mapeado."
         
+        intents = plugin_manager.get_intents()
+        if intents:
+            intents_str = "\n".join([f"        - Intent: '{i['intent']}' | Descrição: {i['description']} | Risco: {i['risk_level']}" for i in intents])
+        else:
+            intents_str = "        Nenhum comando de plugin carregado."
+
         prompt = f"""
         Você é o Jarvis, um assistente de terminal no Windows.
         O usuário falou: "{text}"
-        Os comandos locais disponíveis são: [{commands_list}]
+        
+        Comandos de Plugins disponíveis:
+{intents_str}
+        
+        Outros comandos locais: [{commands_list}]
         
         Sua tarefa é decidir se o usuário quer executar uma ação técnica ou apenas conversar.
         Retorne um JSON estrito seguindo um destes formatos:
 
-        1. Se for uma AÇÃO (comando de sistema ou terminal):
+        1. Se for uma AÇÃO mapeada em um Plugin:
+        {{
+            "type": "action",
+            "action": "plugin",
+            "intent": "NOME_DO_INTENT_AQUI",
+            "risk_level": "NÍVEL_DE_RISCO_DO_INTENT"
+        }}
+
+        2. Se for uma AÇÃO genérica de sistema ou terminal (Warp):
         {{
             "type": "action",
             "action": "warp" ou "system",
@@ -32,7 +51,7 @@ class LLMAgent:
             "risk_level": "safe", "dangerous" ou "blocked"
         }}
 
-        2. Se for um CHAT (conversa, pergunta, saudação):
+        3. Se for um CHAT (conversa, pergunta, saudação):
         {{
             "type": "chat",
             "message": "Sua resposta curta e natural aqui."
@@ -44,8 +63,9 @@ class LLMAgent:
         - "blocked": Formatar discos, deletar pastas do sistema (Windows, System32), apagar recursivamente o disco C:, ou qualquer ação catastrófica.
 
         Regras:
-        - Se a ação for de terminal (Warp), use comandos bash/powershell.
-        - Se for de sistema, use comandos válidos de Windows CMD.
+        - Se a ação corresponder a um comando de plugin, prefira o formato 1.
+        - Se a ação for de terminal (Warp), use comandos bash/powershell (formato 2).
+        - Se for de sistema, use comandos válidos de Windows CMD (formato 2).
         - Retorne APENAS o JSON, sem crases markdown (```json).
         """
         

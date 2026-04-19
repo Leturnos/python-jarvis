@@ -10,8 +10,8 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Logging:** Substituir todos os `print()` por `logging.info()` e `logging.error()`, salvando-os em `jarvis.log`.
 - [x] **POO Inicial:** Criar a classe `WarpAutomator` para encapsular a lógica de busca e ativação da janela.
 - [x] **Sensibilidade Dinâmica:** Ajustar o código para ler o threshold de sensibilidade do arquivo de config, facilitando o ajuste fino sem mexer no código.
-- [ ] **Sistema de Plugins (Arquitetura):** Refatorar o roteamento de comandos (`dispatcher.py`) para carregar "habilidades" dinamicamente de uma pasta `plugins/` *(Cuidado: evitar overengineering, manter simples)*.
-- [ ] **Mini DSL Declarativa:** Criar formato simplificado (`.yaml` ou `.json`) para definir comandos de voz e suas respectivas automações.
+- [x] **Sistema de Plugins (Arquitetura):** Refatorar o roteamento de comandos (`dispatcher.py`) para carregar "habilidades" dinamicamente de uma pasta `plugins/` *(Cuidado: evitar overengineering, manter simples)*.
+- [x] **Mini DSL Declarativa:** Criar formato simplificado (`.yaml` ou `.json`) para definir comandos de voz e suas respectivas automações.
 
 ## 🎨 Fase 2: Experiência do Usuário (Dando Vida)
 - [x] **Feedback de Voz (TTS):** Integrar a biblioteca `pyttsx3` para o Jarvis falar "Sim?" ao detectar o comando e "Pronto!" ao terminar.

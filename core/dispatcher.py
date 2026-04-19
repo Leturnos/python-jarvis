@@ -105,6 +105,8 @@ class ActionDispatcher:
             self._handle_warp(action_config)
         elif action_type == 'system':
             self._handle_system(action_config)
+        elif action_type == 'plugin':
+            self._handle_plugin(action_config)
         else:
             logger.error(f"Unknown action: {action_type}")
             self.automator.speak("Tipo de ação desconhecida.")
@@ -134,6 +136,8 @@ class ActionDispatcher:
             self._handle_warp(action_config)
         elif action_type == 'system':
             self._handle_system(action_config)
+        elif action_type == 'plugin':
+            self._handle_plugin(action_config)
         else:
             logger.error(f"Unknown action in dynamic config: {action_type}")
             self.automator.speak("Ação dinâmica desconhecida.")
@@ -164,4 +168,47 @@ class ActionDispatcher:
                 return
                 
         logger.info("System commands executed successfully.")
+        self.automator.speak("Pronto!")
+
+    def _handle_plugin(self, action_config):
+        intent_name = action_config.get('intent')
+        if not intent_name:
+            logger.error("No intent provided for plugin action.")
+            self.automator.speak("Ação de plugin sem intenção definida.")
+            return
+
+        actions = plugin_manager.get_actions_for_intent(intent_name)
+        if not actions:
+            logger.error(f"No actions found for intent: {intent_name}")
+            self.automator.speak("Comando de plugin não encontrado.")
+            return
+
+        logger.info(f"Executing plugin actions for intent: {intent_name}")
+        for action in actions:
+            a_type = action.get('type')
+            try:
+                if a_type == 'system_open':
+                    target = action.get('target')
+                    logger.info(f"system_open: {target}")
+                    subprocess.Popen(target, shell=True)
+                elif a_type == 'wait':
+                    duration = action.get('duration', 1.0)
+                    import time
+                    time.sleep(float(duration))
+                elif a_type == 'keyboard_shortcut':
+                    keys = action.get('keys', [])
+                    import pyautogui
+                    pyautogui.hotkey(*keys)
+                elif a_type == 'type_and_enter':
+                    text = action.get('text', '')
+                    self.automator.type_text(text)
+                    import pyautogui
+                    pyautogui.press('enter')
+                else:
+                    logger.warning(f"Unknown plugin action type: {a_type}")
+            except Exception as e:
+                logger.error(f"Error executing plugin action {a_type}: {e}")
+                self.automator.speak("Ocorreu um erro ao executar a automação.")
+                return
+
         self.automator.speak("Pronto!")
