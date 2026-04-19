@@ -11,7 +11,7 @@ Este diretório contém a lógica de negócios essencial e as integrações para
   - *Regra:* O processamento de áudio deve ser rápido. Evite operações de bloqueio aqui.
 
 - **`stt_engine.py`**: 
-  - Cria um wrapper em volta do modelo local `whisper`.
+  - Cria um wrapper em volta do modelo local `faster-whisper`.
   - *Regra:* Atualmente usa o modelo `tiny` para desempenho. Mantenha as dependências mínimas para garantir tempos de carregamento rápidos.
 
 - **`llm_agent.py`**: 

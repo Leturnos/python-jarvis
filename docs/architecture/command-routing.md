@@ -7,7 +7,7 @@ O Jarvis utiliza um pipeline de processamento em múltiplas etapas para garantir
 Ao detectar a palavra de ativação principal (**"Hey Jarvis"**), o sistema segue este fluxo:
 
 1.  **Ativação e Resposta:** O Jarvis responde "Sim?" e inicia a gravação ativa do áudio.
-2.  **Transcrição (STT):** O áudio é convertido em texto localmente usando o modelo **Whisper (OpenAI)**.
+2.  **Transcrição (STT):** O áudio é convertido em texto localmente usando o motor **Faster Whisper**.
 3.  **Normalização:** O texto transcrito é limpo (letras minúsculas, remoção de pontuação e espaços convertidos em `_`).
 
 ### O Pipeline de Decisão (Command Worker)

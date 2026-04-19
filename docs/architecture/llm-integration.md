@@ -6,7 +6,7 @@
 
 **Architecture:** 
 1. **Active Listening:** Extend `core/audio_engine.py` to record a continuous audio buffer after the wake word is detected, stopping upon a silence threshold.
-2. **STT:** A new `core/stt_engine.py` will use `SpeechRecognition` or `openai-whisper` directly to transcribe the recorded buffer locally.
+2. **STT:** A new `core/stt_engine.py` will use `faster-whisper` directly to transcribe the recorded buffer locally.
 3. **LLM Agent:** A new `core/llm_agent.py` will send the transcribed text to Google Gemini (via `google-generativeai`) using a strict JSON-schema prompt.
 4. **Dynamic Dispatch:** Extend `core/dispatcher.py` to accept the JSON payload and execute it just like a static YAML action.
 

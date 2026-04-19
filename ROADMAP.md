@@ -47,7 +47,7 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 *Onde o Jarvis deixa de ser um "disparador de macros" e passa a ser um assistente inteligente.*
 
 ### 🔹 Intenções Baseadas em Contexto (NLU)
-- **Comandos Dinâmicos:** Em vez de apenas uma *Wake Word*, usar o `openwakeword` para detectar comandos curtos específicos ou integrar com um modelo de STT (Speech-to-Text) leve como o `Whisper.cpp` para entender frases como "Jarvis, abra o projeto Alpha".
+- **Comandos Dinâmicos:** Em vez de apenas uma *Wake Word*, usar o `openwakeword` para detectar comandos curtos específicos ou integrar com um modelo de STT (Speech-to-Text) leve como o `faster-whisper` para entender frases como "Jarvis, abra o projeto Alpha".
 - **Integração com LLMs (Gemini/GPT):** Enviar comandos complexos para uma LLM processar e retornar um script de automação em tempo real.
 
 ### 🔹 Visão Computacional
