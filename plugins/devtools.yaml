@@ -1,0 +1,19 @@
+name: "DevTools Automations"
+description: "Automações para ferramentas de desenvolvimento"
+version: "1.0.0"
+
+commands:
+  - intent: "open_warp_and_start_backend"
+    description: "Abre o terminal Warp na pasta do projeto e roda o servidor"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "${WARP_PATH}"
+      - type: "wait"
+        duration: 0.5
+      - type: "keyboard_shortcut"
+        keys: ["ctrl", "shift", "t"]
+      - type: "wait"
+        duration: 1.2
+      - type: "type_and_enter"
+        text: "cd ${PROJECT_PATH} && npm run dev"

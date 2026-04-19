@@ -5,6 +5,7 @@ from core.security_ui import SecurityDialog
 from core.audio_engine import record_command_audio
 from core.stt_engine import stt_engine
 from core.utils import normalize_text
+from core.plugin_manager import plugin_manager
 
 class ActionDispatcher:
     def __init__(self, config, automator, audio_stream=None):
