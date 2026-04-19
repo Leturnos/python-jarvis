@@ -6,19 +6,25 @@ from core.audio_engine import record_command_audio
 from core.stt_engine import stt_engine
 from core.utils import normalize_text
 from core.plugin_manager import plugin_manager
+from core.history_db import history_manager
 
 class ActionDispatcher:
     def __init__(self, config, automator, audio_stream=None):
         self.config = config
         self.automator = automator
         self.audio_stream = audio_stream
+        self.last_input_text = "N/A"
+        self.last_input_source = "voice"
+        self.last_confidence = 1.0
 
     def _check_authorization(self, action_config):
         risk_level = action_config.get('risk_level', 'safe')
+        intent = action_config.get('intent', action_config.get('action', 'unknown'))
         
         if risk_level == 'blocked':
             logger.warning("Blocked action detected!")
             self.automator.speak("Atenção: Ação catastrófica detectada. Comando bloqueado por segurança.")
+            history_manager.log_execution(self.last_input_text, self.last_input_source, intent, risk_level, "blocked", confidence=self.last_confidence, error_msg="Policy Blocked")
             return False
             
         if risk_level == 'dangerous':
@@ -81,12 +87,15 @@ class ActionDispatcher:
             
             # UI blocks here
             result = dialog.ask()
+            if not result:
+                history_manager.log_execution(self.last_input_text, self.last_input_source, intent, risk_level, "denied", confidence=self.last_confidence, error_msg="User Refused")
             return result
             
         return True
 
-    def handle(self, wakeword_name):
+    def handle(self, wakeword_name, confidence=1.0):
         logger.info(f"Dispatching action for: {wakeword_name}")
+        self.last_confidence = confidence
         wakewords = self.config.get('wakewords', {})
         
         if wakeword_name not in wakewords:
@@ -147,10 +156,15 @@ class ActionDispatcher:
         default_warp_path = self.config.get('integrations', {}).get('warp', {}).get('path', self.automator.warp_path)
         self.automator.warp_path = action_config.get('warp_path', default_warp_path)
         self.automator.commands = action_config.get('commands', [])        
-        self.automator.run_workflow()
+        try:
+            self.automator.run_workflow()
+            history_manager.log_execution(self.last_input_text, self.last_input_source, "warp_workflow", "safe", "success", confidence=self.last_confidence)
+        except Exception as e:
+            history_manager.log_execution(self.last_input_text, self.last_input_source, "warp_workflow", "safe", "error", confidence=self.last_confidence, error_msg=str(e))
         
     def _handle_system(self, action_config):
         commands = action_config.get('commands', [])
+        risk_level = action_config.get('risk_level', 'safe')
         logger.info("Executing system commands...")
         
         for cmd in commands:
@@ -161,17 +175,22 @@ class ActionDispatcher:
             except subprocess.CalledProcessError as e:
                 logger.error(f"Command failed with exit code {e.returncode}: {cmd}")
                 self.automator.speak("Erro ao executar comando do sistema.")
+                history_manager.log_execution(self.last_input_text, self.last_input_source, "system_cmd", risk_level, "failed", confidence=self.last_confidence, error_msg=str(e))
                 return
             except Exception as e:
                 logger.error(f"Error executing system command: {e}")
                 self.automator.speak("Erro ao executar comando do sistema.")
+                history_manager.log_execution(self.last_input_text, self.last_input_source, "system_cmd", risk_level, "error", confidence=self.last_confidence, error_msg=str(e))
                 return
                 
         logger.info("System commands executed successfully.")
+        history_manager.log_execution(self.last_input_text, self.last_input_source, "system_cmd", risk_level, "success", confidence=self.last_confidence)
         self.automator.speak("Pronto!")
 
     def _handle_plugin(self, action_config):
         intent_name = action_config.get('intent')
+        risk_level = action_config.get('risk_level', 'safe')
+        
         if not intent_name:
             logger.error("No intent provided for plugin action.")
             self.automator.speak("Ação de plugin sem intenção definida.")
@@ -181,6 +200,7 @@ class ActionDispatcher:
         if not actions:
             logger.error(f"No actions found for intent: {intent_name}")
             self.automator.speak("Comando de plugin não encontrado.")
+            history_manager.log_execution(self.last_input_text, self.last_input_source, intent_name, risk_level, "failed", confidence=self.last_confidence, error_msg="Intent not found")
             return
 
         logger.info(f"Executing plugin actions for intent: {intent_name}")
@@ -213,6 +233,8 @@ class ActionDispatcher:
             except Exception as e:
                 logger.error(f"Error executing plugin action {a_type}: {e}")
                 self.automator.speak("Ocorreu um erro ao executar a automação.")
+                history_manager.log_execution(self.last_input_text, self.last_input_source, intent_name, risk_level, "error", confidence=self.last_confidence, error_msg=str(e))
                 return
 
+        history_manager.log_execution(self.last_input_text, self.last_input_source, intent_name, risk_level, "success", confidence=self.last_confidence)
         self.automator.speak("Pronto!")

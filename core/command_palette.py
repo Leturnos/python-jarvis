@@ -154,6 +154,9 @@ class CommandPalette:
                     "risk_level": selected_cmd["risk_level"]
                 }
                 # Directly call the handler to bypass wakeword logic
+                self.dispatcher.last_input_text = selected_cmd["label"]
+                self.dispatcher.last_input_source = "command_palette"
+                self.dispatcher.last_confidence = 1.0
                 self.dispatcher._handle_plugin(action_config)
                 
         threading.Thread(target=run_action, daemon=True).start()

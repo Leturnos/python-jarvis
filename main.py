@@ -63,9 +63,14 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                 available_commands = [i['intent'] for i in intents]
                 normalized = normalize_text(text)
                 
+                dispatcher.last_input_text = text
+                dispatcher.last_input_source = "voice_llm"
+                
                 # 3. Stage 1: Exact Match
                 if normalized in available_commands:
                     logger.info(f"Exact match found: {normalized}")
+                    dispatcher.last_input_source = "voice_exact"
+                    dispatcher.last_confidence = 1.0
                     action_config = {
                         "action": "plugin",
                         "intent": normalized,
@@ -75,20 +80,32 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                     continue
                 
                 # 4. Stage 2: Fuzzy Match (difflib)
-                matches = difflib.get_close_matches(normalized, available_commands, n=1, cutoff=0.7)
-                if matches:
-                    match = matches[0]
-                    logger.info(f"Fuzzy match found: {match} for {normalized}")
+                # We need the score from difflib, but get_close_matches doesn't return it.
+                # Use SequenceMatcher instead.
+                from difflib import SequenceMatcher
+                best_match = None
+                highest_ratio = 0.0
+                for cmd in available_commands:
+                    ratio = SequenceMatcher(None, normalized, cmd).ratio()
+                    if ratio > highest_ratio:
+                        highest_ratio = ratio
+                        best_match = cmd
+                
+                if best_match and highest_ratio > 0.7:
+                    logger.info(f"Fuzzy match found: {best_match} for {normalized} (Score: {highest_ratio:.2f})")
+                    dispatcher.last_input_source = "voice_fuzzy"
+                    dispatcher.last_confidence = highest_ratio
                     action_config = {
                         "action": "plugin",
-                        "intent": match,
-                        "risk_level": next((i['risk_level'] for i in intents if i['intent'] == match), "safe")
+                        "intent": best_match,
+                        "risk_level": next((i['risk_level'] for i in intents if i['intent'] == best_match), "safe")
                     }
                     dispatcher._handle_plugin(action_config)
                     continue
 
                 # 5. Stage 3: LLM Fallback (Gemini)
                 notifier.notify("Jarvis", "Pensando...")
+                dispatcher.last_confidence = 1.0 # Gemini confidence is opaque for now
                 action_json = llm_agent.process_instruction(text, context_commands=available_commands)
                 
                 if not action_json:
@@ -103,7 +120,7 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                 score = payload
                 logger.info(f"Worker starting execution for '{wakeword_name}' (Score: {score:.2f})")
                 notifier.notify("Jarvis", f"Comando '{wakeword_name}' detectado! (Score: {score:.2f})")
-                dispatcher.handle(wakeword_name)
+                dispatcher.handle(wakeword_name, confidence=score)
             
         except Exception as e:
             logger.error(f"Error in command worker: {e}")
