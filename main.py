@@ -23,6 +23,7 @@ from core.ui import JarvisUI
 from core.notifications import JarvisNotifier
 from core.tray import JarvisTray
 from core.utils import normalize_text
+from core.command_palette import CommandPalette
 
 def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
     """Worker thread that executes commands from the queue."""
@@ -146,6 +147,10 @@ def main():
     ui = JarvisUI(loaded_names)
     notifier = JarvisNotifier()
     tray = JarvisTray(on_stop_callback=on_stop, start_minimized=is_minimized, notifier=notifier)
+    
+    # Initialize Command Palette
+    palette = CommandPalette(dispatcher)
+    palette.start_background_loop()
     
     worker_thread = threading.Thread(
         target=command_worker, 
