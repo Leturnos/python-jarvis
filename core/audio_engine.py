@@ -54,6 +54,21 @@ def load_wakeword_model():
     logger.info(f"Loading wakeword models: {loaded_names}")
     return Model(wakeword_model_paths=selected_paths), loaded_names
 
+def safe_reset_audio(pa, stream):
+    """Deep cleanup and re-initialization of the PyAudio engine."""
+    logger.info("Performing hard reset of the audio engine...")
+    try:
+        if stream:
+            stream.stop_stream()
+            stream.close()
+        if pa:
+            pa.terminate()
+    except Exception as e:
+        logger.error(f"Error during audio cleanup: {e}")
+    
+    time.sleep(1.0) # Grace period for OS to release resources
+    return get_audio_stream()
+
 def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_threshold=15.0, stop_event=None):
     """Utility to record audio synchronously. Used by background threads (e.g. Security Dialog)."""
     logger.info("Recording command...")

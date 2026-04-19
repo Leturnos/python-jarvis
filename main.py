@@ -16,7 +16,7 @@ from core.logger_config import logger
 from core.config import config
 from core.automator import WarpAutomator
 from core.dispatcher import ActionDispatcher
-from core.audio_engine import get_audio_stream, load_wakeword_model
+from core.audio_engine import get_audio_stream, load_wakeword_model, safe_reset_audio
 from core.stt_engine import stt_engine
 from core.llm_agent import llm_agent
 from core.ui import JarvisUI
@@ -179,6 +179,8 @@ def main():
     cooldown_seconds = config.get('jarvis', {}).get('cooldown_seconds', 5)
 
     was_busy = False
+    consecutive_zero_rms = 0
+    MAX_ZERO_RMS_BEFORE_RESET = 30 # Approx 3 seconds of dead silence
 
     is_recording_command = False
     command_frames = []
@@ -221,20 +223,32 @@ def main():
                         if volume_multiplier != 1.0:
                             pcm = (pcm * volume_multiplier).clip(-32768, 32767).astype(np.int16)
 
+                        rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
                         ui.update(volume=pcm)
+
+                        # Self-healing: Check for dead silence (Hardware/Driver hang)
+                        if rms < 0.1: # Absolute silence, often indicates dead stream/driver
+                            consecutive_zero_rms += 1
+                        else:
+                            consecutive_zero_rms = 0
+                            
+                        if consecutive_zero_rms > MAX_ZERO_RMS_BEFORE_RESET:
+                            logger.warning("Dead silence detected! Microphone might be hung. Triggering self-healing...")
+                            ui.update(status="Self-Healing...")
+                            pa, stream = safe_reset_audio(pa, stream)
+                            dispatcher.audio_stream = stream
+                            consecutive_zero_rms = 0
+                            model.reset()
+                            continue
 
                     except Exception as e:
                         if stop_event.is_set():
                             break
-                        logger.error(f"Microphone stream error: {e}. Attempting to reconnect...")
-                        ui.update(status="Stream Error")
-                        try:
-                            stream.stop_stream()
-                            stream.close()
-                        except:
-                            pass
-                        time.sleep(2)
-                        _, stream = get_audio_stream()
+                        logger.error(f"Microphone stream error: {e}. Attempting self-healing reset...")
+                        ui.update(status="Resetting Audio...")
+                        pa, stream = safe_reset_audio(pa, stream)
+                        dispatcher.audio_stream = stream
+                        time.sleep(1)
                         continue
 
                     if is_recording_command:

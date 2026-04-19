@@ -28,7 +28,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Instância Única (Mutex):** Impedir múltiplas instâncias e restaurar a janela principal ao tentar abrir novamente.
 - [x] **Otimização de Recursos:** Garantir que o script use o mínimo de CPU possível quando estiver apenas em modo de escuta.
 - [x] **Validação de Comandos:** Adicionar uma verificação via `pyautogui` para confirmar se a aba do Warp realmente abriu antes de digitar o `cd`.
-- [ ] **Self-healing de Áudio:** Implementar rotina de *watchdog* que verifique o stream do microfone a cada N segundos e force o reset do dispositivo (nível de SO) se detectar silêncio absoluto anômalo ou erros de I/O.
+- [x] **Self-healing de Áudio:** Implementar rotina de *watchdog* que verifique o stream do microfone a cada N segundos e force o reset do dispositivo (nível de SO) se detectar silêncio absoluto anômalo ou erros de I/O.
 - [x] **Sistema de Permissões:** Formalizar as roles e security ranks (já iniciados) para requerer aprovação prévia em comandos destrutivos.
 
 ## 🧠 Fase 4: Expansão de Inteligência (O Próximo Nível)
