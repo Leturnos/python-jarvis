@@ -19,19 +19,36 @@ Este diretório contém a lógica de negócios essencial e as integrações para
   - *Regra:* Os prompts devem impor uma saída JSON estrita. O agente espera o contexto dos comandos disponíveis para realizar o roteamento inteligente entre ações técnicas (`"type": "action"`) e respostas conversacionais (`"type": "chat"`).
 
 - **`dispatcher.py`**: 
-  - Roteia os comandos para o motor de execução apropriado (Sistema ou Warp).
-  - *Regra:* Deve lidar com configurações JSON dinâmicas de forma segura. Sempre forneça um feedback de TTS (voz) alternativo caso uma ação falhe.
+  - Roteia os comandos para o motor de execução apropriado (Sistema, Warp ou Plugin).
+  - *Regra:* Deve validar o `risk_level` via `_check_authorization()` antes da execução.
+  - *Regra:* DEVE registrar o resultado de toda tentativa no `history_manager`.
+
+- **`plugin_manager.py`**:
+  - Carrega dinamicamente arquivos YAML de automação de `plugins/`.
+  - *Regra:* Suporta `shared_actions` via `type: include` e expansão de `${VAR}`.
+
+- **`history_db.py`**:
+  - Gerencia o banco SQLite `data/history.db`.
+  - *Regra:* Toda execução deve ser persistida para auditoria futura.
+
+- **`security_ui.py`**:
+  - Interface modal para autorização de comandos `dangerous`.
+  - *Regra:* Deve suportar aprovação híbrida (Clique ou Voz via STT paralelo).
+
+- **`command_palette.py`**:
+  - Interface de entrada rápida (Hotkeys).
+  - *Regra:* Não deve bloquear a thread principal de áudio.
 
 - **`automator.py`**: 
   - Lida com a interação física com o Sistema Operacional (OS) (encontrar janelas, clicar, digitar).
-  - Usa uma thread em segundo plano dedicada para o TTS (SAPI5) para evitar bloquear o fluxo de execução.
-  - *Regra:* A manipulação de janelas no Windows é frágil. Sempre inclua estratégias de fallback (alternativas em caso de falha), novas tentativas e verificações de segurança (ex: verificar o HWND da janela ativa antes de digitar).
+  - Usa uma thread em segundo plano dedicada para o TTS (SAPI5).
+  - *Regra:* Sempre inclua estratégias de fallback e verifique o HWND ativo antes de digitar.
 
 - **`config.py`**: 
   - Carregador centralizado de configuração (YAML + ENV).
 
 - **`utils.py`**: 
-  - Funções de ajuda (helpers), incluindo `normalize_text` para correspondência (matching) consistente de comandos e manipulação do Registro do Windows para o autostart.
+  - Funções de ajuda, incluindo `normalize_text` (Symmetrical Normalization).
 
 ## ⚠️ Considerações Importantes
 - **Especificidades do Windows:** Muitos módulos aqui dependem fortemente das APIs do Windows (`win32gui`, `win32con`, `pythoncom`). Garanta a compatibilidade ao fazer alterações.

@@ -9,24 +9,29 @@ O Jarvis é um assistente minimalista controlado por voz para Windows, projetado
 - **Ponto de Entrada:** `main.py` gerencia o loop principal de áudio, atualizações da interface de usuário (UI) e inicia a thread `command_worker`.
 - **Lógica Central:** Localizada no diretório `core/`.
   - `audio_engine.py`: Gerencia o stream do microfone e a detecção da palavra de ativação.
-  - `stt_engine.py`: Speech-to-text (fala para texto) local usando Faster Whisper.
-  - `llm_agent.py`: Faz a interface com o Google Gemini para processamento de linguagem natural e geração dinâmica de comandos.
-  - `dispatcher.py`: Executa as ações (comandos de sistema ou automação do terminal Warp).
+  - `stt_engine.py`: Speech-to-text local usando Faster Whisper.
+  - `llm_agent.py`: Interface com o Google Gemini para NLP.
+  - `dispatcher.py`: Roteador central que valida segurança e audita execuções no `history_db`.
+  - `plugin_manager.py`: Carregador dinâmico de intenções YAML com suporte a `shared_actions`.
   - `automator.py`: Lida com foco de janelas, digitação e TTS (SAPI5).
+  - `security_ui.py` & `command_palette.py`: Interfaces de autorização e entrada manual.
 - **Configuração:** Gerenciada via `config.yaml` (comandos, limites) e `.env` (chaves de API).
 - **Interface Gráfica (UI):** Usa `rich` para a interface do terminal e `pystray` para o ícone na bandeja do sistema (system tray).
 
 ## 🛠️ Stack Tecnológica
 - **Linguagem:** Python 3.13+
 - **Gerenciamento de Dependências:** `uv`
-- **Bibliotecas Principais:** `openwakeword`, `openai-whisper`, `google-genai` (SDK v2.0+), `pyautogui`, `pygetwindow`, `rich`.
+- **Bibliotecas Principais:** `openwakeword`, `faster-whisper`, `google-genai` (SDK v2.0+), `pyautogui`, `pygetwindow`, `rich`, `sqlite3`.
 
 ## 📜 Convenções de Código e Regras
 1. **Concorrência e Threads:** 
    - O loop principal gerencia a captura de áudio e a detecção da palavra de ativação.
    - O processamento de comandos (STT, LLM, Dispatch) roda em uma thread separada chamada `command_worker` para evitar o bloqueio do stream de áudio.
    - **Crucial:** Sempre use `pythoncom.CoInitialize()` no início de novas threads que interagem com objetos COM do Windows (como SAPI5 para TTS) e `pythoncom.CoUninitialize()` no final.
-2. **Normalização Simétrica (NLP):**
+2. **Segurança e Auditoria:**
+   - **Regra:** Toda ação submetida ao `dispatcher.py` deve possuir um `risk_level` (`safe`, `dangerous`, `blocked`).
+   - **Regra:** Toda execução (sucesso, negação do usuário ou erro) DEVE ser registrada via `history_manager.log_execution()` para persistência no SQLite (`history_db.py`).
+3. **Normalização Simétrica (NLP):**
    - **Regra:** Sempre aplique `normalize_text` em ambos os lados da comparação (input do usuário E strings de comando/frases dos plugins). Isso evita falhas causadas por espaços vs underscores ou capitalização.
 3. **Configuração:** 
    - Nunca coloque chaves de API ou caminhos (paths) fixos no código (hardcode). Use `core/config.py` que mescla os arquivos `.env` e `config.yaml`.

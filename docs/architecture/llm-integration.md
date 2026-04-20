@@ -83,13 +83,13 @@ git add core/audio_engine.py
 git commit -m "feat(audio): add continuous audio recording for commands"
 ```
 
-### Task 3: STT Engine (Whisper Local)
+### Task 3: STT Engine (Faster Whisper Local)
 
 **Files:**
 - Create: `core/stt_engine.py`
 
 - [x] **Step 1: Implement `transcribe_audio`**
-Create a Singleton or lazy-loaded instance of the Whisper model (`tiny` or `base`) to transcribe the bytes.
+Create a Singleton or lazy-loaded instance of the Faster Whisper model (`tiny` or `base`) to transcribe the bytes.
 
 ```python
 import whisper
