@@ -5,6 +5,7 @@ from core.logger_config import logger
 from core.config import config
 from core.plugin_manager import plugin_manager
 from core.cache import llm_cache
+from core.prompt_guard import PromptGuard
 
 class LLMAgent:
     def __init__(self):
@@ -16,11 +17,16 @@ class LLMAgent:
         self.model_id = "gemini-2.5-flash"
         
     def process_instruction(self, text, context_commands=None):
+        # 0. Prompt Injection Guard (Input validation)
+        if not PromptGuard.is_input_safe(text):
+            logger.warning(f"Blocked suspicious input: {text}")
+            return {"type": "chat", "message": "Desculpe, não posso processar essa instrução por motivos de segurança."}
+
         # 1. Check cache first
         cached_response = llm_cache.get(text)
         if cached_response:
             logger.info(f"Using cached LLM response for: '{text}'")
-            return cached_response
+            return PromptGuard.sanitize_output(cached_response)
 
         # 2. Cache miss, prepare prompt
         commands_list = ", ".join(context_commands) if context_commands else "Nenhum comando mapeado."
@@ -102,6 +108,9 @@ class LLMAgent:
                     json_data["risk_level"] = "safe"
             
             logger.info(f"LLM Response: {json_data}")
+            
+            # Sanitize output before saving or returning
+            json_data = PromptGuard.sanitize_output(json_data)
             
             # 3. Save to cache
             if json_data.get("type") == "action":
