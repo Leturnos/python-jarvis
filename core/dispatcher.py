@@ -170,8 +170,7 @@ class ActionDispatcher:
         for cmd in commands:
             logger.info(f"Running: {cmd}")
             try:
-                # Use subprocess to run system commands
-                subprocess.run(cmd, shell=True, check=True)
+                subprocess.run(["cmd", "/c", cmd], shell=False, check=True)
             except subprocess.CalledProcessError as e:
                 logger.error(f"Command failed with exit code {e.returncode}: {cmd}")
                 self.automator.speak("Erro ao executar comando do sistema.")
@@ -210,7 +209,8 @@ class ActionDispatcher:
                 if a_type == 'system_open':
                     target = action.get('target')
                     logger.info(f"system_open: {target}")
-                    subprocess.Popen(target, shell=True)
+                    import os
+                    os.startfile(target)
                 elif a_type == 'wait':
                     duration = action.get('duration', 1.0)
                     import time
@@ -227,7 +227,7 @@ class ActionDispatcher:
                 elif a_type == 'system_exec':
                     command = action.get('command', '')
                     logger.info(f"system_exec: {command}")
-                    subprocess.run(command, shell=True, check=True)
+                    subprocess.run(["cmd", "/c", command], shell=False, check=True)
                 else:
                     logger.warning(f"Unknown plugin action type: {a_type}")
             except Exception as e:
