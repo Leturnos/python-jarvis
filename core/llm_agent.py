@@ -4,6 +4,7 @@ from google import genai
 from core.logger_config import logger
 from core.config import config
 from core.plugin_manager import plugin_manager
+from core.cache import llm_cache
 
 class LLMAgent:
     def __init__(self):
@@ -12,9 +13,16 @@ class LLMAgent:
             logger.warning("GEMINI_API_KEY is not set.")
         
         self.client = genai.Client(api_key=api_key)
-        self.model_id = "gemini-2.0-flash"
+        self.model_id = "gemini-2.5-flash"
         
     def process_instruction(self, text, context_commands=None):
+        # 1. Check cache first
+        cached_response = llm_cache.get(text)
+        if cached_response:
+            logger.info(f"Using cached LLM response for: '{text}'")
+            return cached_response
+
+        # 2. Cache miss, prepare prompt
         commands_list = ", ".join(context_commands) if context_commands else "Nenhum comando mapeado."
         
         intents = plugin_manager.get_intents()
@@ -94,6 +102,11 @@ class LLMAgent:
                     json_data["risk_level"] = "safe"
             
             logger.info(f"LLM Response: {json_data}")
+            
+            # 3. Save to cache
+            if json_data.get("type") == "action":
+                llm_cache.set(text, json_data)
+                
             return json_data
         except Exception as e:
             logger.error(f"LLM Error: {e}")

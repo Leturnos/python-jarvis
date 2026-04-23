@@ -36,7 +36,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Integração com LLM:** Permitir que, após o comando "Hey Jarvis", o usuário possa falar uma instrução que será processada por uma IA (ex: "Abra o projeto MVP e rode os testes").
 - [x] **Validação de Estado:** Substituir possíveis abordagens de Screenshot por *Process Monitoring*, *Window State tracking* e *Timeout Detection* para gerenciar travamentos de UI.
 - [x] **Histórico e Memória:** Criar um banco de dados local SQLite (`history.db`) para armazenar logs de comandos reconhecidos, data, horário e status de execução.
-- [ ] **Cache de Respostas LLM:** Configurar um sistema de cache de similaridade semântica para retornar scripts instantâneos caso a mesma intenção de voz seja detectada novamente.
+- [x] **Cache de Respostas LLM:** Configurar um sistema de cache de similaridade semântica para retornar scripts instantâneos caso a mesma intenção de voz seja detectada novamente.
 - [ ] **Prompt Injection Guard:** Adicionar camada de sanitização estrita (Regex + validação heurística) nos *outputs* da LLM antes de enviá-los ao `subprocess` ou `pyautogui`.
 
 ## 📊 Fase 5: Observability (Monitoramento)
