@@ -71,7 +71,7 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                         "intent": matched_intent,
                         "risk_level": next((i['risk_level'] for i in intents if i['intent'] == matched_intent), "safe")
                     }
-                    dispatcher._handle_plugin(action_config)
+                    dispatcher.handle_dynamic(action_config)
                     continue
                 
                 # 4. Stage 2: Fuzzy Match (difflib)
@@ -93,7 +93,7 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                         "intent": matched_intent,
                         "risk_level": next((i['risk_level'] for i in intents if i['intent'] == matched_intent), "safe")
                     }
-                    dispatcher._handle_plugin(action_config)
+                    dispatcher.handle_dynamic(action_config)
                     continue
 
                 # 5. Stage 3: LLM Fallback (Gemini)
