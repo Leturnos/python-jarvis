@@ -92,6 +92,11 @@ class ActionDispatcher:
             result = dialog.ask()
             self.waiting_for_auth = False
             
+            # Wait for voice thread to safely exit to avoid PyAudio race conditions
+            if voice_thread.is_alive():
+                dialog.confirmed_event.set()
+                voice_thread.join(timeout=1.0)
+            
             if not result:
                 history_manager.log_execution(self.last_input_text, self.last_input_source, intent, risk_level, "denied", confidence=self.last_confidence, error_msg="User Refused")
             return result
