@@ -16,6 +16,7 @@ class ActionDispatcher:
         self.last_input_text = "N/A"
         self.last_input_source = "voice"
         self.last_confidence = 1.0
+        self.waiting_for_auth = False
 
     def _check_authorization(self, action_config):
         risk_level = action_config.get('risk_level', 'safe')
@@ -31,8 +32,10 @@ class ActionDispatcher:
             logger.warning("Dangerous action detected! Requesting authorization...")
             self.automator.speak("Ação perigosa detectada. Deseja autorizar? Diga Sim ou Não, ou use a janela na tela.")
             
-            action_desc = action_config.get('description', action_config.get('action', 'Ação do sistema'))
+            action_desc = action_config.get('description', action_config.get('intent', action_config.get('action', 'Ação do sistema')))
             dialog = SecurityDialog(action_desc)
+            
+            self.waiting_for_auth = True
             
             # Voice Integration in background
             def listen_for_confirmation(dialog, stream):
@@ -87,6 +90,8 @@ class ActionDispatcher:
             
             # UI blocks here
             result = dialog.ask()
+            self.waiting_for_auth = False
+            
             if not result:
                 history_manager.log_execution(self.last_input_text, self.last_input_source, intent, risk_level, "denied", confidence=self.last_confidence, error_msg="User Refused")
             return result

@@ -102,7 +102,10 @@ def main():
         with ui.get_live() as live:
             while not stop_event.is_set():
                 if worker_busy.is_set():
-                    ui.update(status="Processando...")
+                    if getattr(dispatcher, 'waiting_for_auth', False):
+                        ui.update(status="Aguardando Permissão...")
+                    else:
+                        ui.update(status="Processando...")
                     was_busy = True
                     time.sleep(0.2)
                     continue
