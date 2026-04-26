@@ -9,6 +9,7 @@ class JarvisState(Enum):
     THINKING = auto()           # Processing (STT / LLM)
     CONFIRMING_DRY_RUN = auto() # Waiting for user approval
     EXECUTING = auto()          # Executing automation
+    COOLDOWN = auto()           # Short pause after speaking
     MUTED = auto()              # Muted/Sleeping
     ERROR = auto()              # Error state
 
@@ -24,8 +25,9 @@ class StateManager:
             JarvisState.IDLE: [JarvisState.LISTENING, JarvisState.THINKING, JarvisState.MUTED, JarvisState.EXECUTING],
             JarvisState.LISTENING: [JarvisState.THINKING, JarvisState.IDLE, JarvisState.MUTED, JarvisState.ERROR],
             JarvisState.THINKING: [JarvisState.EXECUTING, JarvisState.CONFIRMING_DRY_RUN, JarvisState.IDLE, JarvisState.MUTED, JarvisState.ERROR],
-            JarvisState.CONFIRMING_DRY_RUN: [JarvisState.EXECUTING, JarvisState.IDLE, JarvisState.MUTED],
-            JarvisState.EXECUTING: [JarvisState.IDLE, JarvisState.ERROR, JarvisState.MUTED],
+            JarvisState.CONFIRMING_DRY_RUN: [JarvisState.EXECUTING, JarvisState.IDLE, JarvisState.MUTED, JarvisState.ERROR],
+            JarvisState.EXECUTING: [JarvisState.IDLE, JarvisState.ERROR, JarvisState.MUTED, JarvisState.COOLDOWN],
+            JarvisState.COOLDOWN: [JarvisState.IDLE, JarvisState.MUTED],
             JarvisState.MUTED: [JarvisState.IDLE],
             JarvisState.ERROR: [JarvisState.IDLE, JarvisState.MUTED]
         }

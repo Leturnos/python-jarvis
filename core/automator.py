@@ -19,6 +19,9 @@ class WarpAutomator:
         self.config = config
         self.warp_path = ""
         self.commands = []
+        self.last_spoken_text = ""
+        self.last_spoken_time = 0
+        self.is_speaking = False
 
         # Dedicated TTS Thread to avoid blocking and thread-safety issues
         self._speech_queue = queue.Queue()
@@ -56,15 +59,19 @@ class WarpAutomator:
                 try:
                     # Non-blocking check for items in queue
                     text = self._speech_queue.get(timeout=0.5)
+                    self.is_speaking = True
                     logger.info(f"Jarvis is speaking: '{text}'")
                     
                     # 0 = Synchronous speak (fine because we are in a dedicated worker thread)
                     voice.Speak(text, 0)
                     
+                    self.is_speaking = False
+                    self.last_spoken_time = time.time()
                     self._speech_queue.task_done()
                 except queue.Empty:
                     continue
                 except Exception as e:
+                    self.is_speaking = False
                     logger.error(f"SAPI TTS error: {e}")
         except Exception as e:
             logger.error(f"Failed to initialize SAPI5: {e}")
@@ -73,7 +80,13 @@ class WarpAutomator:
             logger.info("TTS Worker thread finishing.")
 
     def speak(self, text):
-        """Adds text to the speech queue for immediate, non-blocking playback."""
+        """Adds text to the speech queue with deduplication."""
+        now = time.time()
+        if text == self.last_spoken_text and (now - self.last_spoken_time) < 2.0:
+            logger.debug(f"Skipping duplicate speech: {text}")
+            return
+            
+        self.last_spoken_text = text
         self._speech_queue.put(text)
 
     def is_open(self):

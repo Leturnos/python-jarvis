@@ -16,44 +16,33 @@ class SecurityDialog:
         # Stay on top
         self.root.attributes("-topmost", True)
         
-        # Window size and position
-        window_width = 400
-        window_height = 200
-        
-        try:
-            screen_width = self.root.winfo_screenwidth()
-            screen_height = self.root.winfo_screenheight()
-        except Exception:
-            # Fallback if winfo_screenwidth fails (e.g. in some headless environments)
-            screen_width = 1920
-            screen_height = 1080
-        
-        center_x = int(screen_width/2 - window_width / 2)
-        center_y = int(screen_height/2 - window_height / 2)
-        
-        self.root.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
-        self.root.resizable(False, False)
+        # Window size and position (Dynamic based on content)
+        self.root.resizable(True, True) # Allow manual resize if needed
+        self.root.configure(bg='#2c3e50')
 
         # Style
-        self.root.configure(bg='#2c3e50')
         label_font = ("Arial", 12, "bold")
         button_font = ("Arial", 10, "bold")
 
+        # Container Frame to help with padding/centering
+        container = tk.Frame(self.root, bg='#2c3e50', padx=20, pady=20)
+        container.pack(expand=True, fill="both")
+
         # Label
         label = tk.Label(
-            self.root, 
-            text=f"Deseja executar:\n\n'{self.action_desc}'?", 
+            container, 
+            text=f"Deseja executar:\n\n{self.action_desc}?", 
             font=label_font,
             bg='#2c3e50',
             fg='white',
-            wraplength=350,
+            wraplength=500, # Increased width limit
             justify="center"
         )
-        label.pack(pady=30)
+        label.pack(pady=(0, 20))
 
         # Buttons Frame
-        btn_frame = tk.Frame(self.root, bg='#2c3e50')
-        btn_frame.pack(pady=10)
+        btn_frame = tk.Frame(container, bg='#2c3e50')
+        btn_frame.pack()
 
         def on_sim():
             self.result = True
@@ -69,25 +58,33 @@ class SecurityDialog:
             btn_frame, 
             text="SIM", 
             command=on_sim,
-            width=10,
+            width=12,
             bg='#27ae60',
             fg='white',
             font=button_font,
             activebackground='#2ecc71'
         )
-        sim_btn.pack(side=tk.LEFT, padx=20)
+        sim_btn.pack(side=tk.LEFT, padx=10)
 
         nao_btn = tk.Button(
             btn_frame, 
             text="NÃO", 
             command=on_nao,
-            width=10,
+            width=12,
             bg='#c0392b',
             fg='white',
             font=button_font,
             activebackground='#e74c3c'
         )
-        nao_btn.pack(side=tk.LEFT, padx=20)
+        nao_btn.pack(side=tk.LEFT, padx=10)
+
+        # Center window on screen after layout is calculated
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry('{}x{}+{}+{}'.format(width, height, x, y))
 
         # Handle window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", on_nao)
@@ -104,6 +101,16 @@ class SecurityDialog:
             self.confirmed_event.set()
         
         return self.result
+
+    def approve(self):
+        """Externally approves the dialog."""
+        self.result = True
+        self.close()
+
+    def reject(self):
+        """Externally rejects the dialog."""
+        self.result = False
+        self.close()
 
     def close(self):
         """Closes the dialog programmatically."""
