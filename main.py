@@ -27,6 +27,7 @@ from core.command_palette import CommandPalette
 from core.worker import command_worker
 from core.monitor import MemoryMonitor
 from core.state import state_manager, JarvisState
+from core.job_queue import Job, JobType
 
 def main():
     app_title = "Jarvis AI Assistant"
@@ -236,7 +237,7 @@ def main():
                         audio_bytes = b"".join(command_frames)
                         # Atomic state change to prevent double processing
                         state_manager.set_state(JarvisState.THINKING)
-                        task_queue.put(('llm_dynamic', audio_bytes))
+                        task_queue.put(Job(type=JobType.LLM_DYNAMIC, payload=audio_bytes))
                         command_frames = []
                         silence_start = None
                     continue
@@ -272,7 +273,7 @@ def main():
                             command_start_time = now
                         else:
                             automator.speak("Sim?")
-                            task_queue.put((ww_name_clean, highest_score))
+                            task_queue.put(Job(type=JobType.WAKEWORD, payload=(ww_name_clean, highest_score)))
                             state_manager.set_state(JarvisState.EXECUTING) # Trigger executing for non-LLM
                         
                         cooldown = now + cooldown_seconds
