@@ -37,11 +37,35 @@ class PromptGuard:
     def sanitize_output(cls, action_json: dict) -> dict:
         """
         Validates and sanitizes the LLM output to ensure it respects safety constraints.
-        If a catastrophic command is generated but marked 'safe', we escalate it to 'blocked' or 'dangerous'.
+        Supports both legacy format and new ExecutionPlan schema.
         """
         if not isinstance(action_json, dict):
             return action_json
 
+        # 1. Handle new ExecutionPlan format (Steps)
+        if "steps" in action_json:
+            highest_risk = "safe"
+            for step in action_json["steps"]:
+                cmd = step.get("command", "").lower()
+                target = step.get("target", "").lower()
+                
+                # Catastrophic blocks
+                if any(bad in cmd for bad in ["rm -rf /", "del /f /s /q c:\\", "format c:"]) or \
+                   any(bad in target for bad in ["windows", "system32"]):
+                    logger.warning(f"Output sanitization: Blocked catastrophic step detected.")
+                    step["step_risk"] = "blocked"
+                
+                # Escalation
+                if step.get("step_risk") == "blocked":
+                    highest_risk = "blocked"
+                    break
+            
+            if highest_risk == "blocked":
+                action_json["global_risk"] = "blocked"
+            
+            return action_json
+
+        # 2. Legacy format handling
         risk_level = action_json.get("risk_level", "safe")
         action_type = action_json.get("action")
         

@@ -44,7 +44,7 @@ class LLMAgent:
             intents_str = "        Nenhum comando de plugin carregado."
 
         prompt = f"""
-        Você é o Jarvis, um assistente de terminal no Windows.
+        Você é o Jarvis, um assistente de terminal no Windows. Seu objetivo é ajudar o usuário com automações seguras.
         O usuário falou: "{text}"
         
         Comandos de Plugins disponíveis:
@@ -55,38 +55,44 @@ class LLMAgent:
         Sua tarefa é decidir se o usuário quer executar uma ação técnica ou apenas conversar.
         Retorne um JSON estrito seguindo um destes formatos:
 
-        1. Se for uma AÇÃO mapeada em um Plugin:
+        1. Se for uma AÇÃO (Plugin, Sistema, Terminal, Apps):
         {{
+            "schema_version": "1.0",
             "type": "action",
-            "action": "plugin",
-            "intent": "NOME_DO_INTENT_AQUI",
-            "risk_level": "NÍVEL_DE_RISCO_DO_INTENT"
+            "intent": "nome_curto_da_intencao",
+            "explanation": "Uma frase curta explicando o que você vai fazer em termos humanos.",
+            "global_risk": "safe", "low", "medium", "high", "dangerous" ou "blocked",
+            "steps": [
+                {{
+                    "type": "command", "open_app", "write", "navigate" ou "wait",
+                    "command": "o comando se for type command",
+                    "target": "caminho ou app se for type open_app ou navigate",
+                    "text": "texto se for type write",
+                    "duration": 1.0,
+                    "step_risk": "mesmos níveis do global_risk",
+                    "description": "descrição curta deste passo"
+                }}
+            ]
         }}
 
-        2. Se for uma AÇÃO genérica de sistema ou terminal (Warp):
-        {{
-            "type": "action",
-            "action": "warp" ou "system",
-            "commands": ["comando 1", "comando 2"],
-            "risk_level": "safe", "dangerous" ou "blocked"
-        }}
-
-        3. Se for um CHAT (conversa, pergunta, saudação):
+        2. Se for um CHAT (conversa, pergunta, saudação):
         {{
             "type": "chat",
             "message": "Sua resposta curta e natural aqui."
         }}
 
-        Tiers de risk_level:
-        - "safe": Ações comuns, consultas, abrir pastas. Use como padrão para qualquer ação que não seja claramente perigosa ou bloqueada.
-        - "dangerous": Fechar janelas, deletar arquivos específicos, alterar configurações do sistema.
-        - "blocked": Formatar discos, deletar pastas do sistema (Windows, System32), apagar recursivamente o disco C:, ou qualquer ação catastrófica.
+        Tiers de Risco:
+        - "safe": Consultas, abrir pastas, git status. (Default)
+        - "low": Abrir apps, navegar em pastas.
+        - "medium": Criar pastas/arquivos, rodar testes, git commit.
+        - "high": Deletar arquivos específicos, alterar configurações.
+        - "dangerous": Matar processos, deletar pastas.
+        - "blocked": Formatar discos, deletar pastas do sistema, apagar disco C:.
 
         Regras:
-        - Se a ação corresponder a um comando de plugin, prefira o formato 1.
-        - Se a ação for de terminal (Warp), use comandos bash/powershell (formato 2).
-        - Se for de sistema, use comandos válidos de Windows CMD (formato 2).
-        - Retorne APENAS o JSON, sem crases markdown (```json).
+        - SEMPRE retorne um "explanation" humano para ações.
+        - Se a ação corresponder a um comando de plugin, use type "command" ou o tipo mais adequado dentro dos steps.
+        - Retorne APENAS o JSON, sem markdown.
         """
         
         try:
@@ -97,19 +103,24 @@ class LLMAgent:
             )
             result = response.text.strip()
             
-            # Clean up markdown if Gemini ignores instructions
+            # Clean up markdown
             if result.startswith("```json"):
                 result = result[7:-3].strip()
             elif result.startswith("```"):
                 result = result[3:-3].strip()
                 
             json_data = json.loads(result)
-            ALLOWED_RISKS = ["safe", "dangerous", "blocked"]
-            if json_data.get("type") == "action":
-                if json_data.get("risk_level") not in ALLOWED_RISKS:
-                    json_data["risk_level"] = "safe"
             
-            logger.info(f"LLM Response: {json_data}")
+            if json_data.get("type") == "action":
+                # Basic normalization for legacy compatibility if needed
+                if "risk_level" in json_data and "global_risk" not in json_data:
+                    json_data["global_risk"] = json_data["risk_level"]
+                
+                ALLOWED_RISKS = ["safe", "low", "medium", "high", "dangerous", "blocked"]
+                if json_data.get("global_risk") not in ALLOWED_RISKS:
+                    json_data["global_risk"] = "safe"
+            
+            logger.info(f"LLM Response Parsed: {json_data}")
             
             # Sanitize output before saving or returning
             json_data = PromptGuard.sanitize_output(json_data)

@@ -110,8 +110,10 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
                     dispatcher.automator.speak("Erro ao processar instrução.")
                     continue
                     
-                # 6. Dispatch
-                dispatcher.handle_dynamic(action_json)
+                # 6. Dispatch via ExecutionPlan pipeline
+                from core.execution_plan import ExecutionPlan
+                plan = ExecutionPlan.from_dict(action_json)
+                dispatcher.handle_plan(plan)
                 
             else:
                 wakeword_name = task_type

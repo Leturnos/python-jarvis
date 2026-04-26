@@ -1,5 +1,6 @@
 import subprocess
 import threading
+from typing import Optional
 from core.logger_config import logger
 from core.security_ui import SecurityDialog
 from core.audio_engine import record_command_audio
@@ -8,6 +9,7 @@ from core.utils import normalize_text
 from core.plugin_manager import plugin_manager
 from core.history_db import history_manager
 from core.state import state_manager, JarvisState
+from core.execution_plan import ExecutionPlan, ExecutionStep, StepType, RiskLevel
 
 class ActionDispatcher:
     def __init__(self, config, automator, audio_stream=None):
@@ -18,6 +20,153 @@ class ActionDispatcher:
         self.last_input_source = "voice"
         self.last_confidence = 1.0
         self.waiting_for_auth = False
+        self.last_plan: Optional[ExecutionPlan] = None
+
+    def handle_plan(self, plan: ExecutionPlan):
+        """Processes an ExecutionPlan, including validation and user confirmation."""
+        logger.info(f"Handling execution plan: {plan.intent} (Risk: {plan.global_risk.value})")
+        
+        # 1. Prompt Guard Validation (Secondary check of the parsed plan)
+        from core.prompt_guard import PromptGuard
+        # We pass the raw dict back for sanitization as PromptGuard works on dicts for now
+        sanitized_dict = PromptGuard.sanitize_output(plan.to_dict())
+        plan = ExecutionPlan.from_dict(sanitized_dict)
+
+        if plan.global_risk == RiskLevel.BLOCKED:
+            logger.warning("Plan blocked by PromptGuard!")
+            self.automator.speak("Ação bloqueada por segurança.")
+            return False
+
+        # 2. Check if Dry-run is needed
+        dry_run_config = self.config.get('dry_run', {})
+        require_confirmation = dry_run_config.get('enabled', True)
+        
+        if plan.global_risk == RiskLevel.SAFE and dry_run_config.get('bypass_for_safe_intents', True):
+            require_confirmation = False
+
+        if require_confirmation:
+            if not self._confirm_dry_run(plan):
+                logger.info("Plan rejected by user.")
+                return False
+
+        # 3. Execute
+        return self.execute_plan(plan)
+
+    def _confirm_dry_run(self, plan: ExecutionPlan) -> bool:
+        """Requests user confirmation for the execution plan."""
+        logger.info(f"Requesting confirmation for plan: {plan.intent}")
+        state_manager.set_state(JarvisState.CONFIRMING_DRY_RUN, context={"plan": plan.to_dict()})
+        
+        # Explain what will be done
+        self.automator.speak(f"Planejo o seguinte: {plan.explanation}. Posso executar?")
+        
+        # For now, let's use the existing SecurityDialog enhanced for Dry-run
+        # In a future step, we'll create a specific DryRunDialog
+        action_desc = f"{plan.intent.upper()}\n\n{plan.explanation}\n\nSteps:\n" + \
+                     "\n".join([f"- {s.type.value}: {s.description or ''}" for s in plan.steps])
+        
+        dialog = SecurityDialog(action_desc)
+        self.waiting_for_auth = True
+        
+        # Start voice confirmation thread (reusing logic from _check_authorization)
+        def listen_for_confirmation(dialog, stream):
+            import numpy as np
+            if not stream: return
+            volume_multiplier = self.config.get('jarvis', {}).get('volume_multiplier', 1.0)
+            while not dialog.confirmed_event.is_set():
+                try:
+                    audio = record_command_audio(stream, max_seconds=4, stop_event=dialog.confirmed_event, volume_multiplier=volume_multiplier)
+                    if dialog.confirmed_event.is_set(): break
+                    pcm = np.frombuffer(audio, dtype=np.int16)
+                    if len(pcm) == 0 or np.max(np.abs(pcm)) < 200: continue
+                    text = stt_engine.transcribe(audio)
+                    norm = normalize_text(text)
+                    if any(word in norm for word in ["sim", "confirma", "pode", "autorizo", "yes", "vai"]):
+                        dialog.result = True
+                        dialog.close()
+                        break
+                    elif any(word in norm for word in ["nao", "não", "cancela", "aborta", "no"]):
+                        dialog.result = False
+                        dialog.close()
+                        break
+                except: break
+
+        voice_thread = threading.Thread(target=listen_for_confirmation, args=(dialog, self.audio_stream), daemon=True)
+        voice_thread.start()
+        
+        result = dialog.ask()
+        self.waiting_for_auth = False
+        
+        if voice_thread.is_alive():
+            dialog.confirmed_event.set()
+            voice_thread.join(timeout=0.5)
+            
+        return result
+
+    def execute_plan(self, plan: ExecutionPlan):
+        """Executes an ExecutionPlan step by step with isolation."""
+        logger.info(f"Starting execution of plan: {plan.intent}")
+        state_manager.set_state(JarvisState.EXECUTING, context={"intent": plan.intent})
+        self.last_plan = plan
+        
+        success_steps = 0
+        try:
+            for i, step in enumerate(plan.steps):
+                logger.info(f"Step {i+1}/{len(plan.steps)}: {step.type.value} - {step.description or ''}")
+                
+                success = self._execute_step(step)
+                if not success:
+                    logger.error(f"Step {i+1} failed. Aborting plan.")
+                    state_manager.set_state(JarvisState.ERROR, context={"error": f"Step {i+1} failed: {step.type.value}"})
+                    history_manager.log_execution(self.last_input_text, self.last_input_source, plan.intent, plan.global_risk.value, "failed", confidence=self.last_confidence, error_msg=f"Failed at step {i+1}")
+                    return False
+                success_steps += 1
+                
+            logger.info("Plan executed successfully.")
+            history_manager.log_execution(self.last_input_text, self.last_input_source, plan.intent, plan.global_risk.value, "success", confidence=self.last_confidence)
+            self.automator.speak("Pronto!")
+            return True
+        except Exception as e:
+            logger.error(f"Critical error during plan execution: {e}")
+            state_manager.set_state(JarvisState.ERROR, context={"error": str(e)})
+            return False
+
+    def _execute_step(self, step: ExecutionStep) -> bool:
+        """Executes a single step based on its type."""
+        try:
+            if step.type == StepType.COMMAND:
+                cmd = step.payload.get("command")
+                subprocess.run(["cmd", "/c", cmd], shell=False, check=True)
+                return True
+            
+            elif step.type == StepType.OPEN_APP:
+                target = step.payload.get("target")
+                import os
+                os.startfile(target)
+                return True
+                
+            elif step.type == StepType.WRITE:
+                text = step.payload.get("text")
+                self.automator.type_text(text)
+                return True
+                
+            elif step.type == StepType.NAVIGATE:
+                target = step.payload.get("target")
+                # This could be directory navigation if in Warp, or window focus
+                # For now, let's assume it's terminal navigation
+                subprocess.run(["cmd", "/c", f"cd /d {target}"], shell=False, check=True)
+                return True
+                
+            elif step.type == StepType.WAIT:
+                duration = step.payload.get("duration", 1.0)
+                import time
+                time.sleep(float(duration))
+                return True
+                
+            return False
+        except Exception as e:
+            logger.error(f"Step execution error ({step.type.value}): {e}")
+            return False
 
     def _check_authorization(self, action_config):
         risk_level = action_config.get('risk_level', 'safe')

@@ -3,6 +3,11 @@ jarvis:
   cooldown_seconds: 2.5
   volume_multiplier: 1.0
 
+dry_run:
+  enabled: true
+  bypass_for_safe_intents: true
+  timeout_seconds: 15
+
 integrations:
   warp:
     path: "${WARP_PATH}"
