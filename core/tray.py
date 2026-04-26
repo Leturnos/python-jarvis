@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timedelta
 from core.logger_config import logger
 from core.utils import manage_autostart, is_autostart_enabled_check
+from core.state import state_manager, JarvisState
 
 class JarvisTray:
     def __init__(self, on_stop_callback, start_minimized=False, notifier=None):
@@ -64,11 +65,13 @@ class JarvisTray:
         """Sets the mute duration."""
         if minutes == 0:
             self.mute_until = 0
+            state_manager.set_state(JarvisState.IDLE)
             logger.info("Jarvis unmuted.")
             if self.notifier:
                 self.notifier.notify("Jarvis", "Welcome back! I'm listening.")
         else:
             self.mute_until = time.time() + (minutes * 60)
+            state_manager.set_state(JarvisState.MUTED)
             resume_time = datetime.now() + timedelta(minutes=minutes)
             msg = f"Jarvis is now sleeping. I'll be back at {resume_time.strftime('%H:%M:%S')}."
             logger.info(msg)
@@ -81,10 +84,11 @@ class JarvisTray:
     def is_muted(self):
         """Checks if Jarvis is currently muted."""
         if self.mute_until == 0:
-            return False
+            return state_manager.get_state() == JarvisState.MUTED
         
         if time.time() > self.mute_until:
             self.mute_until = 0
+            state_manager.set_state(JarvisState.IDLE)
             logger.info("Auto-resuming: Jarvis is listening again.")
             if self.notifier:
                 self.notifier.notify("Jarvis", "I'm back! Listening for 'Hey Jarvis' again.")

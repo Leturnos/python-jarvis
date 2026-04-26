@@ -6,6 +6,7 @@ from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 from rich import box
 import numpy as np
+from core.state import state_manager, JarvisState
 
 class JarvisUI:
     def __init__(self, wakeword_name):
@@ -29,6 +30,9 @@ class JarvisUI:
         return layout
 
     def update_renderable(self):
+        # Current State from StateManager
+        current_state = state_manager.get_state()
+        
         # Header
         self.layout["header"].update(
             Panel(
@@ -43,13 +47,22 @@ class JarvisUI:
         main_table.add_column(ratio=1)
         main_table.add_column(ratio=1)
 
-        # Status and Score
-        status_color = "green" if self.status == "Listening" else "yellow"
-        if self.status == "Detected!":
-            status_color = "bold red"
-
+        # Status and Score mapping
+        state_colors = {
+            JarvisState.IDLE: "green",
+            JarvisState.LISTENING: "bold yellow",
+            JarvisState.THINKING: "bold magenta",
+            JarvisState.CONFIRMING_DRY_RUN: "bold blue",
+            JarvisState.EXECUTING: "bold red",
+            JarvisState.MUTED: "dim white",
+            JarvisState.ERROR: "bold white on red"
+        }
+        
+        color = state_colors.get(current_state, "white")
+        
         status_panel = Panel(
-            f"Status: [{status_color}]{self.status}[/{status_color}]\n"
+            f"State: [{color}]{current_state.name}[/{color}]\n"
+            f"Status: [white]{self.status}[/white]\n"
             f"Wake Word Score: [bold white]{self.score:.2f}[/bold white]",
             title="Monitoring",
             box=box.ROUNDED

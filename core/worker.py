@@ -9,6 +9,7 @@ from core.stt_engine import stt_engine
 from core.llm_agent import llm_agent
 from core.utils import normalize_text
 from core.plugin_manager import plugin_manager
+from core.state import state_manager, JarvisState
 
 def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
     """Worker thread that executes commands from the queue."""
@@ -22,7 +23,11 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
             continue
             
         try:
+            worker_busy.set()
             task_type, payload = task_data
+            
+            # Transition to THINKING state
+            state_manager.set_state(JarvisState.THINKING)
             
             if task_type == 'llm_dynamic':
                 audio_bytes = payload
@@ -120,7 +125,8 @@ def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
         finally:
             task_queue.task_done()
             worker_busy.clear()
-            logger.info("Worker finished task and cleared busy flag.")
+            state_manager.set_state(JarvisState.IDLE)
+            logger.info("Worker finished task, cleared busy flag and returned to IDLE.")
 
     pythoncom.CoUninitialize()
     logger.info("Command worker thread stopped.")

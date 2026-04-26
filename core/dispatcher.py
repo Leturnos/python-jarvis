@@ -7,6 +7,7 @@ from core.stt_engine import stt_engine
 from core.utils import normalize_text
 from core.plugin_manager import plugin_manager
 from core.history_db import history_manager
+from core.state import state_manager, JarvisState
 
 class ActionDispatcher:
     def __init__(self, config, automator, audio_stream=None):
@@ -30,6 +31,9 @@ class ActionDispatcher:
             
         if risk_level == 'dangerous':
             logger.warning("Dangerous action detected! Requesting authorization...")
+            # Transition to CONFIRMING_DRY_RUN state
+            state_manager.set_state(JarvisState.CONFIRMING_DRY_RUN, context={"intent": intent})
+            
             self.automator.speak("Ação perigosa detectada. Deseja autorizar? Diga Sim ou Não, ou use a janela na tela.")
             
             action_desc = action_config.get('description', action_config.get('intent', action_config.get('action', 'Ação do sistema')))
@@ -164,6 +168,7 @@ class ActionDispatcher:
             self.automator.speak("Ação dinâmica desconhecida.")
 
     def _handle_warp(self, action_config):
+        state_manager.set_state(JarvisState.EXECUTING)
         # Update automator config dynamically before running
         default_warp_path = self.config.get('integrations', {}).get('warp', {}).get('path', self.automator.warp_path)
         self.automator.warp_path = action_config.get('warp_path', default_warp_path)
@@ -175,6 +180,7 @@ class ActionDispatcher:
             history_manager.log_execution(self.last_input_text, self.last_input_source, "warp_workflow", "safe", "error", confidence=self.last_confidence, error_msg=str(e))
         
     def _handle_system(self, action_config):
+        state_manager.set_state(JarvisState.EXECUTING)
         commands = action_config.get('commands', [])
         risk_level = action_config.get('risk_level', 'safe')
         logger.info("Executing system commands...")
@@ -199,6 +205,7 @@ class ActionDispatcher:
         self.automator.speak("Pronto!")
 
     def _handle_plugin(self, action_config):
+        state_manager.set_state(JarvisState.EXECUTING)
         intent_name = action_config.get('intent')
         risk_level = action_config.get('risk_level', 'safe')
         

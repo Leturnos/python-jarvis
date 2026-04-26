@@ -26,6 +26,7 @@ from core.utils import normalize_text
 from core.command_palette import CommandPalette
 from core.worker import command_worker
 from core.monitor import MemoryMonitor
+from core.state import state_manager, JarvisState
 
 def main():
     app_title = "Jarvis AI Assistant"
@@ -83,6 +84,16 @@ def main():
     
     tray.start()
     
+    def on_state_change(old_state, new_state, context):
+        if old_state == JarvisState.EXECUTING and new_state == JarvisState.IDLE:
+            logger.info("Execução finalizada. Resetando modelo de wake word.")
+            try:
+                model.reset()
+            except:
+                pass
+
+    state_manager.add_callback(on_state_change)
+    
     logger.info(f"Jarvis is listening for {loaded_names}...")
     
     cooldown = 0
@@ -90,11 +101,9 @@ def main():
     threshold = config.get('jarvis', {}).get('threshold', 0.4)
     cooldown_seconds = config.get('jarvis', {}).get('cooldown_seconds', 5)
 
-    was_busy = False
     consecutive_zero_rms = 0
     MAX_ZERO_RMS_BEFORE_RESET = 30 # Approx 3 seconds of dead silence
 
-    is_recording_command = False
     command_frames = []
     silence_start = None
     command_start_time = None
@@ -105,153 +114,121 @@ def main():
     try:
         with ui.get_live() as live:
             while not stop_event.is_set():
-                if worker_busy.is_set():
-                    if getattr(dispatcher, 'waiting_for_auth', False):
-                        ui.update(status="Aguardando Permissão...")
-                    else:
-                        ui.update(status="Processando...")
-                    was_busy = True
-                    time.sleep(0.2)
-                    continue
-
-                if was_busy:
-                    was_busy = False
-                    try:
-                        model.reset() # Reset openwakeword state to prevent false positives from old audio
-                        stream.stop_stream()
-                        stream.start_stream()
-                    except Exception as e:
-                        logger.error(f"Error resetting stream: {e}")
-
-                tray_muted = tray.is_muted()
+                current_state = state_manager.get_state()
                 
+                # 1. ALWAYS read from the stream to prevent buffer overflow
                 try:
-                    now = time.time()
-                    if tray_muted:
-                        current_status = "MUTED/Sleeping"
+                    audio_data = stream.read(1280, exception_on_overflow=False)
+                    pcm = np.frombuffer(audio_data, dtype=np.int16)
+
+                    if volume_multiplier != 1.0:
+                        pcm = (pcm * volume_multiplier).clip(-32768, 32767).astype(np.int16)
+
+                    rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
+                    ui.update(volume=pcm)
+
+                    # Self-healing: Check for dead silence (Hardware/Driver hang)
+                    if rms < 0.1: # Absolute silence, often indicates dead stream/driver
+                        consecutive_zero_rms += 1
                     else:
-                        current_status = "Listening" if now > cooldown else "Cooldown/Executing"
-                    
-                    ui.update(status=current_status)
-
-                    try:
-                        audio_data = stream.read(1280, exception_on_overflow=False)
-                        pcm = np.frombuffer(audio_data, dtype=np.int16)
-
-                        if volume_multiplier != 1.0:
-                            pcm = (pcm * volume_multiplier).clip(-32768, 32767).astype(np.int16)
-
-                        rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
-                        ui.update(volume=pcm)
-
-                        # Self-healing: Check for dead silence (Hardware/Driver hang)
-                        if rms < 0.1: # Absolute silence, often indicates dead stream/driver
-                            consecutive_zero_rms += 1
-                        else:
-                            consecutive_zero_rms = 0
-                            
-                        if consecutive_zero_rms > MAX_ZERO_RMS_BEFORE_RESET:
-                            logger.warning("Dead silence detected! Microphone might be hung. Triggering self-healing...")
-                            ui.update(status="Self-Healing...")
-                            pa, stream = safe_reset_audio(pa, stream)
-                            dispatcher.audio_stream = stream
-                            consecutive_zero_rms = 0
-                            model.reset()
-                            continue
-
-                    except Exception as e:
-                        if stop_event.is_set():
-                            break
-                        logger.error(f"Microphone stream error: {e}. Attempting self-healing reset...")
-                        ui.update(status="Resetting Audio...")
+                        consecutive_zero_rms = 0
+                        
+                    if consecutive_zero_rms > MAX_ZERO_RMS_BEFORE_RESET:
+                        logger.warning("Dead silence detected! Microphone might be hung. Triggering self-healing...")
+                        ui.update(status="Self-Healing...")
                         pa, stream = safe_reset_audio(pa, stream)
                         dispatcher.audio_stream = stream
-                        time.sleep(1)
+                        consecutive_zero_rms = 0
+                        model.reset()
                         continue
 
-                    if is_recording_command:
-                        ui.update(status="Gravando...")
-                        command_frames.append(pcm.tobytes())
-                        rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
-                        
-                        if rms < 15.0: # Silence threshold
-                            if silence_start is None:
-                                silence_start = time.time()
-                            elif time.time() - silence_start > 1.5:
-                                # Silence detected, end recording
-                                is_recording_command = False
-                                audio_bytes = b"".join(command_frames)
-                                worker_busy.set()
-                                task_queue.put(('llm_dynamic', audio_bytes))
-                        else:
-                            silence_start = None
-                            
-                        if time.time() - command_start_time > 10.0:
-                            # Max timeout
-                            is_recording_command = False
-                            audio_bytes = b"".join(command_frames)
-                            worker_busy.set()
-                            task_queue.put(('llm_dynamic', audio_bytes))
-                            
-                        continue # Pula o processamento do openwakeword enquanto grava comando
+                except Exception as e:
+                    if stop_event.is_set():
+                        break
+                    logger.error(f"Microphone stream error: {e}. Attempting self-healing reset...")
+                    ui.update(status="Resetting Audio...")
+                    pa, stream = safe_reset_audio(pa, stream)
+                    dispatcher.audio_stream = stream
+                    time.sleep(1)
+                    continue
 
-                    # Prediction
+                # 2. State-based Logic
+                now = time.time()
+
+                if current_state == JarvisState.MUTED:
+                    ui.update(status="MUTED/Sleeping")
+                    # Still read and discard to keep stream alive (already done above)
+                    continue
+
+                if current_state in (JarvisState.THINKING, JarvisState.CONFIRMING_DRY_RUN, JarvisState.EXECUTING, JarvisState.ERROR):
+                    status_map = {
+                        JarvisState.THINKING: "Processando...",
+                        JarvisState.CONFIRMING_DRY_RUN: "Aguardando Permissão...",
+                        JarvisState.EXECUTING: "Executando...",
+                        JarvisState.ERROR: "Erro Detectado!"
+                    }
+                    ui.update(status=status_map.get(current_state, "Ocupado"))
+                    # Continue reading but skip wakeword prediction
+                    continue
+
+                if current_state == JarvisState.LISTENING:
+                    ui.update(status="Gravando...")
+                    command_frames.append(pcm.tobytes())
+                    
+                    # Silence detection to end recording
+                    if rms < 15.0: # Silence threshold
+                        if silence_start is None:
+                            silence_start = time.time()
+                        elif time.time() - silence_start > 1.5:
+                            # Silence detected, end recording
+                            audio_bytes = b"".join(command_frames)
+                            task_queue.put(('llm_dynamic', audio_bytes))
+                            # state_manager.set_state(JarvisState.THINKING) # Worker handles this
+                    else:
+                        silence_start = None
+                        
+                    # Timeout detection
+                    if time.time() - command_start_time > 10.0:
+                        logger.warning("Listening timeout reached.")
+                        audio_bytes = b"".join(command_frames)
+                        task_queue.put(('llm_dynamic', audio_bytes))
+                    
+                    continue
+
+                if current_state == JarvisState.IDLE:
+                    ui.update(status="Listening" if now > cooldown else "Cooldown")
+                    
+                    # Wake word prediction
                     highest_score = 0.0
                     detected_wakeword = None
                     
-                    if not tray_muted:
-                        rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
-                        
-                        if rms > 20: 
-                            prediction = model.predict(pcm)
-                            
-                            # Find the wakeword with the highest score
-                            for model_key, score in prediction.items():
-                                if score > highest_score:
-                                    highest_score = float(score)
-                                    detected_wakeword = model_key
-                                    
-                            if highest_score > 0.1:
-                                logger.debug(f"Prediction debug (RMS: {rms:.1f}): {prediction}")
-                        else:
-                            highest_score = 0.0
+                    if rms > 20: 
+                        prediction = model.predict(pcm)
+                        for model_key, score in prediction.items():
+                            if score > highest_score:
+                                highest_score = float(score)
+                                detected_wakeword = model_key
+                                
+                        if highest_score > 0.1:
+                            logger.debug(f"Prediction debug (RMS: {rms:.1f}): {prediction}")
                     
                     ui.update(score=highest_score)
 
-                    if not tray_muted and highest_score > threshold and now > cooldown:
-                        # Extract base wakeword name from model key (openwakeword attaches prefix/suffix sometimes)
+                    if highest_score > threshold and now > cooldown:
                         ww_name_clean = next((n for n in loaded_names if n in detected_wakeword), detected_wakeword)
-                        
                         logger.info(f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})")
-                        ui.update(status=f"Detected: {ww_name_clean}", score=highest_score)
                         
                         if ww_name_clean == 'hey_jarvis':
                             automator.speak("Sim?")
-                            is_recording_command = True
+                            state_manager.set_state(JarvisState.LISTENING)
                             command_frames = []
                             silence_start = None
                             command_start_time = time.time()
-                            ui.update(status="Gravando...")
-                            continue 
                         else:
-                            worker_busy.set()
                             automator.speak("Sim?")
                             task_queue.put((ww_name_clean, highest_score))
                         
                         cooldown = time.time() + cooldown_seconds
-                        logger.debug(f"Cooldown set until {cooldown}")
-                        
-                    elif tray_muted and highest_score > 0.4: 
-                         logger.info(f"Wake word detected but Jarvis is MUTED. (Score: {highest_score:.2f})")
-                         cooldown = time.time() + cooldown_seconds
-                        
-                except Exception as e:
-                    if not stop_event.is_set():
-                        logger.error(f"Unexpected error in loop: {e}")
-                        ui.update(status="Loop Error")
-                        time.sleep(1)
-                    else:
-                        break
 
     except KeyboardInterrupt:
         logger.info("Stopping Jarvis (KeyboardInterrupt)...")
