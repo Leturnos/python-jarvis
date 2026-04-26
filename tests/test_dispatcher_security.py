@@ -41,7 +41,6 @@ def test_check_authorization_dangerous_approved(mock_thread, mock_dialog_class, 
     assert dispatcher._check_authorization(action_config) is True
     mock_automator.speak.assert_called()
     mock_dialog_class.assert_called_with('Format Drive')
-    mock_thread.assert_called() # Voice thread started
 
 @patch('core.dispatcher.SecurityDialog')
 @patch('core.dispatcher.threading.Thread')

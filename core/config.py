@@ -32,6 +32,12 @@ def load_config():
                 'cooldown_seconds': 2.0,
                 'volume_multiplier': 1.0,
             },
+            'quotas': {
+                'llm': {
+                    'max_requests_per_day': 100,
+                    'max_tokens_per_day': 500000,
+                }
+            },
             'integrations': {
                 'warp': {
                     'path': os.environ.get("WARP_PATH", "")
@@ -44,5 +50,4 @@ def load_config():
                 }
             }
         }
-
 config = load_config()

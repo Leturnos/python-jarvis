@@ -11,3 +11,8 @@ dry_run:
 integrations:
   warp:
     path: "${WARP_PATH}"
+
+quotas:
+  llm:
+    max_requests_per_day: 100
+    max_tokens_per_day: 500000

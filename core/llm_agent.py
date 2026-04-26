@@ -7,6 +7,7 @@ from core.plugin_manager import plugin_manager
 from core.cache import llm_cache
 from core.prompt_guard import PromptGuard
 from core.utils import time_it
+from core.rate_limiter import rate_limiter
 
 class LLMAgent:
     def __init__(self):
@@ -95,6 +96,14 @@ class LLMAgent:
         - Retorne APENAS o JSON, sem markdown.
         """
         
+        # Check Rate Limits
+        if not rate_limiter.check_quotas():
+            logger.info("Rate limit reached. Returning fallback message.")
+            return {
+                "type": "chat",
+                "message": "Atingi o limite de uso de IA por hoje.\nPosso continuar com comandos locais, ou você pode tentar novamente em algumas horas."
+            }
+
         try:
             logger.info("Sending to Gemini...")
             response = self.client.models.generate_content(
@@ -121,7 +130,13 @@ class LLMAgent:
                     json_data["global_risk"] = "safe"
             
             logger.info(f"LLM Response Parsed: {json_data}")
-            
+
+            # Log usage
+            total_tokens = 0
+            if hasattr(response, 'usage_metadata') and hasattr(response.usage_metadata, 'total_token_count'):
+                total_tokens = response.usage_metadata.total_token_count
+            rate_limiter.log_usage(token_count=total_tokens)
+
             # Sanitize output before saving or returning
             json_data = PromptGuard.sanitize_output(json_data)
             

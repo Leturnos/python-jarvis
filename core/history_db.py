@@ -32,6 +32,16 @@ class HistoryManager:
                     error_message TEXT
                 )
             ''')
+            # New table for rate limiting
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS api_usage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    requests_count INTEGER DEFAULT 0,
+                    tokens_count INTEGER DEFAULT 0,
+                    UNIQUE(date)
+                )
+            ''')
             conn.commit()
             conn.close()
         except Exception as e:

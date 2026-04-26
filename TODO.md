@@ -34,7 +34,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 ## ⚙️ Fase 3.5: O Núcleo Profissional (Estabilização Pré-Release)
 - [x] **State Machine Central:** Implementar máquina de estados centralizada (IDLE, LISTENING, THINKING, CONFIRMING_DRY_RUN, EXECUTING, ERROR) para coordenar a UI e evitar race conditions.
 - [x] **Dry-run & Explainability:** Integrar com a State Machine para exibir na UI o plano/script do LLM antes da execução, exigindo confirmação.
-- [ ] **Rate Limiting & Quotas:** Criar verificador de consumo de API (tokens/chamadas) que bloqueia execuções ao atingir limites configurados no `config.yaml`.
+- [x] **Rate Limiting & Quotas:** Criar verificador de consumo de API (tokens/chamadas) que bloqueia execuções ao atingir limites configurados no `config.yaml`.
 - [ ] **Job Queue Interna Leve:** Substituir chamadas isoladas por uma fila estruturada nativa (`asyncio.Queue` ou `queue.Queue` com dataclasses de Job, retries, status).
 - [ ] **Replay de Comandos & Macros:** Criar intenções para repetir o último comando salvo no `history.db` e para agrupar uma sequência recente como uma macro no `.yaml`.
 - [ ] **Integração com Keyring (Segurança):** Migrar a chave da API do LLM do arquivo `.env` em texto plano para o gerenciador de credenciais seguro do Sistema Operacional.
