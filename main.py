@@ -167,7 +167,7 @@ def main():
 
                     if is_recording_command:
                         ui.update(status="Gravando...")
-                        command_frames.append(audio_data)
+                        command_frames.append(pcm.tobytes())
                         rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
                         
                         if rms < 15.0: # Silence threshold

@@ -69,7 +69,7 @@ def safe_reset_audio(pa, stream):
     time.sleep(1.0) # Grace period for OS to release resources
     return get_audio_stream()
 
-def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_threshold=15.0, stop_event=None):
+def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_threshold=15.0, stop_event=None, volume_multiplier=1.0):
     """Utility to record audio synchronously. Used by background threads (e.g. Security Dialog)."""
     logger.info("Recording command...")
     frames = []
@@ -82,8 +82,13 @@ def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_t
             break
         try:
             data = stream.read(1280, exception_on_overflow=False)
-            frames.append(data)
             pcm = np.frombuffer(data, dtype=np.int16)
+            
+            if volume_multiplier != 1.0:
+                pcm = (pcm * volume_multiplier).clip(-32768, 32767).astype(np.int16)
+                
+            frames.append(pcm.tobytes())
+            
             rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
             
             if rms < silence_threshold:

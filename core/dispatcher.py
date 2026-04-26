@@ -44,6 +44,8 @@ class ActionDispatcher:
                     logger.error("No audio stream available for voice confirmation.")
                     return
                     
+                volume_multiplier = self.config.get('jarvis', {}).get('volume_multiplier', 1.0)
+                    
                 while not dialog.confirmed_event.is_set():
                     try:
                         # Flush the buffer to discard old audio/TTS
@@ -53,7 +55,7 @@ class ActionDispatcher:
                             except Exception:
                                 pass
 
-                        audio = record_command_audio(stream, max_seconds=4, stop_event=dialog.confirmed_event)
+                        audio = record_command_audio(stream, max_seconds=4, stop_event=dialog.confirmed_event, volume_multiplier=volume_multiplier)
                         
                         if dialog.confirmed_event.is_set():
                             break
