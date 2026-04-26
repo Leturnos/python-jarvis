@@ -21,6 +21,9 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 ### 🔹 Automação Baseada em DSL
 - **Mini DSL Declarativo:** Criar uma mini DSL (Domain Specific Language) em YAML ou JSON para definir intenções de voz e suas respectivas automações de forma simplificada, separando a lógica da configuração de novos comandos.
 
+### 🔹 Job Queue Interna (Concorrência Estruturada)
+- **Fila de Execução Leve:** Implementar uma fila estruturada nativa (usando `asyncio.Queue` ou `queue.Queue`) para gerenciar a execução de comandos, permitindo retentativas, controle de prioridade e status de jobs sem a complexidade de brokers externos como Redis.
+
 ---
 
 ## 🎨 2. Experiência do Usuário (UX/UI)
@@ -44,8 +47,10 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 
 ### 🔹 Segurança e Permissões
 - **Permission System:** Formalizar o sistema de permissões (Security Ranks já em implementação) exigindo confirmação explícita do usuário para comandos com alto potencial destrutivo.
+- **Armazenamento Seguro (Keyring):** Integrar com o gerenciador de credenciais do sistema operacional (Windows Credential Manager) para salvar chaves de API de forma criptografada, eliminando a dependência de arquivos `.env` em texto plano.
 
-### 🔹 Monitoramento de Estado
+### 🔹 Monitoramento de Estado (State Machine)
+- **Gestão Centralizada:** Implementar uma máquina de estados (IDLE, LISTENING, THINKING, EXECUTING, etc.) para coordenar a interação entre áudio, UI e automação, eliminando race conditions e garantindo que o Jarvis nunca tente "ouvir" e "digitar" simultaneamente.
 - **Validação de Execução:** Em vez de usar capturas de tela, implementar `Process Monitoring`, verificação de `Window State` e `Timeout Detection` para confirmar de forma confiável se as aplicações de destino (ex: Warp) abriram ou se o terminal travou.
 
 ### 🔹 Concorrência e Assincronismo
@@ -67,18 +72,23 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 ### 🔹 Intenções Baseadas em Contexto (NLU)
 - **Comandos Dinâmicos:** Em vez de apenas uma *Wake Word*, usar o `openwakeword` para detectar comandos curtos específicos ou integrar com um modelo de STT leve como o `faster-whisper` para entender frases como "Jarvis, abra o projeto Alpha".
 - **Integração com LLMs (Gemini/GPT):** Enviar comandos complexos para uma LLM processar e retornar um script de automação em tempo real.
+- **Dry-run e Explainability:** Proporcionar visibilidade pré-execução, permitindo ao usuário revisar e aprovar o script ou sequência de ações proposta pelo LLM antes da execução real.
 - **Memória e Histórico de Comandos:** Desenvolver um sistema de persistência que aprenda as preferências do usuário, permitindo comandos como "Jarvis, repita a rotina de ontem" e facilitando auditoria de segurança.
+- **Replay e Macros Inteligentes:** Permitir que sequências de comandos do histórico sejam salvas como rotinas nomeadas (macros) reutilizáveis.
+- **"Explain what I did":** Capacidade do LLM de analisar os logs de execução recentes para explicar ao usuário as ações tomadas, útil para diagnóstico de falhas ou comportamentos inesperados.
 
 ### 🔹 Segurança de IA
 - **Prompt Injection Guard:** Como o Jarvis automatizará comandos de terminal com base em LLMs, adicionar uma camada de sanitização e moderação (ex: via *guardrails* ou um LLM menor de auditoria) para impedir que o sistema execute scripts maliciosos injetados na voz.
+- **Rate Limiting e Quotas:** Implementar limites de tokens e chamadas de API por período (hora/dia) no `config.yaml` para evitar custos excessivos e proteger contra loops infinitos de execução.
 
 ---
 
 ## 📊 5. Observability e Monitoramento
 *Garantir a previsibilidade e diagnosticar gargalos de forma eficiente.*
 
-### 🔹 Métricas e Performance
-- **Performance Profiling:** Adicionar rastreamento de tempo de execução, latência de chamadas do LLM e do STT para localizar gargalos do sistema.
+### 🔹 Métricas Leves e Performance
+- **Métricas de Operação:** Registrar latência de chamadas do LLM, taxa de acerto (hit rate) do cache semântico e tempo total de execução de comandos diretamente no SQLite ou logs estruturados.
+- **Performance Profiling:** Adicionar rastreamento de tempo de execução e do STT para localizar gargalos do sistema.
 - **Memory Usage:** Monitoramento contínuo da memória, especialmente para as threads da IA (OpenWakeWord/JarvisEngine), evitando leaks em longas sessões de background.
 
 ---

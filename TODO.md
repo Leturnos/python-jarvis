@@ -31,6 +31,16 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Self-healing de Áudio:** Implementar rotina de *watchdog* que verifique o stream do microfone a cada N segundos e force o reset do dispositivo (nível de SO) se detectar silêncio absoluto anômalo ou erros de I/O.
 - [x] **Sistema de Permissões:** Formalizar as roles e security ranks (já iniciados) para requerer aprovação prévia em comandos destrutivos.
 
+## ⚙️ Fase 3.5: O Núcleo Profissional (Estabilização Pré-Release)
+- [ ] **State Machine Central:** Implementar máquina de estados centralizada (IDLE, LISTENING, THINKING, CONFIRMING_DRY_RUN, EXECUTING, ERROR) para coordenar a UI e evitar race conditions.
+- [ ] **Dry-run & Explainability:** Integrar com a State Machine para exibir na UI o plano/script do LLM antes da execução, exigindo confirmação.
+- [ ] **Rate Limiting & Quotas:** Criar verificador de consumo de API (tokens/chamadas) que bloqueia execuções ao atingir limites configurados no `config.yaml`.
+- [ ] **Job Queue Interna Leve:** Substituir chamadas isoladas por uma fila estruturada nativa (`asyncio.Queue` ou `queue.Queue` com dataclasses de Job, retries, status).
+- [ ] **Replay de Comandos & Macros:** Criar intenções para repetir o último comando salvo no `history.db` e para agrupar uma sequência recente como uma macro no `.yaml`.
+- [ ] **Integração com Keyring (Segurança):** Migrar a chave da API do LLM do arquivo `.env` em texto plano para o gerenciador de credenciais seguro do Sistema Operacional.
+- [ ] **Explain what I did:** Permitir que o usuário pergunte "o que você fez?" e injetar o último log de ação para o LLM gerar uma explicação humana.
+- [ ] **Observabilidade (Métricas Leves):** Salvar no SQLite métricas simples como latência da API, cache hit rate e tempo de execução dos comandos.
+
 ## 🧠 Fase 4: Expansão de Inteligência (O Próximo Nível)
 - [x] **Múltiplos Comandos de Voz:** Treinar ou adicionar modelos para "Jarvis, fechar tudo" ou "Jarvis, modo trabalho".
 - [x] **Integração com LLM:** Permitir que, após o comando "Hey Jarvis", o usuário possa falar uma instrução que será processada por uma IA (ex: "Abra o projeto MVP e rode os testes").
