@@ -6,6 +6,7 @@ from core.config import config
 from core.plugin_manager import plugin_manager
 from core.cache import llm_cache
 from core.prompt_guard import PromptGuard
+from core.utils import time_it
 
 class LLMAgent:
     def __init__(self):
@@ -16,6 +17,7 @@ class LLMAgent:
         self.client = genai.Client(api_key=api_key)
         self.model_id = "gemini-2.5-flash"
         
+    @time_it
     def process_instruction(self, text, context_commands=None):
         # 0. Prompt Injection Guard (Input validation)
         if not PromptGuard.is_input_safe(text):

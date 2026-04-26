@@ -25,6 +25,7 @@ from core.tray import JarvisTray
 from core.utils import normalize_text
 from core.command_palette import CommandPalette
 from core.worker import command_worker
+from core.monitor import MemoryMonitor
 
 def main():
     app_title = "Jarvis AI Assistant"
@@ -97,6 +98,9 @@ def main():
     command_frames = []
     silence_start = None
     command_start_time = None
+
+    memory_monitor = MemoryMonitor(interval_seconds=60, threshold_mb=800)
+    memory_monitor.start()
 
     try:
         with ui.get_live() as live:
@@ -253,6 +257,8 @@ def main():
         logger.info("Stopping Jarvis (KeyboardInterrupt)...")
     finally:
         logger.info("Cleaning up...")
+        if 'memory_monitor' in locals():
+            memory_monitor.stop()
         stop_event.set()
         tray.stop()
         try:

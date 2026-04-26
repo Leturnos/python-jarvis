@@ -7,6 +7,21 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 from core.logger_config import logger
 
+import time
+import functools
+
+def time_it(func):
+    """Decorator to measure and log the execution time of a function."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        duration = end_time - start_time
+        logger.info(f"Performance: {func.__name__} took {duration:.4f} seconds")
+        return result
+    return wrapper
+
 def normalize_text(text):
     """Normalizes text for matching: lowercase, remove punctuation, spaces to underscores."""
     text = text.lower()

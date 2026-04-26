@@ -40,8 +40,8 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Prompt Injection Guard:** Adicionar camada de sanitização estrita (Regex + validação heurística) nos *outputs* da LLM antes de enviá-los ao `subprocess` ou `pyautogui`.
 
 ## 📊 Fase 5: Observability (Monitoramento)
-- [ ] **Performance Profiling:** Implementar rastreamento do tempo de execução de rotinas, latência de chamadas de LLM e de modelos locais de IA.
-- [ ] **Memory Monitoring:** Monitorar o consumo de RAM da thread principal do OpenWakeWord e JarvisEngine em execuções prolongadas no background.
+- [x] **Performance Profiling:** Implementar rastreamento do tempo de execução de rotinas, latência de chamadas de LLM e de modelos locais de IA.
+- [x] **Memory Monitoring:** Monitorar o consumo de RAM da thread principal do OpenWakeWord e JarvisEngine em execuções prolongadas no background.
 
 ## 📦 Fase 6: Distribuição (Entregando o Produto)
 - [ ] **Compilação (.exe):** Usar `Nuitka` ou `PyInstaller` para transformar o projeto em um executável autônomo e otimizado.

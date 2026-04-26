@@ -12,6 +12,7 @@ import pyperclip
 import queue
 import pythoncom # Required for COM in multiple threads on Windows
 from core.logger_config import logger
+from core.utils import time_it
 
 class WarpAutomator:
     def __init__(self, config):
@@ -160,6 +161,7 @@ class WarpAutomator:
         except Exception as e:
             logger.error(f"Error typing text: {e}")
 
+    @time_it
     def run_workflow(self):
         """Executes the full automation workflow with window validation."""
         logger.info("Starting automation workflow...")
