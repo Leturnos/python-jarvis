@@ -11,6 +11,12 @@ Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", p
 - **Paleta de Comandos (Novo! ⌨️):** Falar alto nem sempre é o ideal. Aperte `Ctrl + Alt + P` a qualquer momento para abrir uma barra de pesquisa rápida na tela e execute suas automações silenciosamente.
 - **Aprende Novas Habilidades (Plugins YAML):** Ensinar algo novo para o Jarvis é tão fácil quanto escrever uma receita de bolo em um arquivo de texto.
 - **Invisível e Seguro:** Roda silenciosamente na bandeja do Windows (System Tray) e possui um sistema de segurança que bloqueia ou pede confirmação antes de executar ações perigosas.
+- **Memória de Curto e Longo Prazo:** Repita rapidamente a última ação ou peça para o Jarvis salvar uma sequência de comandos como uma nova macro (plugin) inteligente.
+
+### 🧠 Comandos de Sistema
+Exemplos de como usar as novas capacidades de memória:
+- **Repetir último comando**: "Repetir último comando", "Faz de novo", "De novo". (Executa a última ação de sucesso).
+- **Salvar como macro**: "Salvar como macro", "Gravar sequência", "Salve isso". (Consolida as últimas ações em um novo plugin usando IA).
 
 ## 📋 Pré-requisitos
 
