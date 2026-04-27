@@ -2,6 +2,7 @@ import numpy as np
 import io
 from faster_whisper import WhisperModel
 from core.logger_config import logger
+from core.errors import TechnicalError
 
 class STTEngine:
     def __init__(self, model_size="tiny"):
@@ -22,6 +23,6 @@ class STTEngine:
             return text
         except Exception as e:
             logger.error(f"STT Error: {e}")
-            return ""
+            raise TechnicalError(f"STT processing failed: {e}")
 
 stt_engine = STTEngine("tiny")

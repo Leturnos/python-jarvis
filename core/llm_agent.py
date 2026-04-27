@@ -8,6 +8,7 @@ from core.cache import llm_cache
 from core.prompt_guard import PromptGuard
 from core.utils import time_it
 from core.rate_limiter import rate_limiter
+from core.errors import TechnicalError
 
 class LLMAgent:
     def __init__(self):
@@ -52,7 +53,11 @@ class LLMAgent:
 {intents_str}
         
         Outros comandos locais: [{commands_list}]
-        
+
+        Ações de Sistema Especiais:
+        - Intent: 'replay' | Descrição: Repete a última ação bem sucedida.
+        - Intent: 'create_macro' | Descrição: Cria uma macro (sequência de comandos) a partir das últimas ações. Aceita parâmetro 'n' (ex: 'n': 3).
+
         Sua tarefa é decidir se o usuário quer executar uma ação técnica ou apenas conversar.
         Retorne um JSON estrito seguindo um destes formatos:
 
@@ -147,6 +152,6 @@ class LLMAgent:
             return json_data
         except Exception as e:
             logger.error(f"LLM Error: {e}")
-            return None
+            raise TechnicalError(f"LLM processing failed: {e}")
 
 llm_agent = LLMAgent()
