@@ -10,6 +10,8 @@ class JobType(Enum):
     LLM_DYNAMIC = auto()
     WAKEWORD = auto()
     SYSTEM = auto()
+    REPLAY = auto()
+    CREATE_MACRO = auto()
 
 class JobStatus(Enum):
     PENDING = "pending"
@@ -24,6 +26,7 @@ class Job:
     type: JobType
     payload: Any
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    payload_text: Optional[str] = None
     status: JobStatus = JobStatus.PENDING
     retries: int = 0
     max_retries: int = 2

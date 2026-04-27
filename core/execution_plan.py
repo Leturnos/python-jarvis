@@ -9,6 +9,8 @@ class StepType(Enum):
     WRITE = "write"         # Type text
     NAVIGATE = "navigate"   # Change directory or focus
     WAIT = "wait"           # Delay
+    HOTKEY = "hotkey"
+    TYPE_AND_ENTER = "type_and_enter"
 
 class RiskLevel(Enum):
     SAFE = "safe"
@@ -41,18 +43,26 @@ class ExecutionStep:
         except ValueError:
             risk = RiskLevel.SAFE
 
-        # Extract payload based on type
+        # Extract payload based on type with validation
         payload = {}
         if step_type == StepType.COMMAND:
-            payload["command"] = data.get("command", "")
+            payload["command"] = str(data.get("command", ""))
         elif step_type == StepType.OPEN_APP:
-            payload["target"] = data.get("target", "")
+            payload["target"] = str(data.get("target", ""))
         elif step_type == StepType.WRITE:
-            payload["text"] = data.get("text", "")
+            payload["text"] = str(data.get("text", ""))
         elif step_type == StepType.NAVIGATE:
-            payload["target"] = data.get("target", "")
+            payload["target"] = str(data.get("target", ""))
         elif step_type == StepType.WAIT:
-            payload["duration"] = data.get("duration", 1.0)
+            try:
+                payload["duration"] = float(data.get("duration", 1.0))
+            except (ValueError, TypeError):
+                payload["duration"] = 1.0
+        elif step_type == StepType.HOTKEY:
+            keys = data.get("keys", [])
+            payload["keys"] = keys if isinstance(keys, list) else [str(keys)] if keys else []
+        elif step_type == StepType.TYPE_AND_ENTER:
+            payload["text"] = str(data.get("text", ""))
 
         return cls(
             type=step_type,
