@@ -12,7 +12,35 @@ from core.audio_engine import safe_reset_audio
 logger = logging.getLogger(__name__)
 
 class JarvisController:
+    """Main orchestration controller for the Jarvis assistant.
+
+    This class manages the real-time audio processing loop, coordinates state
+    transitions, handles wake word detection, and manages audio buffers for
+    commands and confirmations. It acts as the bridge between the audio hardware
+    and the higher-level logic (STT, LLM, Dispatcher).
+
+    Attributes:
+        config (dict): Configuration parameters.
+        automator (WarpAutomator): Helper for speech and UI automation.
+        dispatcher (ActionDispatcher): Hub for routing and executing actions.
+        model (openwakeword.Model): The loaded wake word detection model.
+        loaded_names (list): List of wake word names the model is listening for.
+        ui (JarvisUI): Interface for real-time visual feedback.
+        tray (JarvisTray): System tray integration.
+        task_queue (queue.Queue): Queue for background command execution.
+        stop_event (threading.Event): Signal to stop the controller loop.
+        pa: PyAudio instance.
+        stream: PyAudio input stream.
+    """
+
     def __init__(self, config, automator, dispatcher, model, loaded_names, ui, tray, task_queue, stop_event, pa, stream):
+        """Initializes the controller with injected dependencies.
+
+        Args:
+            config, automator, dispatcher, model, loaded_names, ui, tray,
+            task_queue, stop_event, pa, stream: Dependencies required for
+            orchestration.
+        """
         self.config = config
         self.automator = automator
         self.dispatcher = dispatcher
@@ -41,6 +69,12 @@ class JarvisController:
         self.MAX_ZERO_RMS_BEFORE_RESET = 30
 
     def start(self):
+        """Starts the main orchestration loop.
+
+        This method enters an infinite loop (until stop_event is set) that
+        reads audio, calculates volume (RMS), updates the UI, and delegates
+        processing based on the current system state.
+        """
         state_manager.add_callback(self._on_state_change)
         logger.info(f"Jarvis is listening for {self.loaded_names}...")
 

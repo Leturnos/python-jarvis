@@ -1,3 +1,9 @@
+"""Core dispatching logic for Jarvis actions.
+
+This module contains the ActionDispatcher class, which is responsible for
+orchestrating the execution of both static (wakeword-based) and dynamic
+(LLM-based) actions, while ensuring security through user confirmation.
+"""
 import subprocess
 import threading
 import json
@@ -18,7 +24,33 @@ from core.execution_plan import ExecutionPlan, ExecutionStep, StepType, RiskLeve
 from core.errors import BusinessError
 
 class ActionDispatcher:
+    """Central hub for coordinating action execution, security validation, and routing.
+
+    The ActionDispatcher receives instructions (either from wake words or dynamic LLM analysis),
+    converts them into execution plans (if not already structured), validates them against
+    security policies (PromptGuard), requests user authorization when necessary, and
+    orchestrates the step-by-step execution.
+
+    Attributes:
+        config (dict): Global application configuration.
+        automator (WarpAutomator): Interface for UI automation and speech synthesis.
+        audio_stream: The current PyAudio input stream.
+        last_input_text (str): The last transcribed text or command name.
+        last_input_source (str): Source of the command ('voice', 'text', 'shortcut').
+        last_confidence (float): Confidence score of the last wake word detection.
+        waiting_for_auth (bool): Whether the dispatcher is currently blocked waiting for UI/voice approval.
+        active_dialog (Optional[SecurityDialog]): Reference to the currently visible security popup.
+        last_plan (Optional[ExecutionPlan]): The most recently executed or proposed plan.
+    """
+
     def __init__(self, config, automator, audio_stream=None):
+        """Initializes the ActionDispatcher with its dependencies.
+
+        Args:
+            config (dict): The configuration dictionary.
+            automator (WarpAutomator): The UI automation helper.
+            audio_stream (optional): The PyAudio stream for secondary recording tasks.
+        """
         self.config = config
         self.automator = automator
         self.audio_stream = audio_stream
@@ -29,8 +61,20 @@ class ActionDispatcher:
         self.active_dialog: Optional[SecurityDialog] = None # Access for main.py voice confirmation
         self.last_plan: Optional[ExecutionPlan] = None
 
-    def handle_plan(self, plan: ExecutionPlan):
-        """Processes an ExecutionPlan, including validation and user confirmation."""
+    def handle_plan(self, plan: ExecutionPlan) -> bool:
+        """Processes an ExecutionPlan, including validation and user confirmation.
+
+        This is the main entry point for structured execution. it handles security
+        sanitization via PromptGuard, determines if a dry-run confirmation is required
+        based on the risk level and config, and finally delegates to execute_plan.
+
+        Args:
+            plan (ExecutionPlan): The structured plan to be processed.
+
+        Returns:
+            bool: True if the plan was successfully executed, False if blocked,
+                rejected, or if execution failed.
+        """
         logger.info(f"Handling execution plan: {plan.intent} (Risk: {plan.global_risk.value})")
         
         # 1. Prompt Guard Validation
@@ -78,8 +122,18 @@ class ActionDispatcher:
         self.active_dialog = None
         return result
 
-    def execute_plan(self, plan: ExecutionPlan):
-        """Executes an ExecutionPlan step by step with isolation."""
+    def execute_plan(self, plan: ExecutionPlan) -> bool:
+        """Executes an ExecutionPlan step by step with isolation.
+
+        Each step in the plan is executed sequentially. If any step fails, the
+        entire plan is aborted, the failure is logged, and the user is notified.
+
+        Args:
+            plan (ExecutionPlan): The validated plan to execute.
+
+        Returns:
+            bool: True if all steps were executed successfully, False otherwise.
+        """
         logger.info(f"Starting execution of plan: {plan.intent}")
         state_manager.set_state(JarvisState.EXECUTING, context={"intent": plan.intent})
         self.last_plan = plan
@@ -107,7 +161,17 @@ class ActionDispatcher:
             return False
 
     def replay_last_command(self) -> bool:
-        """Fetches the last successful action from history and executes it again."""
+        """Fetches the last successful action from history and executes it again.
+
+        This method retrieves the most recent successful execution plan from the
+        SQLite database, reconstructs it, and triggers a new execution via handle_plan.
+
+        Returns:
+            bool: True if the replay was successful, False otherwise.
+
+        Raises:
+            BusinessError: If no recent successful commands are found in history.
+        """
         logger.info("Replaying last successful command...")
         last_json = history_manager.get_last_successful_json()
         
@@ -128,8 +192,22 @@ class ActionDispatcher:
             self.automator.speak("Erro ao repetir a última ação.")
             return False
 
-    def initiate_macro_creation(self, n=3):
-        """Flow to create a macro from the last N actions."""
+    def initiate_macro_creation(self, n: int = 3) -> bool:
+        """Flow to create a macro from the last N actions.
+
+        This method analyzes the recent execution history, proposes a new intelligent
+        macro (plugin) using the MacroManager, and asks for user confirmation
+        before saving it to the filesystem.
+
+        Args:
+            n (int): The number of recent actions to consider for the macro. Defaults to 3.
+
+        Returns:
+            bool: True if the macro was successfully created and saved, False otherwise.
+
+        Raises:
+            BusinessError: If there isn't enough history to form a macro.
+        """
         logger.info(f"Initiating macro creation from last {n} actions.")
         recent_jsons = history_manager.get_recent_history_json(n)
         

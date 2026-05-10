@@ -4,6 +4,18 @@ from typing import Dict, Any, Optional, Callable, List
 from core.logger_config import logger
 
 class JarvisState(Enum):
+    """Enumeration of all possible logical states for the Jarvis assistant.
+
+    States:
+        IDLE: Waiting for a wake word detection.
+        LISTENING: Actively recording a voice command after wake word detection.
+        THINKING: Processing the command (e.g., STT transcription or LLM analysis).
+        CONFIRMING_DRY_RUN: Waiting for user approval (voice or UI) for a planned action.
+        EXECUTING: Performing the steps of an execution plan.
+        COOLDOWN: A brief pause after speech feedback to prevent self-triggering.
+        MUTED: The system is asleep and ignoring all audio inputs.
+        ERROR: A temporary failure state.
+    """
     IDLE = auto()               # Waiting for Wake Word
     LISTENING = auto()          # Wake word detected, recording command
     THINKING = auto()           # Processing (STT / LLM)
@@ -14,7 +26,19 @@ class JarvisState(Enum):
     ERROR = auto()              # Error state
 
 class StateManager:
+    """Thread-safe manager for the system's global state and context.
+
+    The StateManager acts as the single source of truth for the assistant's
+    current logical state. it enforces valid state transitions and notifies
+    registered callbacks of any changes.
+
+    Attributes:
+        _state (JarvisState): The current state.
+        _context (dict): Arbitrary metadata associated with the current state (e.g., the current plan).
+        _callbacks (list): A list of functions to be called on every state change.
+    """
     def __init__(self):
+        """Initializes the StateManager with the IDLE state and empty context."""
         self._state = JarvisState.IDLE
         self._context: Dict[str, Any] = {}
         self._lock = threading.Lock()
@@ -33,14 +57,36 @@ class StateManager:
         }
 
     def get_state(self) -> JarvisState:
+        """Returns the current JarvisState in a thread-safe manner.
+
+        Returns:
+            JarvisState: The current system state.
+        """
         with self._lock:
             return self._state
 
     def get_context(self) -> Dict[str, Any]:
+        """Returns a copy of the current state context dictionary.
+
+        Returns:
+            Dict[str, Any]: A copy of the current context.
+        """
         with self._lock:
             return self._context.copy()
 
     def set_state(self, new_state: JarvisState, context: Optional[Dict[str, Any]] = None):
+        """Attempts to change the system state and updates the context.
+
+        This method validates the transition against the internal allowed_transitions
+        map. If a transition is invalid, it logs a warning but proceeds (to ensure
+        the system doesn't get stuck, though this behavior can be configured).
+        Registered callbacks are notified after the state change.
+
+        Args:
+            new_state (JarvisState): The target state to transition to.
+            context (Optional[Dict[str, Any]]): New metadata for the state. If None,
+                the context is cleared (unless new_state == old_state).
+        """
         with self._lock:
             old_state = self._state
             
@@ -72,6 +118,13 @@ class StateManager:
                     logger.error(f"Error in state callback: {e}")
 
     def add_callback(self, callback: Callable[[JarvisState, JarvisState, Dict[str, Any]], None]):
+        """Registers a callback function to be notified of state changes.
+
+        The callback must accept three arguments: old_state, new_state, and context.
+
+        Args:
+            callback (Callable): The callback function to register.
+        """
         with self._lock:
             self._callbacks.append(callback)
 

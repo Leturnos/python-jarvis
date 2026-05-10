@@ -11,7 +11,19 @@ from core.rate_limiter import rate_limiter
 from core.errors import TechnicalError
 
 class LLMAgent:
+    """Interface for the Gemini-powered AI reasoning engine.
+
+    The LLMAgent is responsible for interpreting natural language instructions from
+    the user and deciding whether they represent a conversational intent (chat) or
+    a technical automation request (action). For actions, it generates a structured
+    ExecutionPlan JSON that the ActionDispatcher can execute.
+
+    Attributes:
+        client (genai.Client): The Google GenAI client instance.
+        model_id (str): The specific Gemini model identifier used for reasoning.
+    """
     def __init__(self):
+        """Initializes the GenAI client using the GEMINI_API_KEY environment variable."""
         api_key = os.getenv("GEMINI_API_KEY", "")
         if not api_key:
             logger.warning("GEMINI_API_KEY is not set.")
@@ -20,7 +32,27 @@ class LLMAgent:
         self.model_id = "gemini-2.5-flash"
         
     @time_it
-    def process_instruction(self, text, context_commands=None):
+    def process_instruction(self, text: str, context_commands: list = None) -> dict:
+        """Analyzes user text and returns a structured decision (action or chat).
+
+        This method coordinates the entire AI processing pipeline:
+        1. Validates input against prompt injection (PromptGuard).
+        2. Checks the local SQLite cache for recurring instructions.
+        3. Enforces daily and burst rate limits.
+        4. Dynamically builds a system prompt including available plugins and intents.
+        5. Calls the Gemini API and parses the strict JSON response.
+        6. Normalizes risk levels and sanitizes the output plan.
+
+        Args:
+            text (str): The natural language instruction (transcribed or typed).
+            context_commands (list, optional): List of currently mapped static wakewords.
+
+        Returns:
+            dict: A dictionary following either the 'action' or 'chat' schema.
+
+        Raises:
+            TechnicalError: If the LLM service is unavailable or returns unparseable data.
+        """
         # 0. Prompt Injection Guard (Input validation)
         if not PromptGuard.is_input_safe(text):
             logger.warning(f"Blocked suspicious input: {text}")
