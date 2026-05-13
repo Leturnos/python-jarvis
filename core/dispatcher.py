@@ -77,6 +77,10 @@ class ActionDispatcher:
         """
         logger.info(f"Handling execution plan: {plan.intent} (Risk: {plan.global_risk.value})")
         
+        if plan.intent == "explain_last_action":
+            self._handle_explain_last_action()
+            return True
+
         # 1. Prompt Guard Validation
         from core.prompt_guard import PromptGuard
         sanitized_dict = PromptGuard.sanitize_output(plan.to_dict())
@@ -235,6 +239,23 @@ class ActionDispatcher:
                 return False
         
         return False
+
+    def _handle_explain_last_action(self):
+        """Fetches the last successful action and asks LLM to explain it."""
+        last_json = history_manager.get_last_successful_json()
+        if not last_json:
+            self.automator.speak("Não encontrei nenhuma ação recente para explicar.")
+            return
+
+        prompt = f"O usuário perguntou o que você acabou de fazer. Aqui está o JSON da sua última ação técnica: {last_json}\nExplique de forma curta, natural e humana o que você fez. Não explique o JSON, explique a ação."
+        
+        try:
+            from core.llm_agent import llm_agent
+            explanation = llm_agent.generate_text(prompt)
+            self.automator.speak(explanation)
+        except Exception as e:
+            logger.error(f"Error generating explanation: {e}")
+            self.automator.speak("Tive um problema ao tentar gerar a explicação.")
 
     def _execute_step(self, step: ExecutionStep) -> bool:
         """Executes a single step based on its type."""

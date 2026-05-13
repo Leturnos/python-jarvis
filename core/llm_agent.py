@@ -100,6 +100,7 @@ class LLMAgent:
         Ações de Sistema Especiais:
         - Intent: 'replay' | Descrição: Repete a última ação bem sucedida.
         - Intent: 'create_macro' | Descrição: Cria uma macro (sequência de comandos) a partir das últimas ações. Aceita parâmetro 'n' (ex: 'n': 3).
+        - Intent: 'explain_last_action' | Descrição: O usuário está perguntando o que você acabou de fazer. Use este intent quando o usuário quiser uma explicação da última ação.
 
         Sua tarefa é decidir se o usuário quer executar uma ação técnica ou apenas conversar.
         Retorne um JSON estrito seguindo um destes formatos:
@@ -196,5 +197,18 @@ class LLMAgent:
         except Exception as e:
             logger.error(f"LLM Error: {e}")
             raise TechnicalError(f"LLM processing failed: {e}")
+
+    def generate_text(self, prompt: str) -> str:
+        """Generates raw text from the LLM for a given prompt."""
+        try:
+            logger.info("Sending prompt to Gemini for raw text generation...")
+            response = self.client.models.generate_content(
+                model=self.model_id,
+                contents=prompt
+            )
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"Error generating text from LLM: {e}")
+            raise
 
 llm_agent = LLMAgent()

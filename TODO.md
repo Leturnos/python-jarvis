@@ -38,7 +38,7 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Job Queue Interna Leve:** Substituir chamadas isoladas por uma fila estruturada nativa (`asyncio.Queue` ou `queue.Queue` com dataclasses de Job, retries, status).
 - [x] **Replay de Comandos & Macros:** Criar intenções para repetir o último comando salvo no `history.db` e para agrupar uma sequência recente como uma macro no `.yaml`.
 - [x] **Integração com Keyring (Segurança):** Migrar a chave da API do LLM do arquivo `.env` em texto plano para o gerenciador de credenciais seguro do Sistema Operacional.
-- [ ] **Explain what I did:** Permitir que o usuário pergunte "o que você fez?" e injetar o último log de ação para o LLM gerar uma explicação humana.
+- [x] **Explain what I did:** Permitir que o usuário pergunte "o que você fez?" e injetar o último log de ação para o LLM gerar uma explicação humana.
 - [ ] **Observabilidade (Métricas Leves):** Salvar no SQLite métricas simples como latência da API, cache hit rate e tempo de execução dos comandos.
 
 ## 🧠 Fase 4: Expansão de Inteligência (O Próximo Nível)
