@@ -4,11 +4,12 @@ from google import genai
 from core.logger_config import logger
 from core.config import config
 from core.plugin_manager import plugin_manager
-from core.cache import llm_cache
-from core.prompt_guard import PromptGuard
 from core.utils import time_it
-from core.rate_limiter import rate_limiter
+from core.prompt_guard import PromptGuard
 from core.errors import TechnicalError
+from core.keyring_manager import KeyringManager
+from core.cache import llm_cache
+from core.rate_limiter import rate_limiter
 
 class LLMAgent:
     """Interface for the Gemini-powered AI reasoning engine.
@@ -23,13 +24,23 @@ class LLMAgent:
         model_id (str): The specific Gemini model identifier used for reasoning.
     """
     def __init__(self):
-        """Initializes the GenAI client using the GEMINI_API_KEY environment variable."""
-        api_key = os.getenv("GEMINI_API_KEY", "")
+        """Initializes the GenAI client using the GEMINI_API_KEY from Keyring or Environment."""
+        # Try retrieving from keyring first
+        api_key = KeyringManager.get_secret("python-jarvis", "GEMINI_API_KEY")
+
+        # Fallback to .env for transition/development
         if not api_key:
-            logger.warning("GEMINI_API_KEY is not set.")
-        
+            api_key = os.getenv("GEMINI_API_KEY", "")
+            if api_key:
+                logger.info("GEMINI_API_KEY found in .env. Saving to Keyring for future use.")
+                KeyringManager.set_secret("python-jarvis", "GEMINI_API_KEY", api_key)
+
+        if not api_key:
+            logger.warning("GEMINI_API_KEY is not set in Keyring or .env.")
+
         self.client = genai.Client(api_key=api_key)
         self.model_id = "gemini-2.5-flash"
+
         
     @time_it
     def process_instruction(self, text: str, context_commands: list = None) -> dict:

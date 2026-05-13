@@ -1,4 +1,5 @@
 import time
+import os
 import numpy as np
 import threading
 import queue
@@ -30,9 +31,26 @@ from core.state import state_manager, JarvisState
 from core.job_queue import Job, JobType
 from core.controller import JarvisController
 
+from core.keyring_manager import KeyringManager
+
 def main():
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
+
+    # Transparent migration of the API key from .env to Keyring on startup
+    api_key = KeyringManager.get_secret("python-jarvis", "GEMINI_API_KEY")
+    env_key = os.getenv("GEMINI_API_KEY")
+    
+    if env_key and (not api_key or env_key != api_key):
+        logger.info("Migrating GEMINI_API_KEY from .env to secure Keyring.")
+        KeyringManager.set_secret("python-jarvis", "GEMINI_API_KEY", env_key)
+        logger.info("Security tip: You can now remove GEMINI_API_KEY from your .env file.")
+    elif not api_key and not env_key:
+        logger.error("ERROR: GEMINI_API_KEY not found in Keyring or .env!")
+        print("\n[!] Error: API Key not configured.")
+        print("[!] Please set GEMINI_API_KEY in your .env file to start the automatic migration.")
+        time.sleep(5)
+        sys.exit(1)
 
     mutex_name = r"Global\JarvisAI_SingleInstance_Mutex"
     mutex = CreateMutex(None, False, mutex_name)
