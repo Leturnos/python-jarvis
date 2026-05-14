@@ -37,14 +37,15 @@ def test_history_db():
     print("Test 4: Recent history retrieval passed.")
 
     # Test 5: Exclude replay/macro
-    hm.log_execution("replay input", "test_source", "replay", "low", "success", action_json='{"replay": true}')
+    hm.log_execution("replay input", "test_source", "replay", "low", "success", action_json='{"replay": true}')       
     last = hm.get_last_successful_json()
     assert "replay" not in last, "Replay action should be excluded"
     print("Test 5: Exclusion of replay/macro passed.")
 
+    hm.close()
+
     if os.path.exists(db_path):
         os.remove(db_path)
-
 if __name__ == "__main__":
     try:
         test_history_db()

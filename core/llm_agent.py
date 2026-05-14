@@ -73,7 +73,12 @@ class LLMAgent:
         cached_response = llm_cache.get(text)
         if cached_response:
             logger.info(f"Using cached LLM response for: '{text}'")
+            from core.history_db import history_manager
+            history_manager.log_metric("llm_cache_hit", 1.0)
             return PromptGuard.sanitize_output(cached_response)
+
+        from core.history_db import history_manager
+        history_manager.log_metric("llm_cache_hit", 0.0)
 
         # 2. Cache miss, prepare prompt
         commands_list = ", ".join(context_commands) if context_commands else "Nenhum comando mapeado."
@@ -198,6 +203,7 @@ class LLMAgent:
             logger.error(f"LLM Error: {e}")
             raise TechnicalError(f"LLM processing failed: {e}")
 
+    @time_it
     def generate_text(self, prompt: str) -> str:
         """Generates raw text from the LLM for a given prompt."""
         try:

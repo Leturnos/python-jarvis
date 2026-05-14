@@ -15,7 +15,7 @@ from core.logger_config import logger
 from core.security_ui import SecurityDialog
 from core.audio_engine import record_command_audio
 from core.stt_engine import stt_engine
-from core.utils import normalize_text
+from core.utils import normalize_text, time_it
 from core.plugin_manager import plugin_manager
 from core.history_db import history_manager
 from core.macro_manager import macro_manager
@@ -126,6 +126,7 @@ class ActionDispatcher:
         self.active_dialog = None
         return result
 
+    @time_it
     def execute_plan(self, plan: ExecutionPlan) -> bool:
         """Executes an ExecutionPlan step by step with isolation.
 

@@ -1,5 +1,7 @@
 import sqlite3
 import os
+import threading
+import queue
 from datetime import datetime
 from core.logger_config import logger
 
@@ -8,6 +10,11 @@ class HistoryManager:
         self.db_path = db_path
         self._ensure_dir()
         self._init_db()
+        
+        # Metrics background writer
+        self.metrics_queue = queue.Queue()
+        self.worker_thread = threading.Thread(target=self._metrics_worker, daemon=True)
+        self.worker_thread.start()
 
     def _ensure_dir(self):
         directory = os.path.dirname(self.db_path)
@@ -49,6 +56,17 @@ class HistoryManager:
                     requests_count INTEGER DEFAULT 0,
                     tokens_count INTEGER DEFAULT 0,
                     UNIQUE(date)
+                )
+            ''')
+            
+            # New table for metrics
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    metric_name TEXT NOT NULL,
+                    metric_value REAL NOT NULL,
+                    tags TEXT
                 )
             ''')
             conn.commit()
@@ -109,6 +127,47 @@ class HistoryManager:
         except Exception as e:
             logger.error(f"Error retrieving recent history json: {e}")
             return []
+
+    def _metrics_worker(self):
+        """Background thread that reads from metrics_queue and writes to SQLite."""
+        # Create a dedicated connection for this thread
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            while True:
+                metric = self.metrics_queue.get()
+                if metric is None:  # Shutdown signal
+                    break
+                    
+                timestamp, metric_name, metric_value, tags = metric
+                try:
+                    cursor.execute('''
+                        INSERT INTO metrics (timestamp, metric_name, metric_value, tags)
+                        VALUES (?, ?, ?, ?)
+                    ''', (timestamp, metric_name, float(metric_value), tags))
+                    conn.commit()
+                except Exception as e:
+                    logger.error(f"Error writing metric to DB: {e}")
+                finally:
+                    self.metrics_queue.task_done()
+                    
+        except Exception as e:
+            logger.error(f"Metrics worker thread failed: {e}")
+        finally:
+            if conn:
+                conn.close()
+
+    def log_metric(self, metric_name: str, metric_value: float, tags: str = None):
+        """Enqueues a metric to be logged to the database asynchronously."""
+        self.metrics_queue.put((datetime.now().isoformat(), metric_name, metric_value, tags))
+
+    def close(self):
+        """Stops the background worker thread and closes the SQLite connection."""
+        self.metrics_queue.put(None)
+        if hasattr(self, 'worker_thread') and self.worker_thread.is_alive():
+            self.worker_thread.join(timeout=2.0)
 
 # Singleton instance
 history_manager = HistoryManager()
