@@ -39,15 +39,33 @@ class WarpAutomator:
             voice = win32com.client.Dispatch("SAPI.SpVoice")
             
             # Find a Portuguese voice if available
+            voice_keyword = self.config.get('tts', {}).get('voice_keyword', 'maria').lower()
             try:
                 available_voices = voice.GetVoices()
+                logger.debug(f"Available SAPI Voices ({available_voices.Count}):")
+                selected_voice = None
+                
                 for i in range(available_voices.Count):
                     v = available_voices.Item(i)
                     desc = v.GetDescription()
-                    if "portuguese" in desc.lower() or "brazil" in desc.lower() or "maria" in desc.lower():
-                        voice.Voice = v
-                        logger.info(f"SAPI Voice selected: {desc}")
-                        break
+                    logger.debug(f" - [{i}] {desc}")
+                    if voice_keyword in desc.lower():
+                        selected_voice = v
+                
+                if selected_voice:
+                    voice.Voice = selected_voice
+                    logger.info(f"SAPI Voice selected: {selected_voice.GetDescription()}")
+                else:
+                    # Fallback: search for any Portuguese voice if Maria is not found
+                    for i in range(available_voices.Count):
+                        v = available_voices.Item(i)
+                        desc = v.GetDescription().lower()
+                        if "portuguese" in desc or "brazil" in desc:
+                            voice.Voice = v
+                            logger.info(f"Fallback SAPI Voice selected (Portuguese): {v.GetDescription()}")
+                            break
+                    else:
+                        logger.warning(f"Voice keyword '{voice_keyword}' not found and no Portuguese fallback available.")
             except Exception as e:
                 logger.debug(f"Default voice will be used: {e}")
 

@@ -52,7 +52,9 @@ Nós separamos as coisas para facilitar sua vida. Existem três arquivos princip
    Aqui você mexe na "mecânica" do Jarvis.
    - `threshold`: Quão sensível é o ouvido dele (padrão `0.35`).
    - `volume_multiplier`: Se o seu microfone for baixo, aumente esse número.
-   - `cooldown_seconds`: Quanto tempo o Jarvis "descansa" após executar um comando.
+   - **Cérebro do Jarvis (`llm`):** Você pode escolher qual IA o Jarvis usa! No campo `active_provider`, você pode colocar `gemini`, `openai` ou `anthropic`. 
+     - *Dica:* Lembre-se de colocar a chave correspondente (`OPENAI_API_KEY`, etc) no seu `.env`.
+   - **Voz do Jarvis (`tts`):** Quer que o Jarvis tenha uma voz diferente? No campo `voice_keyword`, coloque parte do nome da voz que você tem instalada no Windows (ex: "maria", "zira", "david"). Se ele não encontrar a que você pediu, ele tentará usar uma voz em Português automaticamente.
 
 3. **A pasta `plugins/` (Ensinando novas habilidades):**
    Esqueça código complexo. Para ensinar o Jarvis a abrir seu projeto favorito, crie um arquivo como `devtools.yaml` na pasta `plugins`:

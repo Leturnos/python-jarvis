@@ -3,6 +3,20 @@ jarvis:
   cooldown_seconds: 2.5
   volume_multiplier: 1.0
 
+llm:
+  active_provider: "gemini"
+  providers:
+    gemini:
+      model: "gemini-2.5-flash"
+    openai:
+      model: "gpt-4.1-mini"
+    anthropic:
+      model: "claude-3-5-haiku-latest"
+
+tts:
+  provider: "sapi5"
+  voice_keyword: "maria"
+
 dry_run:
   enabled: true
   bypass_for_safe_intents: true

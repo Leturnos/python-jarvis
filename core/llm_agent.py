@@ -1,47 +1,34 @@
 import json
 import os
-from google import genai
 from core.logger_config import logger
 from core.config import config
 from core.plugin_manager import plugin_manager
 from core.utils import time_it
 from core.prompt_guard import PromptGuard
 from core.errors import TechnicalError
-from core.keyring_manager import KeyringManager
 from core.cache import llm_cache
 from core.rate_limiter import rate_limiter
+from core.llm import LiteLLMProvider, LLMError
 
 class LLMAgent:
-    """Interface for the Gemini-powered AI reasoning engine.
+    """Interface for the AI reasoning engine.
 
     The LLMAgent is responsible for interpreting natural language instructions from
     the user and deciding whether they represent a conversational intent (chat) or
-    a technical automation request (action). For actions, it generates a structured
-    ExecutionPlan JSON that the ActionDispatcher can execute.
+    a technical automation request (action). It uses a pluggable LLM provider.
 
     Attributes:
-        client (genai.Client): The Google GenAI client instance.
-        model_id (str): The specific Gemini model identifier used for reasoning.
+        provider (BaseLLMProvider): The LLM provider instance.
     """
     def __init__(self):
-        """Initializes the GenAI client using the GEMINI_API_KEY from Keyring or Environment."""
-        # Try retrieving from keyring first
-        api_key = KeyringManager.get_secret("python-jarvis", "GEMINI_API_KEY")
-
-        # Fallback to .env for transition/development
-        if not api_key:
-            api_key = os.getenv("GEMINI_API_KEY", "")
-            if api_key:
-                logger.info("GEMINI_API_KEY found in .env. Saving to Keyring for future use.")
-                KeyringManager.set_secret("python-jarvis", "GEMINI_API_KEY", api_key)
-
-        if not api_key:
-            logger.warning("GEMINI_API_KEY is not set in Keyring or .env.")
-
-        self.client = genai.Client(api_key=api_key)
-        self.model_id = "gemini-2.5-flash"
-
+        """Initializes the LLM provider based on config."""
+        llm_config = config.get('llm', {})
+        active_provider = llm_config.get('active_provider', 'gemini')
+        model_name = llm_config.get('providers', {}).get(active_provider, {}).get('model', 'gemini-2.0-flash')
         
+        logger.info(f"Initializing LLMAgent with provider: {active_provider}, model: {model_name}")
+        self.provider = LiteLLMProvider(provider=active_provider, model=model_name)
+
     @time_it
     def process_instruction(self, text: str, context_commands: list = None) -> dict:
         """Analyzes user text and returns a structured decision (action or chat).
@@ -51,7 +38,7 @@ class LLMAgent:
         2. Checks the local SQLite cache for recurring instructions.
         3. Enforces daily and burst rate limits.
         4. Dynamically builds a system prompt including available plugins and intents.
-        5. Calls the Gemini API and parses the strict JSON response.
+        5. Calls the LLM provider and parses the strict JSON response.
         6. Normalizes risk levels and sanitizes the output plan.
 
         Args:
@@ -159,12 +146,11 @@ class LLMAgent:
             }
 
         try:
-            logger.info("Sending to Gemini...")
-            response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=prompt
+            logger.info(f"Sending to LLM Provider ({self.provider.provider})...")
+            response = self.provider.generate_content(
+                prompt=prompt
             )
-            result = response.text.strip()
+            result = response.content.strip()
             
             # Clean up markdown
             if result.startswith("```json"):
@@ -186,9 +172,7 @@ class LLMAgent:
             logger.info(f"LLM Response Parsed: {json_data}")
 
             # Log usage
-            total_tokens = 0
-            if hasattr(response, 'usage_metadata') and hasattr(response.usage_metadata, 'total_token_count'):
-                total_tokens = response.usage_metadata.total_token_count
+            total_tokens = response.usage.get("total_tokens", 0)
             rate_limiter.log_usage(token_count=total_tokens)
 
             # Sanitize output before saving or returning
@@ -199,6 +183,9 @@ class LLMAgent:
                 llm_cache.set(text, json_data)
                 
             return json_data
+        except LLMError as e:
+            logger.error(f"LLM Provider Error: {e}")
+            raise TechnicalError(f"LLM processing failed: {e}")
         except Exception as e:
             logger.error(f"LLM Error: {e}")
             raise TechnicalError(f"LLM processing failed: {e}")
@@ -207,12 +194,9 @@ class LLMAgent:
     def generate_text(self, prompt: str) -> str:
         """Generates raw text from the LLM for a given prompt."""
         try:
-            logger.info("Sending prompt to Gemini for raw text generation...")
-            response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=prompt
-            )
-            return response.text.strip()
+            logger.info(f"Sending prompt to LLM ({self.provider.provider}) for raw text generation...")
+            response = self.provider.generate_content(prompt=prompt)
+            return response.content.strip()
         except Exception as e:
             logger.error(f"Error generating text from LLM: {e}")
             raise

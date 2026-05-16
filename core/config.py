@@ -32,6 +32,18 @@ def load_config():
                 'cooldown_seconds': 2.0,
                 'volume_multiplier': 1.0,
             },
+            'llm': {
+                'active_provider': 'gemini',
+                'providers': {
+                    'gemini': {'model': 'gemini-2.5-flash'},
+                    'openai': {'model': 'gpt-4.1-mini'},
+                    'anthropic': {'model': 'claude-3-5-haiku-latest'}
+                }
+            },
+            'tts': {
+                'provider': 'sapi5',
+                'voice_keyword': 'maria'
+            },
             'quotas': {
                 'llm': {
                     'max_requests_per_day': 100,
