@@ -89,10 +89,12 @@ class LLMAgent:
         
         Outros comandos locais: [{commands_list}]
 
-        Ações de Sistema Especiais:
+        Ações de Sistema Especiais (PRIORIDADE ALTA):
+        - Intent: 'sleep' | Descrição: O usuário quer que você pare de ouvir, descanse, durma ou se desative temporariamente. Use este intent para comandos como "vá descansar", "dormir", "parar de ouvir", "desativar".
+        - Intent: 'mute' | Descrição: O usuário quer silenciar você.
         - Intent: 'replay' | Descrição: Repete a última ação bem sucedida.
-        - Intent: 'create_macro' | Descrição: Cria uma macro (sequência de comandos) a partir das últimas ações. Aceita parâmetro 'n' (ex: 'n': 3).
-        - Intent: 'explain_last_action' | Descrição: O usuário está perguntando o que você acabou de fazer. Use este intent quando o usuário quiser uma explicação da última ação.
+        - Intent: 'create_macro' | Descrição: Cria uma macro a partir das últimas ações.
+        - Intent: 'explain_last_action' | Descrição: Explica o que você acabou de fazer.
 
         Sua tarefa é decidir se o usuário quer executar uma ação técnica ou apenas conversar.
         Retorne um JSON estrito seguindo um destes formatos:

@@ -3,6 +3,17 @@ jarvis:
   cooldown_seconds: 2.5
   volume_multiplier: 1.0
 
+voice_activation:
+  mode: "hybrid" # always_listening, push_to_talk, hybrid, disabled
+  push_to_talk:
+    key: "ctrl+alt"
+    behavior: "hold" # hold or toggle
+  wake_word:
+    enabled: true
+    keyword: "hey_jarvis"
+  auto_suspend:
+    fullscreen: true
+
 llm:
   active_provider: "gemini"
   providers:

@@ -32,6 +32,20 @@ def load_config():
                 'cooldown_seconds': 2.0,
                 'volume_multiplier': 1.0,
             },
+            'voice_activation': {
+                'mode': 'hybrid',
+                'push_to_talk': {
+                    'key': 'ctrl+alt',
+                    'behavior': 'hold'
+                },
+                'wake_word': {
+                    'enabled': True,
+                    'keyword': 'hey jarvis'
+                },
+                'auto_suspend': {
+                    'fullscreen': True
+                }
+            },
             'llm': {
                 'active_provider': 'gemini',
                 'providers': {

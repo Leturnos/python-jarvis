@@ -8,6 +8,7 @@ from core.stt_engine import stt_engine
 from core.utils import normalize_text
 from core.job_queue import Job, JobType
 from core.audio_engine import safe_reset_audio
+from core.activation import ActivationManager, ActivationContext, ActivationActionType
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,9 @@ class JarvisController:
         self.stop_event = stop_event
         self.pa = pa
         self.stream = stream
+
+        # Activation Manager
+        self.activation_manager = ActivationManager(config)
 
         # State Variables
         self.ignore_audio_until = 0
@@ -105,13 +109,45 @@ class JarvisController:
                     if self._check_dead_silence(rms):
                         continue
 
-                    # 2. State-based Logic
+                    # 3. Activation Gate Evaluation
+                    # Gather context for decision making
+                    context = ActivationContext(
+                        wakeword_score=0.0, # Will be filled in _handle_idle if needed
+                        wakeword_detected=None,
+                        is_fullscreen=self.activation_manager.is_fullscreen(),
+                        is_hotkey_pressed=self.activation_manager.is_hotkey_pressed(),
+                        current_state=current_state,
+                        timestamp=now
+                    )
+
+                    # 4. State-based Logic
                     if now < self.ignore_audio_until:
                         self.ui.update(status="Ignoring Audio (Self-Feedback)")
                         continue
 
                     if current_state == JarvisState.MUTED:
-                        self.ui.update(status="MUTED/Sleeping")
+                        self.ui.update(status="MUTED")
+                        continue
+
+                    if current_state == JarvisState.SLEEPING:
+                        self.ui.update(status="SLEEPING")
+                        
+                        # Allow waking up via PTT
+                        action_obj = self.activation_manager.evaluate(context)
+                        if action_obj.action_type == ActivationActionType.TRIGGER_PTT_START:
+                            logger.info("Waking up from Sleep via PTT!")
+                            self.tray.mute_until = 0 # Clear timer if any
+                            stt_engine.load() # Preload model before listening
+                            self.automator.speak("Sim?")
+                            state_manager.set_state(JarvisState.LISTENING)
+                            self.command_frames = []
+                            self.confirmation_frames = []
+                            self.silence_start = None
+                            self.command_start_time = context.timestamp
+                        continue
+
+                    if current_state == JarvisState.SUSPENDED:
+                        self._handle_suspended(context)
                         continue
 
                     if current_state == JarvisState.CONFIRMING_DRY_RUN:
@@ -123,11 +159,17 @@ class JarvisController:
                         continue
 
                     if current_state == JarvisState.LISTENING:
+                        # PTT Check: if we are in PTT hold mode and key is released, stop
+                        action_obj = self.activation_manager.evaluate(context)
+                        if action_obj.action_type == ActivationActionType.TRIGGER_PTT_STOP:
+                             self._stop_listening_and_process(now)
+                             continue
+                             
                         self._handle_listening(pcm, rms, now)
                         continue
 
                     if current_state == JarvisState.IDLE:
-                        self._handle_idle(pcm, rms, now)
+                        self._handle_idle(pcm, rms, context)
 
         except Exception as e:
             logger.error(f"Controller loop error: {e}", exc_info=True)
@@ -240,19 +282,29 @@ class JarvisController:
             stop_recording = True
 
         if stop_recording:
-            audio_bytes = b"".join(self.command_frames)
-            state_manager.set_state(JarvisState.THINKING)
-            self.task_queue.put(Job(type=JobType.LLM_DYNAMIC, payload=audio_bytes))
-            self.command_frames = []
-            self.silence_start = None
+            self._stop_listening_and_process(now)
 
-    def _handle_idle(self, pcm, rms, now):
-        self.ui.update(status="Listening" if now > self.cooldown else "Cooldown")
+    def _stop_listening_and_process(self, now):
+        audio_bytes = b"".join(self.command_frames)
+        state_manager.set_state(JarvisState.THINKING)
+        self.task_queue.put(Job(type=JobType.LLM_DYNAMIC, payload=audio_bytes))
+        self.command_frames = []
+        self.silence_start = None
+
+    def _handle_suspended(self, context: ActivationContext):
+        self.ui.update(status="SUSPENDED (Fullscreen)")
+        action_obj = self.activation_manager.evaluate(context)
+        if action_obj.action_type == ActivationActionType.RESUME:
+            logger.info("Fullscreen app closed/minimized. Resuming to IDLE.")
+            state_manager.set_state(JarvisState.IDLE)
+
+    def _handle_idle(self, pcm, rms, context: ActivationContext):
+        self.ui.update(status="Listening" if context.timestamp > self.cooldown else "Cooldown")
         
         highest_score = 0.0
         detected_wakeword = None
         
-        if rms > 20 and now > self.cooldown: 
+        if rms > 20 and context.timestamp > self.cooldown: 
             prediction = self.model.predict(pcm)
             for model_key, score in prediction.items():
                 if score > highest_score:
@@ -264,23 +316,50 @@ class JarvisController:
         
         self.ui.update(score=highest_score)
 
-        if highest_score > self.threshold:
+        # Clean the wake word name (e.g., 'hey_jarvis_v0.1' -> 'hey_jarvis')
+        ww_name_clean = None
+        if detected_wakeword:
             ww_name_clean = next((n for n in self.loaded_names if n in detected_wakeword), detected_wakeword)
-            logger.info(f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})")
+
+        # Update context with wake word info before delegation
+        context.wakeword_score = highest_score
+        context.wakeword_detected = ww_name_clean
+
+        # Delegate activation decision to Manager
+        action_obj = self.activation_manager.evaluate(context)
+
+        if action_obj.action_type == ActivationActionType.SUSPEND:
+            state_manager.set_state(JarvisState.SUSPENDED)
+            return
+
+        if action_obj.action_type in (ActivationActionType.TRIGGER_WAKE, ActivationActionType.TRIGGER_PTT_START):
+            source = action_obj.source
+            if source == "WAKE_WORD":
+                ww_name_clean = context.wakeword_detected
+                logger.info(f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})")
+                
+                if ww_name_clean == 'hey_jarvis':
+                    self.automator.speak("Sim?")
+                    state_manager.set_state(JarvisState.LISTENING)
+                    self.command_frames = []
+                    self.confirmation_frames = []
+                    self.silence_start = None
+                    self.command_start_time = context.timestamp
+                else:
+                    self.automator.speak("Sim?")
+                    self.task_queue.put(Job(type=JobType.WAKEWORD, payload=(ww_name_clean, highest_score)))
+                    state_manager.set_state(JarvisState.EXECUTING)
             
-            if ww_name_clean == 'hey_jarvis':
+            elif source == "PTT":
+                logger.info("PTT Activation triggered!")
                 self.automator.speak("Sim?")
                 state_manager.set_state(JarvisState.LISTENING)
                 self.command_frames = []
                 self.confirmation_frames = []
                 self.silence_start = None
-                self.command_start_time = now
-            else:
-                self.automator.speak("Sim?")
-                self.task_queue.put(Job(type=JobType.WAKEWORD, payload=(ww_name_clean, highest_score)))
-                state_manager.set_state(JarvisState.EXECUTING)
-            
-            self.cooldown = now + self.cooldown_seconds
+                self.command_start_time = context.timestamp
+
+            self.cooldown = context.timestamp + self.cooldown_seconds
 
     def _cleanup(self):
         logger.info("Cleaning up controller...")

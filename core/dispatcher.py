@@ -81,6 +81,19 @@ class ActionDispatcher:
             self._handle_explain_last_action()
             return True
 
+        # Handle built-in system states
+        if plan.intent in ("sleep", "dormir", "parar_de_ouvir", "stop_listening"):
+            logger.info("System command: Entering SLEEPING state.")
+            self.automator.speak("Indo dormir. Use o atalho ou a bandeja para me acordar.")
+            state_manager.set_state(JarvisState.SLEEPING)
+            return True
+
+        if plan.intent in ("mute", "silenciar"):
+            logger.info("System command: Entering MUTED state.")
+            self.automator.speak("Silenciado.")
+            state_manager.set_state(JarvisState.MUTED)
+            return True
+
         # 1. Prompt Guard Validation
         from core.prompt_guard import PromptGuard
         sanitized_dict = PromptGuard.sanitize_output(plan.to_dict())

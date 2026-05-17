@@ -84,7 +84,8 @@ class JarvisTray:
     def is_muted(self):
         """Checks if Jarvis is currently muted."""
         if self.mute_until == 0:
-            return state_manager.get_state() == JarvisState.MUTED
+            # If no timer is set, we just check the current state without side effects
+            return state_manager.get_state() in (JarvisState.MUTED, JarvisState.SLEEPING, JarvisState.SUSPENDED)
         
         if time.time() > self.mute_until:
             self.mute_until = 0
@@ -121,20 +122,17 @@ class JarvisTray:
         def is_autostart_enabled(item):
             return is_autostart_enabled_check()
 
-        def get_mute_label(minutes):
-            if minutes == 0:
-                return "Off (Listening)"
-            return f"{minutes} {'hour' if minutes >= 60 else 'min'}"
-
         def is_mute_checked(minutes):
             if minutes == 0:
-                return self.mute_until == 0
+                return False
             # Allow for a small margin of error in time calculation
             remaining = self.mute_until - time.time()
             return remaining > (minutes - 5) * 60 and remaining <= (minutes + 5) * 60
 
         mute_menu = pystray.Menu(
-            pystray.MenuItem(get_mute_label(0), lambda: self.set_mute(0), checked=lambda item: self.mute_until == 0),
+            pystray.MenuItem("Listening (Active)", lambda: self.set_mute(0), checked=lambda item: state_manager.get_state() not in (JarvisState.SLEEPING, JarvisState.MUTED, JarvisState.SUSPENDED)),
+            pystray.MenuItem("On (Suspended)", lambda: state_manager.set_state(JarvisState.SLEEPING), checked=lambda item: state_manager.get_state() in (JarvisState.SLEEPING, JarvisState.SUSPENDED)),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("30 min", lambda: self.set_mute(30), checked=lambda item: is_mute_checked(30)),
             pystray.MenuItem("1 hour", lambda: self.set_mute(60), checked=lambda item: is_mute_checked(60)),
             pystray.MenuItem("3 hours", lambda: self.set_mute(180), checked=lambda item: is_mute_checked(180))
