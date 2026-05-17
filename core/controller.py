@@ -84,7 +84,12 @@ class JarvisController:
                     current_state = state_manager.get_state()
                     now = time.time()
 
-                    # 1. Audio Processing
+                    # 1. Update Tray Timer and Auto-resume check
+                    if self.tray:
+                        # is_muted() in Tray class handles auto-resuming to IDLE when timer expires
+                        self.tray.is_muted()
+
+                    # 2. Audio Processing
                     pcm, rms = self._read_audio()
                     if pcm is None:
                         continue
@@ -130,6 +135,15 @@ class JarvisController:
             self._cleanup()
 
     def _on_state_change(self, old_state, new_state, context):
+        # 1. Resource Management (Memory Optimization)
+        if new_state == JarvisState.MUTED:
+            # Unload heavy models when entering muted state
+            stt_engine.unload()
+        elif old_state == JarvisState.MUTED and new_state == JarvisState.IDLE:
+            # Proactively reload models when coming back from muted state
+            stt_engine.load()
+
+        # 2. State-specific Logic
         if new_state == JarvisState.CONFIRMING_DRY_RUN:
             self.ignore_audio_until = 0
             logger.info("Entering Confirmation: Listening immediately.")
