@@ -6,17 +6,19 @@ Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", p
 
 ## ✨ O que ele faz?
 
-- **Ouve de verdade (Offline):** Fica sempre a postos esperando você dizer "Hey Jarvis" de forma rápida e sem depender de internet para a ativação inicial.
+- **Ativação Inteligente (Novo! 🎙️):** Você escolhe como o Jarvis deve te ouvir. Ele pode ficar sempre atento à frase "Hey Jarvis", funcionar apenas quando você aperta uma tecla (Push-to-Talk), ou ambos!
+- **Modo Gamer e Reunião (Auto-Suspend):** O Jarvis é educado. Se ele perceber que você está jogando ou em uma apresentação (tela cheia), ele entra em suspensão automaticamente para não te interromper.
 - **Entende seu jeito de falar (IA):** Não precisa decorar comandos rígidos. Após ativar o assistente, fale de forma natural e ele usará IA (Google Gemini) para entender sua intenção.
-- **Paleta de Comandos (Novo! ⌨️):** Falar alto nem sempre é o ideal. Aperte `Ctrl + Alt + P` a qualquer momento para abrir uma barra de pesquisa rápida na tela e execute suas automações silenciosamente.
+- **Paleta de Comandos (⌨️):** Falar alto nem sempre é o ideal. Aperte `Ctrl + Alt + P` a qualquer momento para abrir uma barra de pesquisa rápida na tela e execute suas automações silenciosamente.
 - **Aprende Novas Habilidades (Plugins YAML):** Ensinar algo novo para o Jarvis é tão fácil quanto escrever uma receita de bolo em um arquivo de texto.
 - **Invisível e Seguro:** Roda silenciosamente na bandeja do Windows (System Tray) e possui um sistema de segurança que bloqueia ou pede confirmação antes de executar ações perigosas.
-- **Memória de Curto e Longo Prazo:** Repita rapidamente a última ação ou peça para o Jarvis salvar uma sequência de comandos como uma nova macro (plugin) inteligente.
+- **Controle de Descanso:** Você pode dizer "Jarvis, ir dormir" e ele descarregará os modelos pesados da memória para economizar energia do seu PC, ficando em modo de espera até que você o acorde manualmente.
 
 ### 🧠 Comandos de Sistema
-Exemplos de como usar as novas capacidades de memória:
-- **Repetir último comando**: "Repetir último comando", "Faz de novo", "De novo". (Executa a última ação de sucesso).
-- **Salvar como macro**: "Salvar como macro", "Gravar sequência", "Salve isso". (Consolida as últimas ações em um novo plugin usando IA).
+Exemplos de como usar as novas capacidades de memória e controle:
+- **Descansar/Silenciar**: "Jarvis, ir dormir", "Silenciar", "Parar de ouvir".
+- **Repetir último comando**: "Faz de novo", "De novo".
+- **Salvar como macro**: "Salvar como macro", "Gravar sequência", "Salve isso".
 
 ## 📋 Pré-requisitos
 
@@ -50,8 +52,10 @@ Nós separamos as coisas para facilitar sua vida. Existem três arquivos princip
 
 2. **Arquivo `config.yaml` (Ajustes de Motor):**
    Aqui você mexe na "mecânica" do Jarvis.
-   - `threshold`: Quão sensível é o ouvido dele (padrão `0.35`).
-   - `volume_multiplier`: Se o seu microfone for baixo, aumente esse número.
+   - **Ativação de Voz (`voice_activation`):**
+     - `mode`: Escolha entre `hybrid` (Frase + Tecla), `push_to_talk` (Apenas tecla), `always_listening` (Apenas frase) ou `disabled`.
+     - `push_to_talk`: Configure a tecla (ex: `ctrl+alt`) e se quer segurar para falar (`hold`) ou apenas um toque (`toggle`).
+     - `auto_suspend`: Ative o `fullscreen: true` para o Jarvis silenciar automaticamente em jogos ou vídeos em tela cheia.
    - **Cérebro do Jarvis (`llm`):** Você pode escolher qual IA o Jarvis usa! No campo `active_provider`, você pode colocar `gemini`, `openai` ou `anthropic`. 
      - *Dica:* Lembre-se de colocar a chave correspondente (`OPENAI_API_KEY`, etc) no seu `.env`.
    - **Voz do Jarvis (`tts`):** Quer que o Jarvis tenha uma voz diferente? No campo `voice_keyword`, coloque parte do nome da voz que você tem instalada no Windows (ex: "maria", "zira", "david"). Se ele não encontrar a que você pediu, ele tentará usar uma voz em Português automaticamente.

@@ -8,10 +8,12 @@ O Jarvis é um assistente minimalista controlado por voz para Windows, projetado
 ## 🏗️ Arquitetura
 - **Ponto de Entrada:** `main.py` gerencia o loop principal de áudio, atualizações da interface de usuário (UI) e inicia a thread `command_worker`.
 - **Lógica Central:** Localizada no diretório `core/`.
-  - `audio_engine.py`: Gerencia o stream do microfone e a detecção da palavra de ativação.
-  - `stt_engine.py`: Speech-to-text local usando Faster Whisper.
+  - `audio_engine.py`: Gerencia o stream do microfone e o carregamento dos modelos de palavra de ativação.
+  - `activation.py`: Gerencia a lógica de ativação híbrida (PTT, Wake Word, Fullscreen suspension) e fornece o contexto de decisão para o controller.
+  - `stt_engine.py`: Speech-to-text local usando Faster Whisper com suporte a lazy loading e descarregamento de memória.
   - `llm_agent.py`: Interface com o Google Gemini para NLP.
-  - `dispatcher.py`: Roteador central que valida segurança e audita execuções no `history_db`.
+  - `dispatcher.py`: Roteador central que valida segurança, audita execuções e intercepta comandos de sistema (sleep/mute).
+  - `controller.py`: Orquestrador do loop de áudio que delega ativações ao `ActivationManager` e gerencia estados de ciclo de vida (`SLEEPING`, `SUSPENDED`).
   - `plugin_manager.py`: Carregador dinâmico de intenções YAML com suporte a `shared_actions`.
   - `automator.py`: Lida com foco de janelas, digitação e TTS (SAPI5).
   - `security_ui.py` & `command_palette.py`: Interfaces de autorização e entrada manual.

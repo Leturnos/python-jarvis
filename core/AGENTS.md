@@ -6,13 +6,18 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 
 - **`audio_engine.py`**: 
   - Gerencia os streams do PyAudio.
-  - Gerencia os modelos do `openwakeword`.
-  - Contém `record_command_audio` para audição ativa após a detecção da palavra de ativação.
+  - Gerencia o carregamento de modelos do `openwakeword` e a detecção offline.
   - *Regra:* O processamento de áudio deve ser rápido. Evite operações de bloqueio aqui.
+
+- **`activation.py`**:
+  - Centraliza a lógica de decisão para ativação do Jarvis.
+  - Avalia o `ActivationContext` (scores de wake word, estados de hotkey via `keyboard` e janelas em tela cheia via `win32gui`).
+  - Implementa histerese e métricas de ativação.
+  - *Regra:* Não deve conter lógica de gravação, apenas decisão de estado.
 
 - **`stt_engine.py`**: 
   - Cria um wrapper em volta do modelo local `faster-whisper`.
-  - *Regra:* Atualmente usa o modelo `tiny` para desempenho. Mantenha as dependências mínimas para garantir tempos de carregamento rápidos.
+  - Suporta lazy loading e `unload()` para liberar memória em estados de repouso.
 
 - **`llm_agent.py`**: 
   - Faz a interface com o SDK `google-genai`.
@@ -20,6 +25,7 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 
 - **`dispatcher.py`**: 
   - Roteia os comandos para o motor de execução apropriado (Sistema, Warp ou Plugin).
+  - Intercepta intenções de sistema como `sleep` e `mute` para gerenciar estados globais.
   - *Regra:* Deve validar o `risk_level` via `_check_authorization()` antes da execução.
   - *Regra:* DEVE registrar o resultado de toda tentativa no `history_manager`.
 
@@ -47,9 +53,14 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 - **`config.py`**: 
   - Carregador centralizado de configuração (YAML + ENV).
 
+- **`state.py`**:
+  - Single Source of Truth para o estado lógico do sistema (`JarvisState`).
+  - Gerencia transições entre `IDLE`, `LISTENING`, `THINKING`, `MUTED`, `SLEEPING` e `SUSPENDED`.
+
 - **`utils.py`**: 
   - Funções de ajuda, incluindo `normalize_text` (Symmetrical Normalization).
 
 ## ⚠️ Considerações Importantes
+- **Estados de Repouso:** Diferencie `MUTED` (usuário silenciou), `SLEEPING` (sistema em baixo consumo, modelos descarregados) e `SUSPENDED` (suspensão automática contextual por tela cheia).
 - **Especificidades do Windows:** Muitos módulos aqui dependem fortemente das APIs do Windows (`win32gui`, `win32con`, `pythoncom`). Garanta a compatibilidade ao fazer alterações.
 - **Tratamento de Erros:** A degradação suave é fundamental. Se o STT ou o LLM falharem, o sistema deve se recuperar e notificar o usuário via TTS (`automator.speak()`) ou pela interface gráfica (UI), em vez de travar (crash).
