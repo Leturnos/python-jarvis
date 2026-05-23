@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from core.dispatcher import ActionDispatcher
+from core.execution.dispatcher import ActionDispatcher
 
 @pytest.fixture
 def mock_config():
@@ -30,8 +30,8 @@ def test_check_authorization_blocked(dispatcher, mock_automator):
     assert dispatcher._check_authorization(action_config) is False
     mock_automator.speak.assert_called_with("Atenção: Ação catastrófica detectada. Comando bloqueado por segurança.")
 
-@patch('core.dispatcher.SecurityDialog')
-@patch('core.dispatcher.threading.Thread')
+@patch('core.execution.dispatcher.SecurityDialog')
+@patch('core.execution.dispatcher.threading.Thread')
 def test_check_authorization_dangerous_approved(mock_thread, mock_dialog_class, dispatcher, mock_automator):
     action_config = {'risk_level': 'dangerous', 'description': 'Format Drive'}
     
@@ -42,8 +42,8 @@ def test_check_authorization_dangerous_approved(mock_thread, mock_dialog_class, 
     mock_automator.speak.assert_called()
     mock_dialog_class.assert_called_with('Format Drive')
 
-@patch('core.dispatcher.SecurityDialog')
-@patch('core.dispatcher.threading.Thread')
+@patch('core.execution.dispatcher.SecurityDialog')
+@patch('core.execution.dispatcher.threading.Thread')
 def test_check_authorization_dangerous_rejected(mock_thread, mock_dialog_class, dispatcher, mock_automator):
     action_config = {'risk_level': 'dangerous', 'description': 'Format Drive'}
     

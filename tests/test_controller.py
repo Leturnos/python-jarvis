@@ -80,7 +80,9 @@ def test_wake_word_detection_idle_to_listening(mock_deps):
     controller._read_audio = MagicMock(side_effect=slow_read)
     mock_deps['model'].predict.return_value = {'hey_jarvis': 0.9}
     
-    controller.start()
+    with patch.object(controller.activation_manager, 'is_fullscreen', return_value=False), \
+         patch.object(controller.activation_manager, 'is_hotkey_pressed', return_value=False):
+        controller.start()
         
     assert state_manager.get_state() == JarvisState.LISTENING
     mock_deps['automator'].speak.assert_called_with("Sim?")

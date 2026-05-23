@@ -2,9 +2,9 @@ import yaml
 import os
 import json
 from core.infra.logger_config import logger
-from core.plugin_manager import plugin_manager
+from core.plugins.plugin_manager import plugin_manager
 from core.ai.llm_agent import llm_agent
-from core.execution_plan import ExecutionPlan, ExecutionStep
+from core.execution.execution_plan import ExecutionPlan, ExecutionStep
 
 class MacroManager:
     def __init__(self, macros_path="plugins/macros.yaml"):

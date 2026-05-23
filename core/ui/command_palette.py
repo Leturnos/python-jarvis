@@ -6,7 +6,7 @@ import queue
 import win32gui
 import win32con
 from core.infra.logger_config import logger
-from core.plugin_manager import plugin_manager
+from core.plugins.plugin_manager import plugin_manager
 
 class CommandPalette:
     def __init__(self, dispatcher):

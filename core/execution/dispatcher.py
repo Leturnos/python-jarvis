@@ -12,15 +12,15 @@ import time
 import pyautogui
 from typing import Optional
 from core.infra.logger_config import logger
-from core.security_ui import SecurityDialog
+from core.ui.security_ui import SecurityDialog
 from core.audio.audio_engine import record_command_audio
 from core.audio.stt_engine import stt_engine
 from core.shared.utils import normalize_text, time_it
-from core.plugin_manager import plugin_manager
+from core.plugins.plugin_manager import plugin_manager
 from core.persistence.history_db import history_manager
-from core.macro_manager import macro_manager
+from core.plugins.macro_manager import macro_manager
 from core.runtime.state import state_manager, JarvisState
-from core.execution_plan import ExecutionPlan, ExecutionStep, StepType, RiskLevel
+from core.execution.execution_plan import ExecutionPlan, ExecutionStep, StepType, RiskLevel
 from core.shared.errors import BusinessError
 
 class ActionDispatcher:

@@ -9,10 +9,10 @@ from core.infra.logger_config import logger
 from core.audio.stt_engine import stt_engine
 from core.ai.llm_agent import llm_agent
 from core.shared.utils import normalize_text
-from core.plugin_manager import plugin_manager
+from core.plugins.plugin_manager import plugin_manager
 from core.runtime.state import state_manager, JarvisState
-from core.job_queue import Job, JobType, JobStatus, job_manager
-from core.execution_plan import ExecutionPlan
+from core.execution.job_queue import Job, JobType, JobStatus, job_manager
+from core.execution.execution_plan import ExecutionPlan
 from core.ai.command_resolver import CommandResolver
 from core.shared.errors import TechnicalError, BusinessError
 

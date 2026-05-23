@@ -8,16 +8,16 @@ import os
 # Add the project root to sys.path to allow importing from core
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.security_ui import SecurityDialog
+from core.ui.security_ui import SecurityDialog
 
 class TestSecurityDialog(unittest.TestCase):
-    @patch('core.security_ui.tk.Tk')
+    @patch('core.ui.security_ui.tk.Tk')
     def test_initialization(self, mock_tk):
         dialog = SecurityDialog("test action")
         self.assertEqual(dialog.action_desc, "test action")
         self.assertFalse(dialog.result)
 
-    @patch('core.security_ui.tk.Tk')
+    @patch('core.ui.security_ui.tk.Tk')
     def test_ask_returns_result(self, mock_tk):
         # We need to simulate the user clicking a button which sets the event and destroys the window
         dialog = SecurityDialog("test action")
@@ -40,7 +40,7 @@ class TestSecurityDialog(unittest.TestCase):
         result = dialog.ask()
         self.assertTrue(result)
 
-    @patch('core.security_ui.tk.Tk')
+    @patch('core.ui.security_ui.tk.Tk')
     def test_close_programmatically(self, mock_tk):
         dialog = SecurityDialog("test action")
         

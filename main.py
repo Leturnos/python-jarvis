@@ -15,20 +15,20 @@ from winerror import ERROR_ALREADY_EXISTS
 
 from core.infra.logger_config import logger
 from core.infra.config import config
-from core.automator import WarpAutomator
-from core.dispatcher import ActionDispatcher
+from core.execution.automator import WarpAutomator
+from core.execution.dispatcher import ActionDispatcher
 from core.audio.audio_engine import get_audio_stream, load_wakeword_model, safe_reset_audio
 from core.audio.stt_engine import stt_engine
 from core.ai.llm_agent import llm_agent
-from core.ui import JarvisUI
-from core.notifications import JarvisNotifier
-from core.tray import JarvisTray
+from core.ui.ui import JarvisUI
+from core.ui.notifications import JarvisNotifier
+from core.ui.tray import JarvisTray
 from core.shared.utils import normalize_text
-from core.command_palette import CommandPalette
-from core.worker import command_worker
+from core.ui.command_palette import CommandPalette
+from core.execution.worker import command_worker
 from core.runtime.monitor import MemoryMonitor
 from core.runtime.state import state_manager, JarvisState
-from core.job_queue import Job, JobType
+from core.execution.job_queue import Job, JobType
 from core.controller import JarvisController
 
 from core.infra.keyring_manager import KeyringManager

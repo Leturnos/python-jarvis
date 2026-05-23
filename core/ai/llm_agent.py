@@ -2,7 +2,7 @@ import json
 import os
 from core.infra.logger_config import logger
 from core.infra.config import config
-from core.plugin_manager import plugin_manager
+from core.plugins.plugin_manager import plugin_manager
 from core.shared.utils import time_it
 from core.ai.prompt_guard import PromptGuard
 from core.shared.errors import TechnicalError
