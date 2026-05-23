@@ -82,9 +82,7 @@ class LLMAgent:
 
         # 2. Cache miss, prepare prompt
         commands_list = (
-            ", ".join(context_commands)
-            if context_commands
-            else "Nenhum comando mapeado."
+            ", ".join(context_commands) if context_commands else "Nenhum comando."
         )
 
         intents = plugin_manager.get_intents()
@@ -95,14 +93,16 @@ class LLMAgent:
                     f" | Frases: {', '.join(i['phrases'])}" if i.get("phrases") else ""
                 )
                 intents_list.append(
-                    f"        - Intent: '{i['intent']}' | Descrição: {i['description']}{phrases_str} | Risco: {i['risk_level']}"
+                    f"        - Intent: '{i['intent']}' | Descrição: "
+                    f"{i['description']}{phrases_str} | Risco: {i['risk_level']}"
                 )
             intents_str = "\n".join(intents_list)
         else:
             intents_str = "        Nenhum comando de plugin carregado."
 
         prompt = f"""
-        Você é o Jarvis, um assistente de terminal no Windows. Seu objetivo é ajudar o usuário com automações seguras.
+        Você é o Jarvis, um assistente de terminal no Windows.
+        Seu objetivo é ajudar o usuário com automações seguras.
         O usuário falou: "{text}"
 
         Comandos de Plugins disponíveis:
@@ -111,13 +111,15 @@ class LLMAgent:
         Outros comandos locais: [{commands_list}]
 
         Ações de Sistema Especiais (PRIORIDADE ALTA):
-        - Intent: 'sleep' | Descrição: O usuário quer que você pare de ouvir, descanse, durma ou se desative temporariamente. Use este intent para comandos como "vá descansar", "dormir", "parar de ouvir", "desativar".
+        - Intent: 'sleep' | Descrição: O usuário quer que você pare de ouvir, descanse,
+          durma ou se desative temporariamente. Use este intent para comandos como
+          "vá descansar", "dormir", "parar de ouvir", "desativar".
         - Intent: 'mute' | Descrição: O usuário quer silenciar você.
         - Intent: 'replay' | Descrição: Repete a última ação bem sucedida.
         - Intent: 'create_macro' | Descrição: Cria uma macro a partir das últimas ações.
         - Intent: 'explain_last_action' | Descrição: Explica o que você acabou de fazer.
 
-        Sua tarefa é decidir se o usuário quer executar uma ação técnica ou apenas conversar.
+        Sua tarefa é decidir se o usuário quer executar uma ação técnica ou conversar.
         Retorne um JSON estrito seguindo um destes formatos:
 
         1. Se for uma AÇÃO (Plugin, Sistema, Terminal, Apps):
@@ -125,7 +127,7 @@ class LLMAgent:
             "schema_version": "1.0",
             "type": "action",
             "intent": "nome_curto_da_intencao",
-            "explanation": "Uma frase curta explicando o que você vai fazer em termos humanos.",
+            "explanation": "Uma frase explicando o que você vai fazer em termos humanos.",
             "global_risk": "safe", "low", "medium", "high", "dangerous" ou "blocked",
             "steps": [
                 {{
@@ -156,7 +158,8 @@ class LLMAgent:
 
         Regras:
         - SEMPRE retorne um "explanation" humano para ações.
-        - Se a ação corresponder a um comando de plugin, use type "command" ou o tipo mais adequado dentro dos steps.
+        - Se a ação corresponder a um comando de plugin, use type "command" ou o
+          tipo mais adequado dentro dos steps.
         - Retorne APENAS o JSON, sem markdown.
         """
 
@@ -165,7 +168,10 @@ class LLMAgent:
             logger.info("Rate limit reached. Returning fallback message.")
             return {
                 "type": "chat",
-                "message": "Atingi o limite de uso de IA por hoje.\nPosso continuar com comandos locais, ou você pode tentar novamente em algumas horas.",
+                "message": (
+                    "Atingi o limite de uso de IA por hoje.\nPosso continuar com "
+                    "comandos locais, ou você pode tentar novamente em algumas horas."
+                ),
             }
 
         try:

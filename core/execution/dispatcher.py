@@ -306,7 +306,12 @@ class ActionDispatcher:
             self.automator.speak("Não encontrei nenhuma ação recente para explicar.")
             return
 
-        prompt = f"O usuário perguntou o que você acabou de fazer. Aqui está o JSON da sua última ação técnica: {last_json}\nExplique de forma curta, natural e humana o que você fez. Não explique o JSON, explique a ação."
+        prompt = (
+            f"O usuário perguntou o que você acabou de fazer. "
+            f"Aqui está o JSON da sua última ação técnica: {last_json}\n"
+            f"Explique de forma curta, natural e humana o que você fez. "
+            f"Não explique o JSON, explique a ação."
+        )
 
         try:
             from core.ai.llm_agent import llm_agent

@@ -85,7 +85,8 @@ class CommandResolver:
             matched_intent = available_commands_map[best_match]
             is_system = matched_intent in self.SYSTEM_ALIASES
             logger.info(
-                f"Fuzzy match found: {best_match} for {normalized} (Score: {highest_ratio:.2f}) -> {matched_intent}"
+                f"Fuzzy match found: {best_match} for {normalized} "
+                f"(Score: {highest_ratio:.2f}) -> {matched_intent}"
             )
             return ResolutionResult(
                 intent_name=matched_intent,
