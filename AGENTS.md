@@ -6,56 +6,55 @@ Bem-vindo, Agente de IA! Este documento fornece o contexto essencial, diretrizes
 O Jarvis é um assistente minimalista controlado por voz para Windows, projetado especificamente para automatizar fluxos de trabalho no terminal (Warp) e comandos de sistema. Ele usa detecção de palavra de ativação offline local (`openwakeword`) combinada com um sistema inteligente de roteamento de comandos em múltiplos estágios (Match Exato -> Fuzzy Match -> Cloud LLM via Google Gemini).
 
 ## 🏗️ Arquitetura
-- **Ponto de Entrada:** `main.py` gerencia o loop principal de áudio, atualizações da interface de usuário (UI) e inicia a thread `command_worker`.
-- **Lógica Central:** Localizada no diretório `core/`.
-  - `audio_engine.py`: Gerencia o stream do microfone e o carregamento dos modelos de palavra de ativação.
-  - `activation.py`: Gerencia a lógica de ativação híbrida (PTT, Wake Word, Fullscreen suspension) e fornece o contexto de decisão para o controller.
-  - `stt_engine.py`: Speech-to-text local usando Faster Whisper com suporte a lazy loading e descarregamento de memória.
-  - `llm_agent.py`: Interface com o Google Gemini para NLP.
-  - `dispatcher.py`: Roteador central que valida segurança, audita execuções e intercepta comandos de sistema (sleep/mute).
-  - `controller.py`: Orquestrador do loop de áudio que delega ativações ao `ActivationManager` e gerencia estados de ciclo de vida (`SLEEPING`, `SUSPENDED`).
-  - `plugin_manager.py`: Carregador dinâmico de intenções YAML com suporte a `shared_actions`.
-  - `automator.py`: Lida com foco de janelas, digitação e TTS (SAPI5).
-  - `security_ui.py` & `command_palette.py`: Interfaces de autorização e entrada manual.
-- **Configuração:** Gerenciada via `config.yaml` (comandos, limites) e `.env` (chaves de API).
-- **Interface Gráfica (UI):** Usa `rich` para a interface do terminal e `pystray` para o ícone na bandeja do sistema (system tray).
+O projeto segue uma estrutura de domínios dentro do módulo `core/` para facilitar a escalabilidade e manutenção.
+
+- **Ponto de Entrada:** `main.py` gerencia o bootstrap, chaves de API e inicia a thread `command_worker`.
+- **Lógica Central (`core/`):**
+  - `controller.py`: Orquestrador do loop de áudio e transições de estado.
+  - `activation.py`: Lógica de ativação híbrida (PTT, Wake Word, Fullscreen).
+  - **`audio/`**: Motores de áudio e Speech-to-Text (`faster-whisper`).
+  - **`ai/`**: Inteligência Artificial, Agentes e Segurança de Prompt.
+  - **`execution/`**: Roteamento (`dispatcher`), planos de automação e interação com OS.
+  - **`infra/`**: Configurações, Logging e Gerenciamento de Segredos.
+  - **`runtime/`**: Estado Global (`JarvisState`), monitoramento e rate limiting.
+  - **`plugins/`**: Carregamento dinâmico de comandos DSL e macros.
+  - **`ui/`**: Componentes visuais (Rich terminal, Tray, Diálogos).
+  - **`persistence/`**: Histórico de execução e métricas (SQLite).
+  - **`shared/`**: Funções utilitárias e definições de erros.
+- **Interface Gráfica (UI):** Usa `rich` para o terminal e `pystray` para a bandeja do sistema.
 
 ## 🛠️ Stack Tecnológica
 - **Linguagem:** Python 3.13+
 - **Gerenciamento de Dependências:** `uv`
-- **Bibliotecas Principais:** `openwakeword`, `faster-whisper`, `google-genai` (SDK v2.0+), `pyautogui`, `pygetwindow`, `rich`, `sqlite3`.
+- **Bibliotecas Principais:** `openwakeword`, `faster-whisper`, `litellm`, `pyautogui`, `rich`, `sqlite3`.
 
 ## 📜 Convenções de Código e Regras
 1. **Concorrência e Threads:** 
-   - O loop principal gerencia a captura de áudio e a detecção da palavra de ativação.
-   - O processamento de comandos (STT, LLM, Dispatch) roda em uma thread separada chamada `command_worker` para evitar o bloqueio do stream de áudio.
-   - **Crucial:** Sempre use `pythoncom.CoInitialize()` no início de novas threads que interagem com objetos COM do Windows (como SAPI5 para TTS) e `pythoncom.CoUninitialize()` no final.
+   - O processamento pesado roda na thread `command_worker`.
+   - **Crucial:** Use `pythoncom.CoInitialize()` em novas threads que interagem com o Windows.
 2. **Segurança e Auditoria:**
-   - **Regra:** Toda ação submetida ao `dispatcher.py` deve possuir um `risk_level` (`safe`, `dangerous`, `blocked`).
-   - **Regra:** Toda execução (sucesso, negação do usuário ou erro) DEVE ser registrada via `history_manager.log_execution()` para persistência no SQLite (`history_db.py`).
+   - **Regra:** Toda ação deve ter um `risk_level`.
+   - **Regra:** Toda execução DEVE ser registrada no `history_manager`.
 3. **Normalização Simétrica (NLP):**
-   - **Regra:** Sempre aplique `normalize_text` em ambos os lados da comparação (input do usuário E strings de comando/frases dos plugins). Isso evita falhas causadas por espaços vs underscores ou capitalização.
-3. **Configuração:** 
-   - Nunca coloque chaves de API ou caminhos (paths) fixos no código (hardcode). Use `core/config.py` que mescla os arquivos `.env` e `config.yaml`.
-4. **Roteamento de Comandos:**
-   - Prefira o match local (Exato ou Fuzzy via `difflib`) em vez de chamadas ao LLM pela velocidade e confiabilidade.
-   - O agente LLM retorna um formato JSON estrito com um discriminador `type` (`"action"` ou `"chat"`).
-5. **UI e Logs:**
-   - Use `core.logger_config.logger` para todos os registros (logs).
-   - A interface do terminal é gerenciada por `core.ui.JarvisUI`. Não use `print` diretamente no console dentro do loop principal para não quebrar a exibição ao vivo (Live) do `rich`.
+   - **Regra:** Sempre use `core.shared.utils.normalize_text` em ambos os lados da comparação.
+4. **Configuração:** 
+   - Use `core.infra.config.config`. Nunca use hardcoded secrets.
+5. **Roteamento de Comandos:**
+   - Prioridade: Match Local (Exato/Fuzzy) > LLM.
 6. **Idioma:**
-   - O usuário interage em Português. O TTS (texto para fala), prompts do LLM e documentações internas (como esta) devem usar o Português como padrão. Para o restante, incluindo código e comentários, utilize inglês.
+   - Interação com usuário: Português.
+   - Código, comentários e documentação técnica: Inglês.
 
 ## 🧪 Testes
-- Os testes estão localizados no diretório `tests/`.
-- Rode os testes usando `uv run python -m unittest discover tests/`.
+- Rode os testes usando `uv run pytest`.
 
-Sempre revise os arquivos `AGENTS.md` específicos em subdiretórios para obter um contexto mais localizado.
+Sempre revise os arquivos `AGENTS.md` específicos em subdiretórios para obter um contexto localizado.
 
 ## 🐛 Histórico de Bugs e Causa Raiz (Knowledge Base)
 
 | Bug | Causa Raiz | Solução Arquitetural |
 | :--- | :--- | :--- |
-| `NameError: 'palette' is not defined` | Acesso a variáveis de UI (Main Thread) dentro da Thread de Áudio (Worker) sem injeção de dependência. | Injetar dependências via construtor ou usar Singletons como `plugin_manager` para lógica de negócios. |
-| Falha no Match de frases com espaço (ex: "hora de trabalhar") | O texto do STT era normalizado ("hora_de_trabalhar"), mas as frases do YAML não, causando mismatch. | **Normalização Simétrica:** Aplicar o mesmo transformador de texto no carregamento dos plugins e no processamento do input. |
-| Crash `No wakewords found` | `audio_engine` dependia estritamente de chaves deletadas no `config.yaml`. | Implementar Descoberta Dinâmica: varrer pastas físicas (ex: `models/`) em vez de confiar apenas em manifestos de configuração. |
+| `NameError: 'palette' is not defined` | Acesso a variáveis de UI dentro da Thread de Áudio sem injeção. | Injetar dependências via construtor ou usar Singletons. |
+| Falha no Match de frases com espaço | Texto do STT normalizado vs Frases YAML não normalizadas. | **Normalização Simétrica:** Aplicar o mesmo transformador no carregamento e input. |
+| Crash `No wakewords found` | Dependência de chaves fixas no YAML. | Implementar Descoberta Dinâmica de arquivos na pasta `models/`. |
+| Falha em teste de Wake Word | Detecção de tela cheia interferindo no ambiente de CI/Mock. | Mockar o `ActivationManager` em testes unitários do controller. |
