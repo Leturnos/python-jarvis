@@ -1,9 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, List
 from difflib import SequenceMatcher
-from core.shared.utils import normalize_text
-from core.plugins.plugin_manager import plugin_manager
+from typing import Dict, List, Optional
+
 from core.infra.logger_config import logger
+from core.plugins.plugin_manager import plugin_manager
+from core.shared.utils import normalize_text
+
 
 @dataclass
 class ResolutionResult:
@@ -13,10 +15,22 @@ class ResolutionResult:
     source: str
     matched_phrase: str
 
+
 class CommandResolver:
     SYSTEM_ALIASES = {
-        "replay": ["repetir", "repete", "repetir ultimo comando", "faz de novo", "de novo"],
-        "create_macro": ["salvar como macro", "criar macro", "salve isso", "gravar sequencia"]
+        "replay": [
+            "repetir",
+            "repete",
+            "repetir ultimo comando",
+            "faz de novo",
+            "de novo",
+        ],
+        "create_macro": [
+            "salvar como macro",
+            "criar macro",
+            "salve isso",
+            "gravar sequencia",
+        ],
     }
 
     def __init__(self):
@@ -26,15 +40,15 @@ class CommandResolver:
         intents = plugin_manager.get_intents()
         available_commands_map = {}
         for i in intents:
-            intent_name = i['intent']
+            intent_name = i["intent"]
             available_commands_map[normalize_text(intent_name)] = intent_name
-            for phrase in i.get('phrases', []):
+            for phrase in i.get("phrases", []):
                 available_commands_map[normalize_text(phrase)] = intent_name
-        
+
         for intent, aliases in self.SYSTEM_ALIASES.items():
             for alias in aliases:
                 available_commands_map[normalize_text(alias)] = intent
-                
+
         return available_commands_map
 
     def get_available_intent_names(self) -> List[str]:
@@ -55,7 +69,7 @@ class CommandResolver:
                 confidence=1.0,
                 is_system=is_system,
                 source="voice_exact",
-                matched_phrase=normalized
+                matched_phrase=normalized,
             )
 
         # Stage 2: Fuzzy Match
@@ -66,17 +80,19 @@ class CommandResolver:
             if ratio > highest_ratio:
                 highest_ratio = ratio
                 best_match = cmd
-        
+
         if best_match and highest_ratio > threshold:
             matched_intent = available_commands_map[best_match]
             is_system = matched_intent in self.SYSTEM_ALIASES
-            logger.info(f"Fuzzy match found: {best_match} for {normalized} (Score: {highest_ratio:.2f}) -> {matched_intent}")
+            logger.info(
+                f"Fuzzy match found: {best_match} for {normalized} (Score: {highest_ratio:.2f}) -> {matched_intent}"
+            )
             return ResolutionResult(
                 intent_name=matched_intent,
                 confidence=highest_ratio,
                 is_system=is_system,
                 source="voice_fuzzy",
-                matched_phrase=best_match
+                matched_phrase=best_match,
             )
 
         return None

@@ -1,10 +1,12 @@
 import os
+
 import yaml
-import re
 from dotenv import load_dotenv
+
 from core.infra.logger_config import logger
 
 load_dotenv()
+
 
 def expand_env_vars(data):
     """Recursively expand environment variables in a dictionary."""
@@ -17,6 +19,7 @@ def expand_env_vars(data):
     else:
         return data
 
+
 def load_config():
     """Loads application configuration from config.yaml."""
     try:
@@ -27,53 +30,40 @@ def load_config():
     except Exception as e:
         logger.error(f"Error loading config.yaml: {e}")
         return {
-            'jarvis': {
-                'threshold': 0.35,
-                'cooldown_seconds': 2.0,
-                'volume_multiplier': 1.0,
+            "jarvis": {
+                "threshold": 0.35,
+                "cooldown_seconds": 2.0,
+                "volume_multiplier": 1.0,
             },
-            'voice_activation': {
-                'mode': 'hybrid',
-                'push_to_talk': {
-                    'key': 'ctrl+alt',
-                    'behavior': 'hold'
+            "voice_activation": {
+                "mode": "hybrid",
+                "push_to_talk": {"key": "ctrl+alt", "behavior": "hold"},
+                "wake_word": {"enabled": True, "keyword": "hey jarvis"},
+                "auto_suspend": {"fullscreen": True},
+            },
+            "llm": {
+                "active_provider": "gemini",
+                "providers": {
+                    "gemini": {"model": "gemini-2.5-flash"},
+                    "openai": {"model": "gpt-4.1-mini"},
+                    "anthropic": {"model": "claude-3-5-haiku-latest"},
                 },
-                'wake_word': {
-                    'enabled': True,
-                    'keyword': 'hey jarvis'
-                },
-                'auto_suspend': {
-                    'fullscreen': True
+            },
+            "tts": {"provider": "sapi5", "voice_keyword": "maria"},
+            "quotas": {
+                "llm": {
+                    "max_requests_per_day": 100,
+                    "max_tokens_per_day": 500000,
                 }
             },
-            'llm': {
-                'active_provider': 'gemini',
-                'providers': {
-                    'gemini': {'model': 'gemini-2.5-flash'},
-                    'openai': {'model': 'gpt-4.1-mini'},
-                    'anthropic': {'model': 'claude-3-5-haiku-latest'}
+            "integrations": {"warp": {"path": os.environ.get("WARP_PATH", "")}},
+            "wakewords": {
+                "hey_jarvis": {
+                    "action": "warp",
+                    "commands": [rf"cd {os.environ.get('PROJECT_PATH', '')}", "gemini"],
                 }
             },
-            'tts': {
-                'provider': 'sapi5',
-                'voice_keyword': 'maria'
-            },
-            'quotas': {
-                'llm': {
-                    'max_requests_per_day': 100,
-                    'max_tokens_per_day': 500000,
-                }
-            },
-            'integrations': {
-                'warp': {
-                    'path': os.environ.get("WARP_PATH", "")
-                }
-            },
-            'wakewords': {
-                'hey_jarvis': {
-                    'action': 'warp',
-                    'commands': [rf"cd {os.environ.get('PROJECT_PATH', '')}", "gemini"]
-                }
-            }
         }
+
+
 config = load_config()

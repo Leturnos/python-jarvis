@@ -1,5 +1,7 @@
 from plyer import notification
+
 from core.infra.logger_config import logger
+
 
 class JarvisNotifier:
     def __init__(self):

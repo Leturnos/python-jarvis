@@ -1,10 +1,12 @@
-from enum import Enum, auto
-from dataclasses import dataclass, field
-from typing import Any, Optional
-import uuid
 import time
+import uuid
 from collections import deque
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import Any, Optional
+
 from core.infra.logger_config import logger
+
 
 class JobType(Enum):
     LLM_DYNAMIC = auto()
@@ -13,6 +15,7 @@ class JobType(Enum):
     REPLAY = auto()
     CREATE_MACRO = auto()
 
+
 class JobStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -20,6 +23,7 @@ class JobStatus(Enum):
     FAILED = "failed"
     RETRYING = "retrying"
     TIMEOUT = "timeout"
+
 
 @dataclass
 class Job:
@@ -35,6 +39,7 @@ class Job:
     finished_at: Optional[float] = None
     error: Optional[str] = None
 
+
 class JobManager:
     def __init__(self):
         self.history = deque(maxlen=50)
@@ -42,6 +47,7 @@ class JobManager:
     def add_job(self, job: Job):
         self.history.append(job)
         logger.info(f"Job added to history: {job.id} ({job.type.name})")
+
 
 # Singleton instance
 job_manager = JobManager()

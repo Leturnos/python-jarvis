@@ -1,7 +1,9 @@
-from enum import Enum, auto
 import threading
-from typing import Dict, Any, Optional, Callable, List
+from enum import Enum, auto
+from typing import Any, Callable, Dict, List, Optional
+
 from core.infra.logger_config import logger
+
 
 class JarvisState(Enum):
     """Enumeration of all possible logical states for the Jarvis assistant.
@@ -18,16 +20,18 @@ class JarvisState(Enum):
         SUSPENDED: Auto-suspended (e.g., fullscreen context).
         ERROR: A temporary failure state.
     """
-    IDLE = auto()               # Waiting for Wake Word
-    LISTENING = auto()          # Wake word detected, recording command
-    THINKING = auto()           # Processing (STT / LLM)
-    CONFIRMING_DRY_RUN = auto() # Waiting for user approval
-    EXECUTING = auto()          # Executing automation
-    COOLDOWN = auto()           # Short pause after speaking
-    MUTED = auto()              # Muted
-    SLEEPING = auto()           # Sleeping (Unloaded models)
-    SUSPENDED = auto()          # Auto-suspended
-    ERROR = auto()              # Error state
+
+    IDLE = auto()  # Waiting for Wake Word
+    LISTENING = auto()  # Wake word detected, recording command
+    THINKING = auto()  # Processing (STT / LLM)
+    CONFIRMING_DRY_RUN = auto()  # Waiting for user approval
+    EXECUTING = auto()  # Executing automation
+    COOLDOWN = auto()  # Short pause after speaking
+    MUTED = auto()  # Muted
+    SLEEPING = auto()  # Sleeping (Unloaded models)
+    SUSPENDED = auto()  # Auto-suspended
+    ERROR = auto()  # Error state
+
 
 class StateManager:
     """Thread-safe manager for the system's global state and context.
@@ -41,25 +45,73 @@ class StateManager:
         _context (dict): Arbitrary metadata associated with the current state (e.g., the current plan).
         _callbacks (list): A list of functions to be called on every state change.
     """
+
     def __init__(self):
         """Initializes the StateManager with the IDLE state and empty context."""
         self._state = JarvisState.IDLE
         self._context: Dict[str, Any] = {}
         self._lock = threading.Lock()
-        self._callbacks: List[Callable[[JarvisState, JarvisState, Dict[str, Any]], None]] = []
+        self._callbacks: List[
+            Callable[[JarvisState, JarvisState, Dict[str, Any]], None]
+        ] = []
 
         # Define allowed transitions: {FROM: [TO]}
         self._allowed_transitions = {
-            JarvisState.IDLE: [JarvisState.LISTENING, JarvisState.THINKING, JarvisState.MUTED, JarvisState.SLEEPING, JarvisState.SUSPENDED, JarvisState.EXECUTING],
-            JarvisState.LISTENING: [JarvisState.THINKING, JarvisState.IDLE, JarvisState.MUTED, JarvisState.SLEEPING, JarvisState.ERROR],
-            JarvisState.THINKING: [JarvisState.EXECUTING, JarvisState.CONFIRMING_DRY_RUN, JarvisState.IDLE, JarvisState.MUTED, JarvisState.SLEEPING, JarvisState.ERROR],
-            JarvisState.CONFIRMING_DRY_RUN: [JarvisState.EXECUTING, JarvisState.IDLE, JarvisState.MUTED, JarvisState.SLEEPING, JarvisState.ERROR],
-            JarvisState.EXECUTING: [JarvisState.IDLE, JarvisState.ERROR, JarvisState.MUTED, JarvisState.SLEEPING, JarvisState.COOLDOWN],
-            JarvisState.COOLDOWN: [JarvisState.IDLE, JarvisState.MUTED, JarvisState.SLEEPING, JarvisState.SUSPENDED],
+            JarvisState.IDLE: [
+                JarvisState.LISTENING,
+                JarvisState.THINKING,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+                JarvisState.SUSPENDED,
+                JarvisState.EXECUTING,
+            ],
+            JarvisState.LISTENING: [
+                JarvisState.THINKING,
+                JarvisState.IDLE,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+                JarvisState.ERROR,
+            ],
+            JarvisState.THINKING: [
+                JarvisState.EXECUTING,
+                JarvisState.CONFIRMING_DRY_RUN,
+                JarvisState.IDLE,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+                JarvisState.ERROR,
+            ],
+            JarvisState.CONFIRMING_DRY_RUN: [
+                JarvisState.EXECUTING,
+                JarvisState.IDLE,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+                JarvisState.ERROR,
+            ],
+            JarvisState.EXECUTING: [
+                JarvisState.IDLE,
+                JarvisState.ERROR,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+                JarvisState.COOLDOWN,
+            ],
+            JarvisState.COOLDOWN: [
+                JarvisState.IDLE,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+                JarvisState.SUSPENDED,
+            ],
             JarvisState.MUTED: [JarvisState.IDLE, JarvisState.SLEEPING],
             JarvisState.SLEEPING: [JarvisState.IDLE],
-            JarvisState.SUSPENDED: [JarvisState.IDLE, JarvisState.MUTED, JarvisState.SLEEPING],
-            JarvisState.ERROR: [JarvisState.IDLE, JarvisState.MUTED, JarvisState.SLEEPING]
+            JarvisState.SUSPENDED: [
+                JarvisState.IDLE,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+            ],
+            JarvisState.ERROR: [
+                JarvisState.IDLE,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+            ],
         }
 
     def get_state(self) -> JarvisState:
@@ -80,7 +132,9 @@ class StateManager:
         with self._lock:
             return self._context.copy()
 
-    def set_state(self, new_state: JarvisState, context: Optional[Dict[str, Any]] = None):
+    def set_state(
+        self, new_state: JarvisState, context: Optional[Dict[str, Any]] = None
+    ):
         """Attempts to change the system state and updates the context.
 
         This method validates the transition against the internal allowed_transitions
@@ -95,7 +149,7 @@ class StateManager:
         """
         with self._lock:
             old_state = self._state
-            
+
             if new_state == old_state:
                 if context is not None:
                     self._context.update(context)
@@ -104,7 +158,9 @@ class StateManager:
             # Transition validation
             allowed = self._allowed_transitions.get(old_state, [])
             if new_state not in allowed:
-                logger.warning(f"Invalid transition attempt: {old_state.name} -> {new_state.name}")
+                logger.warning(
+                    f"Invalid transition attempt: {old_state.name} -> {new_state.name}"
+                )
                 # Optional: Block or allow with warning. Following the plan, we allow but log.
                 # return # Uncomment to block invalid transitions
 
@@ -114,8 +170,10 @@ class StateManager:
             else:
                 self._context = {}
 
-            logger.info(f"State Change: {old_state.name} -> {new_state.name} | Context: {self._context}")
-            
+            logger.info(
+                f"State Change: {old_state.name} -> {new_state.name} | Context: {self._context}"
+            )
+
             # Notify callbacks
             for callback in self._callbacks:
                 try:
@@ -123,7 +181,9 @@ class StateManager:
                 except Exception as e:
                     logger.error(f"Error in state callback: {e}")
 
-    def add_callback(self, callback: Callable[[JarvisState, JarvisState, Dict[str, Any]], None]):
+    def add_callback(
+        self, callback: Callable[[JarvisState, JarvisState, Dict[str, Any]], None]
+    ):
         """Registers a callback function to be notified of state changes.
 
         The callback must accept three arguments: old_state, new_state, and context.
@@ -133,6 +193,7 @@ class StateManager:
         """
         with self._lock:
             self._callbacks.append(callback)
+
 
 # Singleton for global access
 state_manager = StateManager()

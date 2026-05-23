@@ -1,11 +1,15 @@
 from abc import ABC, abstractmethod
+
 from core.llm.models import LLMResponse
+
 
 class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers."""
-    
+
     @abstractmethod
-    def generate_content(self, prompt: str, system_instruction: str = None) -> LLMResponse:
+    def generate_content(
+        self, prompt: str, system_instruction: str = None
+    ) -> LLMResponse:
         """Generates content based on a prompt and optional system instruction."""
         pass
 

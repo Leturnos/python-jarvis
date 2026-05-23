@@ -1,16 +1,17 @@
-import time
-import numpy as np
 import logging
-import queue
-import threading
-from core.runtime.state import state_manager, JarvisState
-from core.audio.stt_engine import stt_engine
-from core.shared.utils import normalize_text
-from core.execution.job_queue import Job, JobType
+import time
+
+import numpy as np
+
+from core.activation import ActivationActionType, ActivationContext, ActivationManager
 from core.audio.audio_engine import safe_reset_audio
-from core.activation import ActivationManager, ActivationContext, ActivationActionType
+from core.audio.stt_engine import stt_engine
+from core.execution.job_queue import Job, JobType
+from core.runtime.state import JarvisState, state_manager
+from core.shared.utils import normalize_text
 
 logger = logging.getLogger(__name__)
+
 
 class JarvisController:
     """Main orchestration controller for the Jarvis assistant.
@@ -34,7 +35,20 @@ class JarvisController:
         stream: PyAudio input stream.
     """
 
-    def __init__(self, config, automator, dispatcher, model, loaded_names, ui, tray, task_queue, stop_event, pa, stream):
+    def __init__(
+        self,
+        config,
+        automator,
+        dispatcher,
+        model,
+        loaded_names,
+        ui,
+        tray,
+        task_queue,
+        stop_event,
+        pa,
+        stream,
+    ):
         """Initializes the controller with injected dependencies.
 
         Args:
@@ -67,9 +81,9 @@ class JarvisController:
         self.command_start_time = None
 
         # Constants from config or defaults
-        self.volume_multiplier = config.get('jarvis', {}).get('volume_multiplier', 1.0)
-        self.threshold = config.get('jarvis', {}).get('threshold', 0.4)
-        self.cooldown_seconds = config.get('jarvis', {}).get('cooldown_seconds', 5)
+        self.volume_multiplier = config.get("jarvis", {}).get("volume_multiplier", 1.0)
+        self.threshold = config.get("jarvis", {}).get("threshold", 0.4)
+        self.cooldown_seconds = config.get("jarvis", {}).get("cooldown_seconds", 5)
         self.MAX_ZERO_RMS_BEFORE_RESET = 30
 
     def start(self):
@@ -83,7 +97,7 @@ class JarvisController:
         logger.info(f"Jarvis is listening for {self.loaded_names}...")
 
         try:
-            with self.ui.get_live() as live:
+            with self.ui.get_live():
                 while not self.stop_event.is_set():
                     current_state = state_manager.get_state()
                     now = time.time()
@@ -97,7 +111,7 @@ class JarvisController:
                     pcm, rms = self._read_audio()
                     if pcm is None:
                         continue
-                    
+
                     self.ui.update(volume=pcm)
 
                     # Update ignore window if Jarvis is speaking
@@ -112,12 +126,12 @@ class JarvisController:
                     # 3. Activation Gate Evaluation
                     # Gather context for decision making
                     context = ActivationContext(
-                        wakeword_score=0.0, # Will be filled in _handle_idle if needed
+                        wakeword_score=0.0,  # Will be filled in _handle_idle if needed
                         wakeword_detected=None,
                         is_fullscreen=self.activation_manager.is_fullscreen(),
                         is_hotkey_pressed=self.activation_manager.is_hotkey_pressed(),
                         current_state=current_state,
-                        timestamp=now
+                        timestamp=now,
                     )
 
                     # 4. State-based Logic
@@ -131,13 +145,16 @@ class JarvisController:
 
                     if current_state == JarvisState.SLEEPING:
                         self.ui.update(status="SLEEPING")
-                        
+
                         # Allow waking up via PTT
                         action_obj = self.activation_manager.evaluate(context)
-                        if action_obj.action_type == ActivationActionType.TRIGGER_PTT_START:
+                        if (
+                            action_obj.action_type
+                            == ActivationActionType.TRIGGER_PTT_START
+                        ):
                             logger.info("Waking up from Sleep via PTT!")
-                            self.tray.mute_until = 0 # Clear timer if any
-                            stt_engine.load() # Preload model before listening
+                            self.tray.mute_until = 0  # Clear timer if any
+                            stt_engine.load()  # Preload model before listening
                             self.automator.speak("Sim?")
                             state_manager.set_state(JarvisState.LISTENING)
                             self.command_frames = []
@@ -154,17 +171,24 @@ class JarvisController:
                         self._handle_confirmation(pcm, now)
                         continue
 
-                    if current_state in (JarvisState.THINKING, JarvisState.EXECUTING, JarvisState.ERROR):
+                    if current_state in (
+                        JarvisState.THINKING,
+                        JarvisState.EXECUTING,
+                        JarvisState.ERROR,
+                    ):
                         self._handle_busy_state(current_state)
                         continue
 
                     if current_state == JarvisState.LISTENING:
                         # PTT Check: if we are in PTT hold mode and key is released, stop
                         action_obj = self.activation_manager.evaluate(context)
-                        if action_obj.action_type == ActivationActionType.TRIGGER_PTT_STOP:
-                             self._stop_listening_and_process(now)
-                             continue
-                             
+                        if (
+                            action_obj.action_type
+                            == ActivationActionType.TRIGGER_PTT_STOP
+                        ):
+                            self._stop_listening_and_process(now)
+                            continue
+
                         self._handle_listening(pcm, rms, now)
                         continue
 
@@ -190,7 +214,10 @@ class JarvisController:
             self.ignore_audio_until = 0
             logger.info("Entering Confirmation: Listening immediately.")
 
-        if (old_state == JarvisState.EXECUTING or old_state == JarvisState.CONFIRMING_DRY_RUN) and new_state == JarvisState.IDLE:
+        if (
+            old_state == JarvisState.EXECUTING
+            or old_state == JarvisState.CONFIRMING_DRY_RUN
+        ) and new_state == JarvisState.IDLE:
             logger.info(f"Transition {old_state.name} -> IDLE. Resetting buffers.")
             try:
                 self.model.reset()
@@ -204,9 +231,11 @@ class JarvisController:
             pcm = np.frombuffer(audio_data, dtype=np.int16)
 
             if self.volume_multiplier != 1.0:
-                pcm = (pcm * self.volume_multiplier).clip(-32768, 32767).astype(np.int16)
+                pcm = (
+                    (pcm * self.volume_multiplier).clip(-32768, 32767).astype(np.int16)
+                )
 
-            rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
+            rms = np.sqrt(np.mean(pcm.astype(np.float32) ** 2))
             return pcm, rms
         except Exception as e:
             if not self.stop_event.is_set():
@@ -221,7 +250,7 @@ class JarvisController:
             self.consecutive_zero_rms += 1
         else:
             self.consecutive_zero_rms = 0
-            
+
         if self.consecutive_zero_rms > self.MAX_ZERO_RMS_BEFORE_RESET:
             logger.warning("Dead silence detected! Self-healing...")
             self.ui.update(status="Self-Healing...")
@@ -235,20 +264,25 @@ class JarvisController:
     def _handle_confirmation(self, pcm, now):
         self.ui.update(status="Aguardando Confirmação...")
         self.confirmation_frames.append(pcm.tobytes())
-        
-        if len(self.confirmation_frames) > 10: 
+
+        if len(self.confirmation_frames) > 10:
             audio_chunk = b"".join(self.confirmation_frames)
-            self.confirmation_frames = [] 
-            
+            self.confirmation_frames = []
+
             try:
                 text = stt_engine.transcribe(audio_chunk)
                 norm = normalize_text(text)
-                if any(word in norm for word in ["sim", "confirma", "pode", "autorizo", "yes", "vai"]):
+                if any(
+                    word in norm
+                    for word in ["sim", "confirma", "pode", "autorizo", "yes", "vai"]
+                ):
                     logger.info("Voice confirmation: APPROVED")
                     if self.dispatcher.active_dialog:
                         self.dispatcher.active_dialog.approve()
                     self.ignore_audio_until = now + 0.3
-                elif any(word in norm for word in ["nao", "não", "cancela", "aborta", "no"]):
+                elif any(
+                    word in norm for word in ["nao", "não", "cancela", "aborta", "no"]
+                ):
                     logger.info("Voice confirmation: REJECTED")
                     if self.dispatcher.active_dialog:
                         self.dispatcher.active_dialog.reject()
@@ -260,14 +294,14 @@ class JarvisController:
         status_map = {
             JarvisState.THINKING: "Processando...",
             JarvisState.EXECUTING: "Executando...",
-            JarvisState.ERROR: "Erro Detectado!"
+            JarvisState.ERROR: "Erro Detectado!",
         }
         self.ui.update(status=status_map.get(current_state, "Ocupado"))
 
     def _handle_listening(self, pcm, rms, now):
         self.ui.update(status="Gravando...")
         self.command_frames.append(pcm.tobytes())
-        
+
         stop_recording = False
         if rms < 15.0:
             if self.silence_start is None:
@@ -276,7 +310,7 @@ class JarvisController:
                 stop_recording = True
         else:
             self.silence_start = None
-            
+
         if now - self.command_start_time > 10.0:
             logger.warning("Listening timeout reached.")
             stop_recording = True
@@ -299,27 +333,32 @@ class JarvisController:
             state_manager.set_state(JarvisState.IDLE)
 
     def _handle_idle(self, pcm, rms, context: ActivationContext):
-        self.ui.update(status="Listening" if context.timestamp > self.cooldown else "Cooldown")
-        
+        self.ui.update(
+            status="Listening" if context.timestamp > self.cooldown else "Cooldown"
+        )
+
         highest_score = 0.0
         detected_wakeword = None
-        
-        if rms > 20 and context.timestamp > self.cooldown: 
+
+        if rms > 20 and context.timestamp > self.cooldown:
             prediction = self.model.predict(pcm)
             for model_key, score in prediction.items():
                 if score > highest_score:
                     highest_score = float(score)
                     detected_wakeword = model_key
-                    
+
             if highest_score > 0.1:
                 logger.debug(f"Prediction debug (RMS: {rms:.1f}): {prediction}")
-        
+
         self.ui.update(score=highest_score)
 
         # Clean the wake word name (e.g., 'hey_jarvis_v0.1' -> 'hey_jarvis')
         ww_name_clean = None
         if detected_wakeword:
-            ww_name_clean = next((n for n in self.loaded_names if n in detected_wakeword), detected_wakeword)
+            ww_name_clean = next(
+                (n for n in self.loaded_names if n in detected_wakeword),
+                detected_wakeword,
+            )
 
         # Update context with wake word info before delegation
         context.wakeword_score = highest_score
@@ -332,13 +371,18 @@ class JarvisController:
             state_manager.set_state(JarvisState.SUSPENDED)
             return
 
-        if action_obj.action_type in (ActivationActionType.TRIGGER_WAKE, ActivationActionType.TRIGGER_PTT_START):
+        if action_obj.action_type in (
+            ActivationActionType.TRIGGER_WAKE,
+            ActivationActionType.TRIGGER_PTT_START,
+        ):
             source = action_obj.source
             if source == "WAKE_WORD":
                 ww_name_clean = context.wakeword_detected
-                logger.info(f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})")
-                
-                if ww_name_clean == 'hey_jarvis':
+                logger.info(
+                    f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})"
+                )
+
+                if ww_name_clean == "hey_jarvis":
                     self.automator.speak("Sim?")
                     state_manager.set_state(JarvisState.LISTENING)
                     self.command_frames = []
@@ -347,9 +391,14 @@ class JarvisController:
                     self.command_start_time = context.timestamp
                 else:
                     self.automator.speak("Sim?")
-                    self.task_queue.put(Job(type=JobType.WAKEWORD, payload=(ww_name_clean, highest_score)))
+                    self.task_queue.put(
+                        Job(
+                            type=JobType.WAKEWORD,
+                            payload=(ww_name_clean, highest_score),
+                        )
+                    )
                     state_manager.set_state(JarvisState.EXECUTING)
-            
+
             elif source == "PTT":
                 logger.info("PTT Activation triggered!")
                 self.automator.speak("Sim?")

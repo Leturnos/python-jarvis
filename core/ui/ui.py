@@ -1,12 +1,14 @@
+import numpy as np
+from rich import box
 from rich.console import Console
 from rich.layout import Layout
-from rich.panel import Panel
 from rich.live import Live
+from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
-from rich import box
-import numpy as np
-from core.runtime.state import state_manager, JarvisState
+
+from core.runtime.state import JarvisState, state_manager
+
 
 class JarvisUI:
     def __init__(self, wakeword_name):
@@ -32,13 +34,13 @@ class JarvisUI:
     def update_renderable(self):
         # Current State from StateManager
         current_state = state_manager.get_state()
-        
+
         # Header
         self.layout["header"].update(
             Panel(
                 f"[bold cyan]Jarvis AI Assistant[/bold cyan] - Listening for: [bold green]'{self.wakeword_name}'[/bold green]",
                 box=box.ROUNDED,
-                style="cyan"
+                style="cyan",
             )
         )
 
@@ -55,17 +57,17 @@ class JarvisUI:
             JarvisState.CONFIRMING_DRY_RUN: "bold blue",
             JarvisState.EXECUTING: "bold red",
             JarvisState.MUTED: "dim white",
-            JarvisState.ERROR: "bold white on red"
+            JarvisState.ERROR: "bold white on red",
         }
-        
+
         color = state_colors.get(current_state, "white")
-        
+
         status_panel = Panel(
             f"State: [{color}]{current_state.name}[/{color}]\n"
             f"Status: [white]{self.status}[/white]\n"
             f"Wake Word Score: [bold white]{self.score:.2f}[/bold white]",
             title="Monitoring",
-            box=box.ROUNDED
+            box=box.ROUNDED,
         )
 
         # Volume Meter
@@ -87,7 +89,7 @@ class JarvisUI:
             Panel(
                 "Press [bold red]Ctrl+C[/bold red] to stop.",
                 box=box.ROUNDED,
-                style="dim"
+                style="dim",
             )
         )
 
@@ -98,8 +100,10 @@ class JarvisUI:
             self.score = score
         if volume is not None:
             # Convert raw audio volume to 0-100 scale (rough approximation)
-            self.volume = int(np.abs(volume).mean() / 500 * 100) if volume is not None else 0
-        
+            self.volume = (
+                int(np.abs(volume).mean() / 500 * 100) if volume is not None else 0
+            )
+
         self.update_renderable()
 
     def get_live(self):

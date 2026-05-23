@@ -1,12 +1,14 @@
-import sqlite3
 import hashlib
 import json
-import time
 import os
 import re
-from typing import Optional, Dict, Any
-from core.infra.logger_config import logger
+import sqlite3
+import time
+from typing import Any, Dict, Optional
+
 from core.cache.base import LLMCacheBase
+from core.infra.logger_config import logger
+
 
 class SQLiteLLMCache(LLMCacheBase):
     def __init__(self, db_path: str = "data/llm_cache.db", ttl_seconds: int = 86400):
@@ -14,7 +16,7 @@ class SQLiteLLMCache(LLMCacheBase):
         self.ttl_seconds = ttl_seconds
         self.hits = 0
         self.misses = 0
-        
+
         # Ensure directory exists
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_db()
@@ -23,14 +25,14 @@ class SQLiteLLMCache(LLMCacheBase):
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute("""
                     CREATE TABLE IF NOT EXISTS cache (
                         hash_key TEXT PRIMARY KEY,
                         instruction TEXT,
                         response_json TEXT,
                         created_at REAL
                     )
-                ''')
+                """)
                 conn.commit()
         except Exception as e:
             logger.error(f"Error initializing SQLite cache: {e}")
@@ -38,28 +40,31 @@ class SQLiteLLMCache(LLMCacheBase):
     def _normalize(self, text: str) -> str:
         """Normalizes text by making it lowercase and removing extra spaces/punctuation."""
         text = text.lower()
-        text = re.sub(r'[^\w\s]', '', text)
-        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r"[^\w\s]", "", text)
+        text = re.sub(r"\s+", " ", text).strip()
         return text
 
     def _hash(self, text: str) -> str:
         """Generates a SHA-256 hash for the normalized text."""
-        return hashlib.sha256(text.encode('utf-8')).hexdigest()
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     def get(self, instruction: str) -> Optional[Dict[str, Any]]:
         normalized = self._normalize(instruction)
         if not normalized:
             self.misses += 1
             return None
-            
+
         hash_key = self._hash(normalized)
-        
+
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT response_json, created_at FROM cache WHERE hash_key = ?', (hash_key,))
+                cursor.execute(
+                    "SELECT response_json, created_at FROM cache WHERE hash_key = ?",
+                    (hash_key,),
+                )
                 row = cursor.fetchone()
-                
+
                 if row:
                     response_json_str, created_at = row
                     if time.time() - created_at <= self.ttl_seconds:
@@ -68,10 +73,12 @@ class SQLiteLLMCache(LLMCacheBase):
                         return json.loads(response_json_str)
                     else:
                         # Expired
-                        cursor.execute('DELETE FROM cache WHERE hash_key = ?', (hash_key,))
+                        cursor.execute(
+                            "DELETE FROM cache WHERE hash_key = ?", (hash_key,)
+                        )
                         conn.commit()
                         logger.debug(f"Cache EXPIRED for: '{instruction}'")
-                        
+
         except Exception as e:
             logger.error(f"Error reading from cache: {e}")
 
@@ -90,14 +97,17 @@ class SQLiteLLMCache(LLMCacheBase):
         hash_key = self._hash(normalized)
         response_str = json.dumps(response)
         created_at = time.time()
-        
+
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    """
                     INSERT OR REPLACE INTO cache (hash_key, instruction, response_json, created_at)
                     VALUES (?, ?, ?, ?)
-                ''', (hash_key, instruction, response_str, created_at))
+                """,
+                    (hash_key, instruction, response_str, created_at),
+                )
                 conn.commit()
                 logger.debug(f"Saved to cache: '{instruction}'")
         except Exception as e:
@@ -107,7 +117,7 @@ class SQLiteLLMCache(LLMCacheBase):
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('DELETE FROM cache')
+                cursor.execute("DELETE FROM cache")
                 conn.commit()
                 logger.info("LLM cache cleared.")
         except Exception as e:
@@ -119,5 +129,5 @@ class SQLiteLLMCache(LLMCacheBase):
         return {
             "hits": self.hits,
             "misses": self.misses,
-            "hit_rate_percent": round(hit_rate, 2)
+            "hit_rate_percent": round(hit_rate, 2),
         }

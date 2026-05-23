@@ -1,8 +1,10 @@
 import sqlite3
 from datetime import datetime
+
 from core.infra.config import config
-from core.persistence.history_db import history_manager
 from core.infra.logger_config import logger
+from core.persistence.history_db import history_manager
+
 
 class RateLimiter:
     def __init__(self):
@@ -21,22 +23,27 @@ class RateLimiter:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute("SELECT requests_count, tokens_count FROM api_usage WHERE date = ?", (today,))
+            cursor.execute(
+                "SELECT requests_count, tokens_count FROM api_usage WHERE date = ?",
+                (today,),
+            )
             row = cursor.fetchone()
             conn.close()
 
             if not row:
-                return True # No usage recorded yet for today
+                return True  # No usage recorded yet for today
 
             req_count, token_count = row
             if req_count >= self.max_requests or token_count >= self.max_tokens:
-                logger.warning(f"Quota exceeded! Req: {req_count}/{self.max_requests}, Tokens: {token_count}/{self.max_tokens}")
+                logger.warning(
+                    f"Quota exceeded! Req: {req_count}/{self.max_requests}, Tokens: {token_count}/{self.max_tokens}"
+                )
                 return False
-            
+
             return True
         except Exception as e:
             logger.error(f"Error checking quotas: {e}")
-            return True # Fail open to prevent locking out on DB error
+            return True  # Fail open to prevent locking out on DB error
 
     def log_usage(self, token_count=0):
         """Logs an API call and its token usage."""
@@ -44,20 +51,24 @@ class RateLimiter:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            
+
             # Upsert logic (Insert or Update)
-            cursor.execute('''
-                INSERT INTO api_usage (date, requests_count, tokens_count) 
+            cursor.execute(
+                """
+                INSERT INTO api_usage (date, requests_count, tokens_count)
                 VALUES (?, 1, ?)
-                ON CONFLICT(date) DO UPDATE SET 
+                ON CONFLICT(date) DO UPDATE SET
                 requests_count = requests_count + 1,
                 tokens_count = tokens_count + ?
-            ''', (today, token_count, token_count))
-            
+            """,
+                (today, token_count, token_count),
+            )
+
             conn.commit()
             conn.close()
             logger.debug(f"Logged API usage: +1 request, +{token_count} tokens.")
         except Exception as e:
             logger.error(f"Error logging API usage: {e}")
+
 
 rate_limiter = RateLimiter()

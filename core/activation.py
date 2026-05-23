@@ -1,15 +1,17 @@
-import time
-import win32gui
-import win32api
-import win32con
-import keyboard
 import logging
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+import keyboard
+import win32api
+import win32con
+import win32gui
+
 from core.runtime.state import JarvisState
 
 logger = logging.getLogger(__name__)
+
 
 class ActivationActionType(Enum):
     TRIGGER_WAKE = auto()
@@ -19,10 +21,12 @@ class ActivationActionType(Enum):
     RESUME = auto()
     NONE = auto()
 
+
 @dataclass
 class ActivationAction:
     action_type: ActivationActionType
-    source: str # WAKE_WORD, PTT, FULLSCREEN_APP, MANUAL, NONE
+    source: str  # WAKE_WORD, PTT, FULLSCREEN_APP, MANUAL, NONE
+
 
 @dataclass
 class ActivationContext:
@@ -33,40 +37,41 @@ class ActivationContext:
     current_state: JarvisState
     timestamp: float
 
+
 class ActivationManager:
-    """Manages the logic for activating Jarvis via Wake Word or Push-To-Talk, 
+    """Manages the logic for activating Jarvis via Wake Word or Push-To-Talk,
     and handles automatic suspension in contexts like fullscreen apps.
     """
 
     MIN_SUSPEND_DURATION = 2.0  # Hysteresis to prevent flickering
 
     def __init__(self, config: Dict[str, Any]):
-        self.full_config = config # Keep reference for threshold lookup
-        self.config = config.get('voice_activation', {})
-        self.mode = self.config.get('mode', 'hybrid')
-        self.ptt_config = self.config.get('push_to_talk', {})
-        self.ww_config = self.config.get('wake_word', {})
-        self.auto_suspend = self.config.get('auto_suspend', {}).get('fullscreen', True)
-        
-        self.ptt_key = self.ptt_config.get('key', 'ctrl+alt')
-        self.ptt_behavior = self.ptt_config.get('behavior', 'hold')
-        
+        self.full_config = config  # Keep reference for threshold lookup
+        self.config = config.get("voice_activation", {})
+        self.mode = self.config.get("mode", "hybrid")
+        self.ptt_config = self.config.get("push_to_talk", {})
+        self.ww_config = self.config.get("wake_word", {})
+        self.auto_suspend = self.config.get("auto_suspend", {}).get("fullscreen", True)
+
+        self.ptt_key = self.ptt_config.get("key", "ctrl+alt")
+        self.ptt_behavior = self.ptt_config.get("behavior", "hold")
+
         # State tracking for hysteresis and transitions
         self.last_state_change_time = 0
         self.is_ptt_active = False
-        
+
         # Metrics
         self.metrics = {
             "activation_wake_word": 0,
             "activation_ptt": 0,
             "activation_suspend": 0,
             "activation_resume": 0,
-            "fullscreen_suspend_count": 0
+            "fullscreen_suspend_count": 0,
         }
 
     def evaluate(self, context: ActivationContext) -> ActivationAction:
         """Evaluates the current environment context and decides on an activation action."""
-        
+
         # 1. Check for Fullscreen Suspension
         if self.auto_suspend and context.current_state == JarvisState.IDLE:
             if context.is_fullscreen:
@@ -74,35 +79,49 @@ class ActivationManager:
                 self._update_metric("fullscreen_suspend_count")
                 self.last_state_change_time = context.timestamp
                 return ActivationAction(ActivationActionType.SUSPEND, "FULLSCREEN_APP")
-        
+
         if context.current_state == JarvisState.SUSPENDED:
             # Hysteresis: Don't resume too quickly
-            if not context.is_fullscreen and (context.timestamp - self.last_state_change_time) > self.MIN_SUSPEND_DURATION:
+            if (
+                not context.is_fullscreen
+                and (context.timestamp - self.last_state_change_time)
+                > self.MIN_SUSPEND_DURATION
+            ):
                 self._update_metric("activation_resume")
                 self.last_state_change_time = context.timestamp
                 return ActivationAction(ActivationActionType.RESUME, "FULLSCREEN_APP")
             return ActivationAction(ActivationActionType.NONE, "NONE")
 
         # 2. Check Push-To-Talk (Priority)
-        if self.mode in ('hybrid', 'push_to_talk'):
+        if self.mode in ("hybrid", "push_to_talk"):
             if context.is_hotkey_pressed:
                 if not self.is_ptt_active:
                     self.is_ptt_active = True
                     self._update_metric("activation_ptt")
-                    return ActivationAction(ActivationActionType.TRIGGER_PTT_START, "PTT")
+                    return ActivationAction(
+                        ActivationActionType.TRIGGER_PTT_START, "PTT"
+                    )
             else:
                 if self.is_ptt_active:
                     self.is_ptt_active = False
-                    return ActivationAction(ActivationActionType.TRIGGER_PTT_STOP, "PTT")
+                    return ActivationAction(
+                        ActivationActionType.TRIGGER_PTT_STOP, "PTT"
+                    )
 
         # 3. Check Wake Word
-        if self.mode in ('hybrid', 'always_listening') and self.ww_config.get('enabled', True):
+        if self.mode in ("hybrid", "always_listening") and self.ww_config.get(
+            "enabled", True
+        ):
             # Look up threshold in correct config path
-            threshold = self.full_config.get('jarvis', {}).get('threshold', 0.5)
+            threshold = self.full_config.get("jarvis", {}).get("threshold", 0.5)
             if context.wakeword_score > threshold:
-                if context.wakeword_detected == self.ww_config.get('keyword', 'hey_jarvis'):
+                if context.wakeword_detected == self.ww_config.get(
+                    "keyword", "hey_jarvis"
+                ):
                     self._update_metric("activation_wake_word")
-                    return ActivationAction(ActivationActionType.TRIGGER_WAKE, "WAKE_WORD")
+                    return ActivationAction(
+                        ActivationActionType.TRIGGER_WAKE, "WAKE_WORD"
+                    )
 
         return ActivationAction(ActivationActionType.NONE, "NONE")
 
@@ -116,7 +135,7 @@ class ActivationManager:
             hwnd = win32gui.GetForegroundWindow()
             if not hwnd:
                 return False
-            
+
             # Skip desktop/taskbar
             if win32gui.GetClassName(hwnd) in ("Progman", "WorkerW", "Shell_TrayWnd"):
                 return False
@@ -140,5 +159,7 @@ class ActivationManager:
             return keyboard.is_pressed(self.ptt_key)
         except Exception as e:
             # Common in non-admin or restricted environments
-            logger.warning(f"Keyboard hotkey check failed: {e}. Disabling PTT for this tick.")
+            logger.warning(
+                f"Keyboard hotkey check failed: {e}. Disabling PTT for this tick."
+            )
             return False

@@ -1,8 +1,10 @@
-import os
-import yaml
 import glob
+import os
+
+import yaml
+
 from core.infra.logger_config import logger
-from core.infra.config import config
+
 
 class PluginManager:
     def __init__(self, plugins_dir="plugins"):
@@ -30,7 +32,9 @@ class PluginManager:
                 if ref_name in shared_actions:
                     resolved.extend(shared_actions[ref_name])
                 else:
-                    logger.error(f"Plugin '{plugin_name}': Shared action '{ref_name}' not found.")
+                    logger.error(
+                        f"Plugin '{plugin_name}': Shared action '{ref_name}' not found."
+                    )
             else:
                 resolved.append(action)
         return resolved
@@ -38,19 +42,23 @@ class PluginManager:
     def load_plugins(self):
         """Loads all YAML/JSON plugin files from the plugins directory."""
         if not os.path.exists(self.plugins_dir):
-            logger.warning(f"Plugins directory '{self.plugins_dir}' not found. Creating it.")
+            logger.warning(
+                f"Plugins directory '{self.plugins_dir}' not found. Creating it."
+            )
             os.makedirs(self.plugins_dir, exist_ok=True)
             return
 
-        plugin_files = glob.glob(os.path.join(self.plugins_dir, "*.yaml")) + \
-                       glob.glob(os.path.join(self.plugins_dir, "*.yml")) + \
-                       glob.glob(os.path.join(self.plugins_dir, "*.json"))
+        plugin_files = (
+            glob.glob(os.path.join(self.plugins_dir, "*.yaml"))
+            + glob.glob(os.path.join(self.plugins_dir, "*.yml"))
+            + glob.glob(os.path.join(self.plugins_dir, "*.json"))
+        )
 
         for file_path in plugin_files:
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     plugin_data = yaml.safe_load(f)
-                    
+
                 if not plugin_data or "commands" not in plugin_data:
                     logger.warning(f"Invalid or empty plugin file: {file_path}")
                     continue
@@ -65,36 +73,52 @@ class PluginManager:
                     if not intent:
                         logger.warning(f"Command without intent found in {plugin_name}")
                         continue
-                    
-                    if intent in self.intents:
-                        logger.warning(f"Intent '{intent}' is being overwritten by plugin '{plugin_name}'")
 
-                    resolved_actions = self._resolve_actions(cmd.get("actions", []), shared_actions, plugin_name)
+                    if intent in self.intents:
+                        logger.warning(
+                            f"Intent '{intent}' is being overwritten by plugin '{plugin_name}'"
+                        )
+
+                    resolved_actions = self._resolve_actions(
+                        cmd.get("actions", []), shared_actions, plugin_name
+                    )
 
                     self.intents[intent] = {
                         "description": cmd.get("description", ""),
                         "risk_level": cmd.get("risk_level", "safe"),
                         "phrases": cmd.get("phrases", []),
                         "actions": resolved_actions,
-                        "plugin_name": plugin_name
+                        "plugin_name": plugin_name,
                     }
-                logger.info(f"Loaded plugin '{plugin_name}' with {len(commands)} intents.")
-                
+                logger.info(
+                    f"Loaded plugin '{plugin_name}' with {len(commands)} intents."
+                )
+
             except Exception as e:
                 logger.error(f"Failed to load plugin {file_path}: {e}")
 
-        logger.info(f"PluginManager initialization complete. Loaded {len(self.intents)} intents total.")
+        logger.info(
+            f"PluginManager initialization complete. Loaded {len(self.intents)} intents total."
+        )
 
     def get_intents(self):
         """Returns a list of all loaded intent names, descriptions and phrases."""
-        return [{"intent": k, "description": v["description"], "phrases": v.get("phrases", []), "risk_level": v["risk_level"]} 
-                for k, v in self.intents.items()]
+        return [
+            {
+                "intent": k,
+                "description": v["description"],
+                "phrases": v.get("phrases", []),
+                "risk_level": v["risk_level"],
+            }
+            for k, v in self.intents.items()
+        ]
 
     def get_actions_for_intent(self, intent_name):
         """Returns the list of actions for a specific intent."""
         if intent_name in self.intents:
             return self.intents[intent_name]["actions"]
         return None
+
 
 # Singleton instance
 plugin_manager = PluginManager()

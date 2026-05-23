@@ -1,18 +1,21 @@
+import queue
+import subprocess
 import threading
 import time
-import subprocess
+
 import psutil
-import pygetwindow as gw
-import win32gui
-import win32con
-import win32process
-import win32com.client
 import pyautogui
+import pygetwindow as gw
 import pyperclip
-import queue
-import pythoncom # Required for COM in multiple threads on Windows
+import pythoncom  # Required for COM in multiple threads on Windows
+import win32com.client
+import win32con
+import win32gui
+import win32process
+
 from core.infra.logger_config import logger
 from core.shared.utils import time_it
+
 
 class WarpAutomator:
     def __init__(self, config):
@@ -34,27 +37,31 @@ class WarpAutomator:
         try:
             # Initialize COM in this thread
             pythoncom.CoInitialize()
-            
+
             # Use Dispatch directly for better stability
             voice = win32com.client.Dispatch("SAPI.SpVoice")
-            
+
             # Find a Portuguese voice if available
-            voice_keyword = self.config.get('tts', {}).get('voice_keyword', 'maria').lower()
+            voice_keyword = (
+                self.config.get("tts", {}).get("voice_keyword", "maria").lower()
+            )
             try:
                 available_voices = voice.GetVoices()
                 logger.debug(f"Available SAPI Voices ({available_voices.Count}):")
                 selected_voice = None
-                
+
                 for i in range(available_voices.Count):
                     v = available_voices.Item(i)
                     desc = v.GetDescription()
                     logger.debug(f" - [{i}] {desc}")
                     if voice_keyword in desc.lower():
                         selected_voice = v
-                
+
                 if selected_voice:
                     voice.Voice = selected_voice
-                    logger.info(f"SAPI Voice selected: {selected_voice.GetDescription()}")
+                    logger.info(
+                        f"SAPI Voice selected: {selected_voice.GetDescription()}"
+                    )
                 else:
                     # Fallback: search for any Portuguese voice if Maria is not found
                     for i in range(available_voices.Count):
@@ -62,15 +69,19 @@ class WarpAutomator:
                         desc = v.GetDescription().lower()
                         if "portuguese" in desc or "brazil" in desc:
                             voice.Voice = v
-                            logger.info(f"Fallback SAPI Voice selected (Portuguese): {v.GetDescription()}")
+                            logger.info(
+                                f"Fallback SAPI Voice selected (Portuguese): {v.GetDescription()}"
+                            )
                             break
                     else:
-                        logger.warning(f"Voice keyword '{voice_keyword}' not found and no Portuguese fallback available.")
+                        logger.warning(
+                            f"Voice keyword '{voice_keyword}' not found and no Portuguese fallback available."
+                        )
             except Exception as e:
                 logger.debug(f"Default voice will be used: {e}")
 
             # SAPI Rate is -10 to 10 (0 is normal)
-            voice.Rate = 2 
+            voice.Rate = 2
             voice.Volume = 100
 
             while not self._stop_tts.is_set():
@@ -79,10 +90,10 @@ class WarpAutomator:
                     text = self._speech_queue.get(timeout=0.5)
                     self.is_speaking = True
                     logger.info(f"Jarvis is speaking: '{text}'")
-                    
+
                     # 0 = Synchronous speak (fine because we are in a dedicated worker thread)
                     voice.Speak(text, 0)
-                    
+
                     self.is_speaking = False
                     self.last_spoken_time = time.time()
                     self._speech_queue.task_done()
@@ -103,15 +114,15 @@ class WarpAutomator:
         if text == self.last_spoken_text and (now - self.last_spoken_time) < 2.0:
             logger.debug(f"Skipping duplicate speech: {text}")
             return
-            
+
         self.last_spoken_text = text
         self._speech_queue.put(text)
 
     def is_open(self):
         """Checks if the Warp process is running."""
         try:
-            for p in psutil.process_iter(['name']):
-                if p.info['name'] and "warp" in p.info['name'].lower():
+            for p in psutil.process_iter(["name"]):
+                if p.info["name"] and "warp" in p.info["name"].lower():
                     return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
@@ -122,10 +133,10 @@ class WarpAutomator:
         try:
             # 1. Get all PIDs for processes named "warp"
             warp_pids = set()
-            for p in psutil.process_iter(['pid', 'name']):
-                if p.info['name'] and "warp" in p.info['name'].lower():
-                    warp_pids.add(p.info['pid'])
-            
+            for p in psutil.process_iter(["pid", "name"]):
+                if p.info["name"] and "warp" in p.info["name"].lower():
+                    warp_pids.add(p.info["pid"])
+
             if not warp_pids:
                 logger.debug("No warp PIDs found.")
                 return None
@@ -141,13 +152,13 @@ class WarpAutomator:
                         continue
         except Exception as e:
             logger.error(f"Error searching for Warp window: {e}")
-                    
+
         # Fallback to title search
-        keywords = ('warp', 'ready', 'working', 'mvp')
+        keywords = ("warp", "ready", "working", "mvp")
         for w in gw.getAllWindows():
             if w.title and any(kw in w.title.lower() for kw in keywords):
                 return w
-                
+
         return None
 
     def activate_window(self, win):
@@ -155,18 +166,18 @@ class WarpAutomator:
         try:
             hwnd = win._hWnd
             logger.info(f"Activating window HWND: {hwnd}")
-            
+
             if win32gui.IsIconic(hwnd):
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             else:
                 win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-            
+
             time.sleep(0.5)
 
             try:
                 # ALT key trick to steal focus on Windows
                 shell = win32com.client.Dispatch("WScript.Shell")
-                shell.SendKeys('%') 
+                shell.SendKeys("%")
                 win32gui.SetForegroundWindow(hwnd)
             except Exception as e:
                 logger.warning(f"Focus error: {e}")
@@ -187,7 +198,7 @@ class WarpAutomator:
         """Types text using the clipboard to handle special characters."""
         try:
             pyperclip.copy(text)
-            pyautogui.hotkey('ctrl', 'v')
+            pyautogui.hotkey("ctrl", "v")
             time.sleep(0.2)
         except Exception as e:
             logger.error(f"Error typing text: {e}")
@@ -196,21 +207,21 @@ class WarpAutomator:
     def run_workflow(self):
         """Executes the full automation workflow with window validation."""
         logger.info("Starting automation workflow...")
-        
+
         # 1. Open Warp if not already running
         if not self.is_open():
             logger.info("Warp not open. Opening...")
             subprocess.Popen(self.warp_path)
-            
+
             # Wait for process to appear (max 10s)
-            for _ in range(20): 
+            for _ in range(20):
                 if self.is_open():
                     break
                 time.sleep(0.5)
-            
+
         # 2. Wait for the window to become available
         win = None
-        for attempt in range(20): # Up to 10 seconds total
+        for attempt in range(20):  # Up to 10 seconds total
             win = self.find_window()
             if win:
                 break
@@ -226,34 +237,48 @@ class WarpAutomator:
         if self.activate_window(win):
             # Give Windows a moment to stabilize focus
             time.sleep(0.5)
-            
+
             # Final validation: check if the active window is actually Warp
             active_hwnd = win32gui.GetForegroundWindow()
             active_title = win32gui.GetWindowText(active_hwnd).lower()
-            
+
             # 1. Direct HWND comparison (most reliable)
             # 2. If HWND doesn't match, check if the title contains keywords
-            keywords = ('warp', 'ready', 'working', 'mvp', 'terminal', 'cmd', 'powershell')
-            is_valid = (active_hwnd == win._hWnd) or any(kw in active_title for kw in keywords)
+            keywords = (
+                "warp",
+                "ready",
+                "working",
+                "mvp",
+                "terminal",
+                "cmd",
+                "powershell",
+            )
+            is_valid = (active_hwnd == win._hWnd) or any(
+                kw in active_title for kw in keywords
+            )
 
             if not is_valid:
-                logger.error(f"Safety Abort: Active window '{active_title}' (HWND: {active_hwnd}) is not Warp (Warp HWND: {win._hWnd}).")
-                self.speak("Abortado por segurança. O terminal não parece estar em foco.")
+                logger.error(
+                    f"Safety Abort: Active window '{active_title}' (HWND: {active_hwnd}) is not Warp (Warp HWND: {win._hWnd})."
+                )
+                self.speak(
+                    "Abortado por segurança. O terminal não parece estar em foco."
+                )
                 return
 
             # 4. Execute commands
             try:
                 logger.info("Opening new tab and executing commands...")
                 # Open new tab (Warp shortcut)
-                pyautogui.hotkey('ctrl', 'shift', 't')
-                time.sleep(1.2) # Wait for tab animation
+                pyautogui.hotkey("ctrl", "shift", "t")
+                time.sleep(1.2)  # Wait for tab animation
 
                 for cmd in self.commands:
                     logger.info(f"Typing: {cmd}")
                     self.type_text(cmd)
                     pyautogui.press("enter")
                     time.sleep(0.6)
-                
+
                 logger.info("Commands executed successfully.")
                 self.speak("Pronto!")
             except Exception as e:

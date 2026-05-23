@@ -1,29 +1,31 @@
+import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
-import os
 
 # Add the project root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core.ai.llm_agent import llm_agent
 from core.llm.models import LLMResponse
+
 
 class TestLLMSecurity(unittest.TestCase):
     def setUp(self):
         # Mock the provider on the global llm_agent instance
         self.original_provider = llm_agent.provider
         llm_agent.provider = MagicMock()
-        
+
         # Mock llm_cache to avoid cache interference
         from core.ai.llm_agent import llm_cache as global_llm_cache
+
         self.original_cache = global_llm_cache
-        self.patcher_cache = patch('core.ai.llm_agent.llm_cache')
+        self.patcher_cache = patch("core.ai.llm_agent.llm_cache")
         self.mock_cache = self.patcher_cache.start()
-        self.mock_cache.get.return_value = None # Always miss cache
-        
+        self.mock_cache.get.return_value = None  # Always miss cache
+
         # Mock RateLimiter to avoid side effects
-        self.patcher_rl = patch('core.ai.llm_agent.rate_limiter')
+        self.patcher_rl = patch("core.ai.llm_agent.rate_limiter")
         self.mock_rate_limiter = self.patcher_rl.start()
         self.mock_rate_limiter.check_quotas.return_value = True
 
@@ -37,12 +39,12 @@ class TestLLMSecurity(unittest.TestCase):
         # Mock response from LLM with risk_level
         mock_response = LLMResponse(
             content='{"type": "action", "action": "system", "commands": ["echo hi"], "risk_level": "dangerous"}',
-            usage={"total_tokens": 100}
+            usage={"total_tokens": 100},
         )
         llm_agent.provider.generate_content.return_value = mock_response
 
         result = llm_agent.process_instruction("fechar tudo")
-        
+
         # llm_agent normalizes risk_level to global_risk
         self.assertEqual(result.get("global_risk"), "dangerous")
 
@@ -50,40 +52,39 @@ class TestLLMSecurity(unittest.TestCase):
         # Mock response from LLM without risk_level
         mock_response = LLMResponse(
             content='{"type": "action", "action": "system", "commands": ["echo hi"]}',
-            usage={"total_tokens": 100}
+            usage={"total_tokens": 100},
         )
         llm_agent.provider.generate_content.return_value = mock_response
 
         result = llm_agent.process_instruction("fale oi")
-        
+
         self.assertEqual(result.get("global_risk"), "safe")
 
     def test_risk_level_invalid_defaults_to_safe(self):
         # Mock response from LLM with invalid risk_level
         mock_response = LLMResponse(
             content='{"type": "action", "action": "system", "commands": ["echo hi"], "risk_level": "unknown"}',
-            usage={"total_tokens": 100}
+            usage={"total_tokens": 100},
         )
         llm_agent.provider.generate_content.return_value = mock_response
 
         result = llm_agent.process_instruction("fale oi")
-        
+
         self.assertEqual(result.get("global_risk"), "safe")
 
     def test_prompt_contains_risk_tiers(self):
         # This tests if the prompt being sent contains the new information
         mock_response = LLMResponse(
-            content='{"type": "chat", "message": "Olá"}',
-            usage={"total_tokens": 100}
+            content='{"type": "chat", "message": "Olá"}', usage={"total_tokens": 100}
         )
         llm_agent.provider.generate_content.return_value = mock_response
 
         llm_agent.process_instruction("oi")
-        
+
         # Capture the call
         args, kwargs = llm_agent.provider.generate_content.call_args
-        prompt = kwargs.get('prompt', '')
-        
+        prompt = kwargs.get("prompt", "")
+
         # The prompt template uses global_risk for instructions and Risco for intent list
         self.assertIn("global_risk", prompt)
         self.assertIn("safe", prompt)
@@ -93,13 +94,14 @@ class TestLLMSecurity(unittest.TestCase):
     def test_rate_limiting_fallback(self):
         # Mock rate limiter to return False (quota exceeded)
         self.mock_rate_limiter.check_quotas.return_value = False
-        
+
         result = llm_agent.process_instruction("oi")
-        
+
         self.assertEqual(result.get("type"), "chat")
         self.assertIn("limite", result.get("message"))
         # Verify LLM was NOT called
         llm_agent.provider.generate_content.assert_not_called()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

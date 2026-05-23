@@ -1,14 +1,15 @@
 import json
-import os
-from core.infra.logger_config import logger
-from core.infra.config import config
-from core.plugins.plugin_manager import plugin_manager
-from core.shared.utils import time_it
+
 from core.ai.prompt_guard import PromptGuard
-from core.shared.errors import TechnicalError
 from core.cache import llm_cache
-from core.runtime.rate_limiter import rate_limiter
+from core.infra.config import config
+from core.infra.logger_config import logger
 from core.llm import LiteLLMProvider, LLMError
+from core.plugins.plugin_manager import plugin_manager
+from core.runtime.rate_limiter import rate_limiter
+from core.shared.errors import TechnicalError
+from core.shared.utils import time_it
+
 
 class LLMAgent:
     """Interface for the AI reasoning engine.
@@ -20,13 +21,20 @@ class LLMAgent:
     Attributes:
         provider (BaseLLMProvider): The LLM provider instance.
     """
+
     def __init__(self):
         """Initializes the LLM provider based on config."""
-        llm_config = config.get('llm', {})
-        active_provider = llm_config.get('active_provider', 'gemini')
-        model_name = llm_config.get('providers', {}).get(active_provider, {}).get('model', 'gemini-2.0-flash')
-        
-        logger.info(f"Initializing LLMAgent with provider: {active_provider}, model: {model_name}")
+        llm_config = config.get("llm", {})
+        active_provider = llm_config.get("active_provider", "gemini")
+        model_name = (
+            llm_config.get("providers", {})
+            .get(active_provider, {})
+            .get("model", "gemini-2.0-flash")
+        )
+
+        logger.info(
+            f"Initializing LLMAgent with provider: {active_provider}, model: {model_name}"
+        )
         self.provider = LiteLLMProvider(provider=active_provider, model=model_name)
 
     @time_it
@@ -54,28 +62,41 @@ class LLMAgent:
         # 0. Prompt Injection Guard (Input validation)
         if not PromptGuard.is_input_safe(text):
             logger.warning(f"Blocked suspicious input: {text}")
-            return {"type": "chat", "message": "Desculpe, não posso processar essa instrução por motivos de segurança."}
+            return {
+                "type": "chat",
+                "message": "Desculpe, não posso processar essa instrução por motivos de segurança.",
+            }
 
         # 1. Check cache first
         cached_response = llm_cache.get(text)
         if cached_response:
             logger.info(f"Using cached LLM response for: '{text}'")
             from core.persistence.history_db import history_manager
+
             history_manager.log_metric("llm_cache_hit", 1.0)
             return PromptGuard.sanitize_output(cached_response)
 
         from core.persistence.history_db import history_manager
+
         history_manager.log_metric("llm_cache_hit", 0.0)
 
         # 2. Cache miss, prepare prompt
-        commands_list = ", ".join(context_commands) if context_commands else "Nenhum comando mapeado."
-        
+        commands_list = (
+            ", ".join(context_commands)
+            if context_commands
+            else "Nenhum comando mapeado."
+        )
+
         intents = plugin_manager.get_intents()
         if intents:
             intents_list = []
             for i in intents:
-                phrases_str = f" | Frases: {', '.join(i['phrases'])}" if i.get('phrases') else ""
-                intents_list.append(f"        - Intent: '{i['intent']}' | Descrição: {i['description']}{phrases_str} | Risco: {i['risk_level']}")
+                phrases_str = (
+                    f" | Frases: {', '.join(i['phrases'])}" if i.get("phrases") else ""
+                )
+                intents_list.append(
+                    f"        - Intent: '{i['intent']}' | Descrição: {i['description']}{phrases_str} | Risco: {i['risk_level']}"
+                )
             intents_str = "\n".join(intents_list)
         else:
             intents_str = "        Nenhum comando de plugin carregado."
@@ -83,10 +104,10 @@ class LLMAgent:
         prompt = f"""
         Você é o Jarvis, um assistente de terminal no Windows. Seu objetivo é ajudar o usuário com automações seguras.
         O usuário falou: "{text}"
-        
+
         Comandos de Plugins disponíveis:
 {intents_str}
-        
+
         Outros comandos locais: [{commands_list}]
 
         Ações de Sistema Especiais (PRIORIDADE ALTA):
@@ -138,39 +159,44 @@ class LLMAgent:
         - Se a ação corresponder a um comando de plugin, use type "command" ou o tipo mais adequado dentro dos steps.
         - Retorne APENAS o JSON, sem markdown.
         """
-        
+
         # Check Rate Limits
         if not rate_limiter.check_quotas():
             logger.info("Rate limit reached. Returning fallback message.")
             return {
                 "type": "chat",
-                "message": "Atingi o limite de uso de IA por hoje.\nPosso continuar com comandos locais, ou você pode tentar novamente em algumas horas."
+                "message": "Atingi o limite de uso de IA por hoje.\nPosso continuar com comandos locais, ou você pode tentar novamente em algumas horas.",
             }
 
         try:
             logger.info(f"Sending to LLM Provider ({self.provider.provider})...")
-            response = self.provider.generate_content(
-                prompt=prompt
-            )
+            response = self.provider.generate_content(prompt=prompt)
             result = response.content.strip()
-            
+
             # Clean up markdown
             if result.startswith("```json"):
                 result = result[7:-3].strip()
             elif result.startswith("```"):
                 result = result[3:-3].strip()
-                
+
             json_data = json.loads(result)
-            
+
             if json_data.get("type") == "action":
                 # Basic normalization for legacy compatibility if needed
                 if "risk_level" in json_data and "global_risk" not in json_data:
                     json_data["global_risk"] = json_data["risk_level"]
-                
-                ALLOWED_RISKS = ["safe", "low", "medium", "high", "dangerous", "blocked"]
+
+                ALLOWED_RISKS = [
+                    "safe",
+                    "low",
+                    "medium",
+                    "high",
+                    "dangerous",
+                    "blocked",
+                ]
                 if json_data.get("global_risk") not in ALLOWED_RISKS:
                     json_data["global_risk"] = "safe"
-            
+
             logger.info(f"LLM Response Parsed: {json_data}")
 
             # Log usage
@@ -179,11 +205,11 @@ class LLMAgent:
 
             # Sanitize output before saving or returning
             json_data = PromptGuard.sanitize_output(json_data)
-            
+
             # 3. Save to cache
             if json_data.get("type") == "action":
                 llm_cache.set(text, json_data)
-                
+
             return json_data
         except LLMError as e:
             logger.error(f"LLM Provider Error: {e}")
@@ -196,11 +222,14 @@ class LLMAgent:
     def generate_text(self, prompt: str) -> str:
         """Generates raw text from the LLM for a given prompt."""
         try:
-            logger.info(f"Sending prompt to LLM ({self.provider.provider}) for raw text generation...")
+            logger.info(
+                f"Sending prompt to LLM ({self.provider.provider}) for raw text generation..."
+            )
             response = self.provider.generate_content(prompt=prompt)
             return response.content.strip()
         except Exception as e:
             logger.error(f"Error generating text from LLM: {e}")
             raise
+
 
 llm_agent = LLMAgent()

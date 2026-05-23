@@ -1,12 +1,14 @@
+import glob
 import os
 import time
-import glob
-import pyaudio
+
 import numpy as np
 import openwakeword
+import pyaudio
 from openwakeword.model import Model
-from core.infra.config import config
+
 from core.infra.logger_config import logger
+
 
 def get_audio_stream():
     """Initializes and returns the PyAudio stream."""
@@ -16,43 +18,45 @@ def get_audio_stream():
         channels=1,
         format=pyaudio.paInt16,
         input=True,
-        frames_per_buffer=1280
+        frames_per_buffer=1280,
     )
     return pa, stream
+
 
 def load_wakeword_model():
     """Loads openWakeWord models (defaults and custom from models/ folder)."""
     # Pre-trained paths
     pretrained_paths = openwakeword.get_pretrained_model_paths()
-    
+
     # Custom paths from models/
     custom_paths = glob.glob(os.path.join("models", "*.onnx"))
-    
-    all_available_paths = pretrained_paths + custom_paths
-    
+
+    pretrained_paths + custom_paths
+
     selected_paths = []
     loaded_names = []
-    
+
     # Always load 'hey_jarvis'
     for p in pretrained_paths:
         if "hey_jarvis" in os.path.basename(p):
             selected_paths.append(p)
             loaded_names.append("hey_jarvis")
             break
-            
+
     # Load any user-provided models from 'models/' directory for offline shortcuts
     for p in custom_paths:
         name = os.path.splitext(os.path.basename(p))[0]
         if name not in loaded_names:
             selected_paths.append(p)
             loaded_names.append(name)
-            
+
     if not selected_paths:
         logger.error("No valid models found to load.")
         return None, []
-        
+
     logger.info(f"Loading wakeword models: {loaded_names}")
     return Model(wakeword_model_paths=selected_paths), loaded_names
+
 
 def safe_reset_audio(pa, stream):
     """Deep cleanup and re-initialization of the PyAudio engine."""
@@ -65,17 +69,25 @@ def safe_reset_audio(pa, stream):
             pa.terminate()
     except Exception as e:
         logger.error(f"Error during audio cleanup: {e}")
-    
-    time.sleep(1.0) # Grace period for OS to release resources
+
+    time.sleep(1.0)  # Grace period for OS to release resources
     return get_audio_stream()
 
-def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_threshold=15.0, stop_event=None, volume_multiplier=1.0):
+
+def record_command_audio(
+    stream,
+    max_seconds=10,
+    silence_duration=1.5,
+    silence_threshold=15.0,
+    stop_event=None,
+    volume_multiplier=1.0,
+):
     """Utility to record audio synchronously. Used by background threads (e.g. Security Dialog)."""
     logger.info("Recording command...")
     frames = []
     start_time = time.time()
     silence_start = None
-    
+
     while time.time() - start_time < max_seconds:
         if stop_event and stop_event.is_set():
             logger.info("Stop event detected. Stopping recording.")
@@ -83,14 +95,14 @@ def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_t
         try:
             data = stream.read(1280, exception_on_overflow=False)
             pcm = np.frombuffer(data, dtype=np.int16)
-            
+
             if volume_multiplier != 1.0:
                 pcm = (pcm * volume_multiplier).clip(-32768, 32767).astype(np.int16)
-                
+
             frames.append(pcm.tobytes())
-            
-            rms = np.sqrt(np.mean(pcm.astype(np.float32)**2))
-            
+
+            rms = np.sqrt(np.mean(pcm.astype(np.float32) ** 2))
+
             if rms < silence_threshold:
                 if silence_start is None:
                     silence_start = time.time()
@@ -102,5 +114,5 @@ def record_command_audio(stream, max_seconds=10, silence_duration=1.5, silence_t
         except Exception as e:
             logger.error(f"Error recording audio: {e}")
             break
-            
+
     return b"".join(frames)

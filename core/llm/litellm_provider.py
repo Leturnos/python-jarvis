@@ -1,11 +1,15 @@
 import litellm
-from typing import Optional
+
+from core.infra.keyring_manager import KeyringManager
+from core.infra.logger_config import logger
 from core.llm.base import BaseLLMProvider
 from core.llm.models import (
-    LLMResponse, LLMProviderError, LLMAuthenticationError, LLMRateLimitError
+    LLMAuthenticationError,
+    LLMProviderError,
+    LLMRateLimitError,
+    LLMResponse,
 )
-from core.infra.logger_config import logger
-from core.infra.keyring_manager import KeyringManager
+
 
 class LiteLLMProvider(BaseLLMProvider):
     """LLM provider implementation using LiteLLM."""
@@ -25,6 +29,7 @@ class LiteLLMProvider(BaseLLMProvider):
 
         if not api_key:
             import os
+
             api_key = os.getenv(key_name)
             if api_key:
                 logger.info(f"{key_name} found in .env. Saving to Keyring.")
@@ -33,13 +38,16 @@ class LiteLLMProvider(BaseLLMProvider):
         if not api_key:
             logger.warning(f"API key for {self.provider} ({key_name}) is missing.")
             # We don't raise here, but generate_content will fail if key is required
-        
+
         # LiteLLM can use environment variables or be passed directly
         # For simplicity and thread safety in some environments, we can set env var
         import os
+
         os.environ[key_name] = api_key if api_key else ""
 
-    def generate_content(self, prompt: str, system_instruction: str = None) -> LLMResponse:
+    def generate_content(
+        self, prompt: str, system_instruction: str = None
+    ) -> LLMResponse:
         """Generates content using LiteLLM."""
         messages = []
         if system_instruction:
@@ -56,7 +64,7 @@ class LiteLLMProvider(BaseLLMProvider):
             usage = {
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
+                "total_tokens": response.usage.total_tokens,
             }
 
             return LLMResponse(
@@ -64,11 +72,13 @@ class LiteLLMProvider(BaseLLMProvider):
                 raw_response=response,
                 model=self.model,
                 provider=self.provider,
-                usage=usage
+                usage=usage,
             )
 
         except litellm.exceptions.AuthenticationError as e:
-            raise LLMAuthenticationError(f"Authentication failed for {self.provider}: {e}")
+            raise LLMAuthenticationError(
+                f"Authentication failed for {self.provider}: {e}"
+            )
         except litellm.exceptions.RateLimitError as e:
             raise LLMRateLimitError(f"Rate limit exceeded for {self.provider}: {e}")
         except Exception as e:
@@ -81,5 +91,5 @@ class LiteLLMProvider(BaseLLMProvider):
         return {
             "supports_system_instructions": True,
             "provider": self.provider,
-            "model": self.model
+            "model": self.model,
         }
