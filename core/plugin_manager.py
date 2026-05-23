@@ -1,8 +1,8 @@
 import os
 import yaml
 import glob
-from core.logger_config import logger
-from core.config import config
+from core.infra.logger_config import logger
+from core.infra.config import config
 
 class PluginManager:
     def __init__(self, plugins_dir="plugins"):

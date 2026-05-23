@@ -1,8 +1,8 @@
 import sqlite3
 from datetime import datetime
-from core.config import config
-from core.history_db import history_manager
-from core.logger_config import logger
+from core.infra.config import config
+from core.persistence.history_db import history_manager
+from core.infra.logger_config import logger
 
 class RateLimiter:
     def __init__(self):

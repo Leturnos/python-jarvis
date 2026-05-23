@@ -6,7 +6,7 @@ from core.execution_plan import ExecutionPlan, RiskLevel
 @pytest.fixture
 def mock_dependencies():
     with patch('core.dispatcher.history_manager') as mock_history, \
-         patch('core.llm_agent.llm_agent') as mock_llm_agent, \
+         patch('core.ai.llm_agent.llm_agent') as mock_llm_agent, \
          patch('core.dispatcher.PromptGuard', create=True) as mock_prompt_guard, \
          patch('core.dispatcher.state_manager') as mock_state:
         

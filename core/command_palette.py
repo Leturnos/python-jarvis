@@ -5,7 +5,7 @@ import keyboard
 import queue
 import win32gui
 import win32con
-from core.logger_config import logger
+from core.infra.logger_config import logger
 from core.plugin_manager import plugin_manager
 
 class CommandPalette:

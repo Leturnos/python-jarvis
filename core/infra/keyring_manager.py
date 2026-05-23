@@ -1,5 +1,5 @@
 import keyring
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 class KeyringManager:
     @staticmethod

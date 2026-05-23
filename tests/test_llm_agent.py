@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from core.llm_agent import LLMAgent
+from core.ai.llm_agent import LLMAgent
 
 @patch("core.llm.litellm_provider.KeyringManager.get_secret")
 @patch("os.getenv")

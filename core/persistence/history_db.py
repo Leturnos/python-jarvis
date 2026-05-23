@@ -3,7 +3,7 @@ import os
 import threading
 import queue
 from datetime import datetime
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 class HistoryManager:
     def __init__(self, db_path="data/history.db"):

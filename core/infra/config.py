@@ -2,7 +2,7 @@ import os
 import yaml
 import re
 from dotenv import load_dotenv
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 load_dotenv()
 

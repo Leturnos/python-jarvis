@@ -5,7 +5,7 @@ import queue
 import time
 from unittest.mock import MagicMock, patch
 from core.controller import JarvisController
-from core.state import JarvisState, state_manager
+from core.runtime.state import JarvisState, state_manager
 
 @pytest.fixture(autouse=True)
 def reset_state():

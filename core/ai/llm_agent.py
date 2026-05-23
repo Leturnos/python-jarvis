@@ -1,13 +1,13 @@
 import json
 import os
-from core.logger_config import logger
-from core.config import config
+from core.infra.logger_config import logger
+from core.infra.config import config
 from core.plugin_manager import plugin_manager
-from core.utils import time_it
-from core.prompt_guard import PromptGuard
-from core.errors import TechnicalError
+from core.shared.utils import time_it
+from core.ai.prompt_guard import PromptGuard
+from core.shared.errors import TechnicalError
 from core.cache import llm_cache
-from core.rate_limiter import rate_limiter
+from core.runtime.rate_limiter import rate_limiter
 from core.llm import LiteLLMProvider, LLMError
 
 class LLMAgent:
@@ -60,11 +60,11 @@ class LLMAgent:
         cached_response = llm_cache.get(text)
         if cached_response:
             logger.info(f"Using cached LLM response for: '{text}'")
-            from core.history_db import history_manager
+            from core.persistence.history_db import history_manager
             history_manager.log_metric("llm_cache_hit", 1.0)
             return PromptGuard.sanitize_output(cached_response)
 
-        from core.history_db import history_manager
+        from core.persistence.history_db import history_manager
         history_manager.log_metric("llm_cache_hit", 0.0)
 
         # 2. Cache miss, prepare prompt

@@ -1,5 +1,5 @@
 import pytest
-from core.keyring_manager import KeyringManager
+from core.infra.keyring_manager import KeyringManager
 
 def test_keyring_set_and_get():
     # Arrange

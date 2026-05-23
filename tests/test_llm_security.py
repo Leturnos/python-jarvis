@@ -6,7 +6,7 @@ import os
 # Add the project root to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.llm_agent import llm_agent
+from core.ai.llm_agent import llm_agent
 from core.llm.models import LLMResponse
 
 class TestLLMSecurity(unittest.TestCase):
@@ -16,14 +16,14 @@ class TestLLMSecurity(unittest.TestCase):
         llm_agent.provider = MagicMock()
         
         # Mock llm_cache to avoid cache interference
-        from core.llm_agent import llm_cache as global_llm_cache
+        from core.ai.llm_agent import llm_cache as global_llm_cache
         self.original_cache = global_llm_cache
-        self.patcher_cache = patch('core.llm_agent.llm_cache')
+        self.patcher_cache = patch('core.ai.llm_agent.llm_cache')
         self.mock_cache = self.patcher_cache.start()
         self.mock_cache.get.return_value = None # Always miss cache
         
         # Mock RateLimiter to avoid side effects
-        self.patcher_rl = patch('core.llm_agent.rate_limiter')
+        self.patcher_rl = patch('core.ai.llm_agent.rate_limiter')
         self.mock_rate_limiter = self.patcher_rl.start()
         self.mock_rate_limiter.check_quotas.return_value = True
 

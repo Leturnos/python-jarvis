@@ -2,8 +2,8 @@ import numpy as np
 import io
 import gc
 from faster_whisper import WhisperModel
-from core.logger_config import logger
-from core.errors import TechnicalError
+from core.infra.logger_config import logger
+from core.shared.errors import TechnicalError
 
 class STTEngine:
     def __init__(self, model_size="tiny"):

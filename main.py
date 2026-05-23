@@ -13,25 +13,25 @@ from win32event import CreateMutex
 from win32api import GetLastError
 from winerror import ERROR_ALREADY_EXISTS
 
-from core.logger_config import logger
-from core.config import config
+from core.infra.logger_config import logger
+from core.infra.config import config
 from core.automator import WarpAutomator
 from core.dispatcher import ActionDispatcher
-from core.audio_engine import get_audio_stream, load_wakeword_model, safe_reset_audio
-from core.stt_engine import stt_engine
-from core.llm_agent import llm_agent
+from core.audio.audio_engine import get_audio_stream, load_wakeword_model, safe_reset_audio
+from core.audio.stt_engine import stt_engine
+from core.ai.llm_agent import llm_agent
 from core.ui import JarvisUI
 from core.notifications import JarvisNotifier
 from core.tray import JarvisTray
-from core.utils import normalize_text
+from core.shared.utils import normalize_text
 from core.command_palette import CommandPalette
 from core.worker import command_worker
-from core.monitor import MemoryMonitor
-from core.state import state_manager, JarvisState
+from core.runtime.monitor import MemoryMonitor
+from core.runtime.state import state_manager, JarvisState
 from core.job_queue import Job, JobType
 from core.controller import JarvisController
 
-from core.keyring_manager import KeyringManager
+from core.infra.keyring_manager import KeyringManager
 
 def main():
     app_title = "Jarvis AI Assistant"

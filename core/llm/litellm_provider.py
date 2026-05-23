@@ -4,8 +4,8 @@ from core.llm.base import BaseLLMProvider
 from core.llm.models import (
     LLMResponse, LLMProviderError, LLMAuthenticationError, LLMRateLimitError
 )
-from core.logger_config import logger
-from core.keyring_manager import KeyringManager
+from core.infra.logger_config import logger
+from core.infra.keyring_manager import KeyringManager
 
 class LiteLLMProvider(BaseLLMProvider):
     """LLM provider implementation using LiteLLM."""

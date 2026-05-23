@@ -11,8 +11,8 @@ import pyautogui
 import pyperclip
 import queue
 import pythoncom # Required for COM in multiple threads on Windows
-from core.logger_config import logger
-from core.utils import time_it
+from core.infra.logger_config import logger
+from core.shared.utils import time_it
 
 class WarpAutomator:
     def __init__(self, config):

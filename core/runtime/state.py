@@ -1,7 +1,7 @@
 from enum import Enum, auto
 import threading
 from typing import Dict, Any, Optional, Callable, List
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 class JarvisState(Enum):
     """Enumeration of all possible logical states for the Jarvis assistant.

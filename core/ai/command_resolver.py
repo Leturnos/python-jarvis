@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, List
 from difflib import SequenceMatcher
-from core.utils import normalize_text
+from core.shared.utils import normalize_text
 from core.plugin_manager import plugin_manager
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 @dataclass
 class ResolutionResult:

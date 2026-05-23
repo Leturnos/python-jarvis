@@ -5,7 +5,7 @@ import win32com.client
 import re
 from pathlib import Path
 from PIL import Image, ImageDraw
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 import time
 import functools
@@ -25,7 +25,7 @@ def time_it(func):
             
             # Log to database asynchronously
             try:
-                from core.history_db import history_manager
+                from core.persistence.history_db import history_manager
                 history_manager.log_metric(f"latency_{func.__name__}", duration)
             except Exception as e:
                 logger.error(f"Failed to enqueue performance metric: {e}")

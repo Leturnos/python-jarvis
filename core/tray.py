@@ -7,9 +7,9 @@ import win32con
 import os
 import time
 from datetime import datetime, timedelta
-from core.logger_config import logger
-from core.utils import manage_autostart, is_autostart_enabled_check
-from core.state import state_manager, JarvisState
+from core.infra.logger_config import logger
+from core.shared.utils import manage_autostart, is_autostart_enabled_check
+from core.runtime.state import state_manager, JarvisState
 
 class JarvisTray:
     def __init__(self, on_stop_callback, start_minimized=False, notifier=None):

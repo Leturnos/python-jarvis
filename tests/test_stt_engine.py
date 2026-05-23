@@ -1,11 +1,11 @@
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
-from core.stt_engine import STTEngine
+from core.audio.stt_engine import STTEngine
 
 @pytest.fixture
 def mock_whisper():
-    with patch('core.stt_engine.WhisperModel') as mock:
+    with patch('core.audio.stt_engine.WhisperModel') as mock:
         yield mock
 
 def test_stt_transcription_success(mock_whisper):

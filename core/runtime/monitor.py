@@ -3,7 +3,7 @@ import psutil
 import threading
 import time
 import gc
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 class MemoryMonitor:
     def __init__(self, interval_seconds=60, threshold_mb=800):

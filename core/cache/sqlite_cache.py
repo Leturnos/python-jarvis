@@ -5,7 +5,7 @@ import time
 import os
 import re
 from typing import Optional, Dict, Any
-from core.logger_config import logger
+from core.infra.logger_config import logger
 from core.cache.base import LLMCacheBase
 
 class SQLiteLLMCache(LLMCacheBase):

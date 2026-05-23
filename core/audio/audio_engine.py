@@ -5,8 +5,8 @@ import pyaudio
 import numpy as np
 import openwakeword
 from openwakeword.model import Model
-from core.config import config
-from core.logger_config import logger
+from core.infra.config import config
+from core.infra.logger_config import logger
 
 def get_audio_stream():
     """Initializes and returns the PyAudio stream."""

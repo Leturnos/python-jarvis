@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Optional, Dict, Any
-from core.state import JarvisState
+from core.runtime.state import JarvisState
 
 logger = logging.getLogger(__name__)
 

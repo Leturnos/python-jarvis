@@ -1,7 +1,7 @@
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 class StepType(Enum):
     COMMAND = "command"     # Terminal command

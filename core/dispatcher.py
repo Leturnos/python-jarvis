@@ -11,17 +11,17 @@ import os
 import time
 import pyautogui
 from typing import Optional
-from core.logger_config import logger
+from core.infra.logger_config import logger
 from core.security_ui import SecurityDialog
-from core.audio_engine import record_command_audio
-from core.stt_engine import stt_engine
-from core.utils import normalize_text, time_it
+from core.audio.audio_engine import record_command_audio
+from core.audio.stt_engine import stt_engine
+from core.shared.utils import normalize_text, time_it
 from core.plugin_manager import plugin_manager
-from core.history_db import history_manager
+from core.persistence.history_db import history_manager
 from core.macro_manager import macro_manager
-from core.state import state_manager, JarvisState
+from core.runtime.state import state_manager, JarvisState
 from core.execution_plan import ExecutionPlan, ExecutionStep, StepType, RiskLevel
-from core.errors import BusinessError
+from core.shared.errors import BusinessError
 
 class ActionDispatcher:
     """Central hub for coordinating action execution, security validation, and routing.
@@ -95,7 +95,7 @@ class ActionDispatcher:
             return True
 
         # 1. Prompt Guard Validation
-        from core.prompt_guard import PromptGuard
+        from core.ai.prompt_guard import PromptGuard
         sanitized_dict = PromptGuard.sanitize_output(plan.to_dict())
         plan = ExecutionPlan.from_dict(sanitized_dict)
 
@@ -264,7 +264,7 @@ class ActionDispatcher:
         prompt = f"O usuário perguntou o que você acabou de fazer. Aqui está o JSON da sua última ação técnica: {last_json}\nExplique de forma curta, natural e humana o que você fez. Não explique o JSON, explique a ação."
         
         try:
-            from core.llm_agent import llm_agent
+            from core.ai.llm_agent import llm_agent
             explanation = llm_agent.generate_text(prompt)
             self.automator.speak(explanation)
         except Exception as e:

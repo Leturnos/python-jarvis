@@ -4,7 +4,7 @@ from typing import Any, Optional
 import uuid
 import time
 from collections import deque
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 class JobType(Enum):
     LLM_DYNAMIC = auto()

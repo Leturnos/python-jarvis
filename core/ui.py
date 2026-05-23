@@ -6,7 +6,7 @@ from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 from rich import box
 import numpy as np
-from core.state import state_manager, JarvisState
+from core.runtime.state import state_manager, JarvisState
 
 class JarvisUI:
     def __init__(self, wakeword_name):

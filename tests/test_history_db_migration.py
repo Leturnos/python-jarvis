@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import json
-from core.history_db import HistoryManager
+from core.persistence.history_db import HistoryManager
 
 def test_history_db():
     db_path = "data/test_history.db"

@@ -3,11 +3,11 @@ import numpy as np
 import logging
 import queue
 import threading
-from core.state import state_manager, JarvisState
-from core.stt_engine import stt_engine
-from core.utils import normalize_text
+from core.runtime.state import state_manager, JarvisState
+from core.audio.stt_engine import stt_engine
+from core.shared.utils import normalize_text
 from core.job_queue import Job, JobType
-from core.audio_engine import safe_reset_audio
+from core.audio.audio_engine import safe_reset_audio
 from core.activation import ActivationManager, ActivationContext, ActivationActionType
 
 logger = logging.getLogger(__name__)

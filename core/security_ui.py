@@ -1,6 +1,6 @@
 import tkinter as tk
 from threading import Event
-from core.logger_config import logger
+from core.infra.logger_config import logger
 
 class SecurityDialog:
     def __init__(self, action_desc):

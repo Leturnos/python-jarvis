@@ -1,5 +1,5 @@
 import unittest
-from core.utils import normalize_text
+from core.shared.utils import normalize_text
 import difflib
 
 class TestRouting(unittest.TestCase):

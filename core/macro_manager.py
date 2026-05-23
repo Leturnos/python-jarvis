@@ -1,9 +1,9 @@
 import yaml
 import os
 import json
-from core.logger_config import logger
+from core.infra.logger_config import logger
 from core.plugin_manager import plugin_manager
-from core.llm_agent import llm_agent
+from core.ai.llm_agent import llm_agent
 from core.execution_plan import ExecutionPlan, ExecutionStep
 
 class MacroManager:

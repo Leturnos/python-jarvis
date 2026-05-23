@@ -5,16 +5,16 @@ import pythoncom
 import json
 from difflib import SequenceMatcher
 
-from core.logger_config import logger
-from core.stt_engine import stt_engine
-from core.llm_agent import llm_agent
-from core.utils import normalize_text
+from core.infra.logger_config import logger
+from core.audio.stt_engine import stt_engine
+from core.ai.llm_agent import llm_agent
+from core.shared.utils import normalize_text
 from core.plugin_manager import plugin_manager
-from core.state import state_manager, JarvisState
+from core.runtime.state import state_manager, JarvisState
 from core.job_queue import Job, JobType, JobStatus, job_manager
 from core.execution_plan import ExecutionPlan
-from core.command_resolver import CommandResolver
-from core.errors import TechnicalError, BusinessError
+from core.ai.command_resolver import CommandResolver
+from core.shared.errors import TechnicalError, BusinessError
 
 # Singleton for the worker session
 resolver = CommandResolver()
