@@ -11,6 +11,8 @@ from win32api import GetLastError
 from win32event import CreateMutex
 from winerror import ERROR_ALREADY_EXISTS
 
+from PySide6.QtWidgets import QApplication
+
 from core.audio.audio_engine import (
     get_audio_stream,
     load_wakeword_model,
@@ -23,10 +25,10 @@ from core.infra.config import config
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
 from core.runtime.monitor import MemoryMonitor
+from core.ui.adapter import JarvisTrayAdapter, JarvisUIAdapter
+from core.ui.app_controller import QtAppController
 from core.ui.command_palette import CommandPalette
 from core.ui.notifications import JarvisNotifier
-from core.ui.tray import JarvisTray
-from core.ui.ui import JarvisUI
 
 
 def main():
@@ -75,9 +77,6 @@ def main():
     worker_busy = threading.Event()
     task_queue = queue.Queue()
 
-    def on_stop():
-        stop_event.set()
-
     automator = WarpAutomator(config)
     pa, stream = get_audio_stream()
     dispatcher = ActionDispatcher(config, automator, stream)
@@ -87,11 +86,16 @@ def main():
         logger.error("Failed to load any wakeword models. Exiting.")
         sys.exit(1)
 
-    ui = JarvisUI(loaded_names)
+    ui_adapter = JarvisUIAdapter(loaded_names)
     notifier = JarvisNotifier()
-    tray = JarvisTray(
-        on_stop_callback=on_stop, start_minimized=is_minimized, notifier=notifier
-    )
+    tray_adapter = JarvisTrayAdapter(notifier=notifier)
+
+    app = QApplication(sys.argv)
+    
+    app_controller = QtAppController(app, ui_adapter, tray_adapter)
+    
+    if not is_minimized:
+        app_controller.show_window()
 
     # Initialize Command Palette
     palette = CommandPalette(dispatcher)
@@ -104,8 +108,6 @@ def main():
     )
     worker_thread.start()
 
-    tray.start()
-
     memory_monitor = MemoryMonitor(interval_seconds=60, threshold_mb=800)
     memory_monitor.start()
 
@@ -116,23 +118,34 @@ def main():
         dispatcher=dispatcher,
         model=model,
         loaded_names=loaded_names,
-        ui=ui,
-        tray=tray,
+        ui=ui_adapter,
+        tray=tray_adapter,
         task_queue=task_queue,
         stop_event=stop_event,
         pa=pa,
         stream=stream,
     )
 
-    try:
-        controller.start()
-    finally:
-        logger.info("Cleaning up bootstrap layer...")
-        if "memory_monitor" in locals():
-            memory_monitor.stop()
-        stop_event.set()
-        tray.stop()
-        logger.info("Jarvis stopped.")
+    def run_controller_safely():
+        try:
+            controller.start()
+        except Exception as e:
+            logger.exception(f"Fatal error in JarvisController thread: {e}")
+        finally:
+            # Tell Qt to quit if the backend crashes or stops
+            app_controller.quit_app()
+
+    controller_thread = threading.Thread(target=run_controller_safely, daemon=True)
+    controller_thread.start()
+
+    exit_code = app.exec()
+    
+    logger.info("Cleaning up bootstrap layer...")
+    stop_event.set()
+    if "memory_monitor" in locals():
+        memory_monitor.stop()
+    logger.info("Jarvis stopped.")
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
