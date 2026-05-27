@@ -4,7 +4,6 @@ import queue
 import sys
 import threading
 import time
-import traceback
 
 import win32con
 import win32gui
@@ -33,8 +32,10 @@ from core.ui.notifications import JarvisNotifier
 
 def qt_exception_hook(exctype, value, tb):
     from core.infra.logger_config import logger
+
     logger.error("Uncaught Qt Exception:", exc_info=(exctype, value, tb))
     sys.__excepthook__(exctype, value, tb)
+
 
 sys.excepthook = qt_exception_hook
 
@@ -100,6 +101,11 @@ def main():
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+
+    # Initialize dark theme as early as possible to avoid flash of white or bugged colors
+    import qdarktheme
+
+    qdarktheme.setup_theme()
 
     app_controller = QtAppController(app, ui_adapter, tray_adapter)
 

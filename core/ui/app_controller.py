@@ -1,10 +1,13 @@
 import os
+import time
 
 from PySide6.QtCore import QObject
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from qfluentwidgets import Theme, setTheme
 
+from core.runtime.state import JarvisState, state_manager
+from core.shared.utils import is_autostart_enabled_check, manage_autostart
 from core.ui.main_window import MainWindow
 
 
@@ -21,11 +24,11 @@ class QtAppController(QObject):
         self._has_shown_tray_message = False
         self.main_window.minimized_to_tray.connect(self._show_minimized_message)
 
-        # Load Stylesheet
+        # Load Stylesheet only on MainWindow to avoid breaking Fluent UI styles globally
         qss_path = os.path.abspath("resources/styles.qss")
         if os.path.exists(qss_path):
             with open(qss_path, "r", encoding="utf-8") as f:
-                self.app.setStyleSheet(f.read())
+                self.main_window.setStyleSheet(f.read())
 
         self._setup_tray()
 
@@ -41,31 +44,95 @@ class QtAppController(QObject):
                 )
             )
 
-        tray_menu = QMenu()
+        self.tray_menu = QMenu()
+        self.tray_menu.aboutToShow.connect(self._update_menu_states)
 
-        show_action = QAction("Show Dashboard", self)
-        show_action.triggered.connect(self.show_window)
-        tray_menu.addAction(show_action)
+        # Dashboard Action
+        self.show_action = QAction("Show Dashboard", self)
+        self.show_action.triggered.connect(self.show_window)
+        self.tray_menu.addAction(self.show_action)
 
-        tray_menu.addSeparator()
+        self.tray_menu.addSeparator()
 
-        mute_30 = QAction("Mute 30 min", self)
-        mute_30.triggered.connect(lambda: self.tray_adapter.set_mute(30))
-        tray_menu.addAction(mute_30)
+        # State Actions
+        self.active_action = QAction("Listening (Active)", self)
+        self.active_action.setCheckable(True)
+        self.active_action.triggered.connect(lambda: self.tray_adapter.set_mute(0))
+        self.tray_menu.addAction(self.active_action)
 
-        unmute = QAction("Resume (Unmute)", self)
-        unmute.triggered.connect(lambda: self.tray_adapter.set_mute(0))
-        tray_menu.addAction(unmute)
+        self.suspended_action = QAction("On (Suspended)", self)
+        self.suspended_action.setCheckable(True)
+        self.suspended_action.triggered.connect(self._set_suspended)
+        self.tray_menu.addAction(self.suspended_action)
 
-        tray_menu.addSeparator()
+        # Disable for Submenu
+        self.mute_menu = self.tray_menu.addMenu("Disable for...")
 
+        self.mute_30m = QAction("30 min", self)
+        self.mute_30m.setCheckable(True)
+        self.mute_30m.triggered.connect(lambda: self.tray_adapter.set_mute(30))
+        self.mute_menu.addAction(self.mute_30m)
+
+        self.mute_1h = QAction("1 hour", self)
+        self.mute_1h.setCheckable(True)
+        self.mute_1h.triggered.connect(lambda: self.tray_adapter.set_mute(60))
+        self.mute_menu.addAction(self.mute_1h)
+
+        self.mute_3h = QAction("3 hours", self)
+        self.mute_3h.setCheckable(True)
+        self.mute_3h.triggered.connect(lambda: self.tray_adapter.set_mute(180))
+        self.mute_menu.addAction(self.mute_3h)
+
+        self.tray_menu.addSeparator()
+
+        # Autostart Action
+        self.autostart_action = QAction("Autostart", self)
+        self.autostart_action.setCheckable(True)
+        self.autostart_action.triggered.connect(self._toggle_autostart)
+        self.tray_menu.addAction(self.autostart_action)
+
+        self.tray_menu.addSeparator()
+
+        # Quit Action
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self.quit_app)
-        tray_menu.addAction(quit_action)
+        self.tray_menu.addAction(quit_action)
 
-        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.setContextMenu(self.tray_menu)
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.show()
+
+    def _update_menu_states(self):
+        """Refreshes the checkmarks in the tray menu before showing it."""
+        current_state = state_manager.get_state()
+
+        # Active vs Suspended
+        is_suspended = current_state in (JarvisState.SLEEPING, JarvisState.SUSPENDED)
+        is_muted = current_state == JarvisState.MUTED
+
+        self.active_action.setChecked(not is_suspended and not is_muted)
+        self.suspended_action.setChecked(is_suspended)
+
+        # Mute durations
+        def get_mute_checked(minutes):
+            if self.tray_adapter.mute_until == 0:
+                return False
+            remaining = self.tray_adapter.mute_until - time.time()
+            return (minutes - 5) * 60 < remaining <= (minutes + 5) * 60
+
+        self.mute_30m.setChecked(get_mute_checked(30))
+        self.mute_1h.setChecked(get_mute_checked(60))
+        self.mute_3h.setChecked(get_mute_checked(180))
+
+        # Autostart
+        self.autostart_action.setChecked(is_autostart_enabled_check())
+
+    def _set_suspended(self):
+        state_manager.set_state(JarvisState.SLEEPING)
+
+    def _toggle_autostart(self):
+        new_state = not is_autostart_enabled_check()
+        manage_autostart(enable=new_state)
 
     def show_window(self):
         self.main_window.show()
@@ -75,11 +142,12 @@ class QtAppController(QObject):
     def _show_minimized_message(self):
         if hasattr(self, "tray_icon") and not self._has_shown_tray_message:
             from PySide6.QtWidgets import QSystemTrayIcon
+
             self.tray_icon.showMessage(
-                "Jarvis", 
-                "O Jarvis continua rodando em segundo plano.", 
-                QSystemTrayIcon.MessageIcon.Information, 
-                2000
+                "Jarvis",
+                "O Jarvis continua rodando em segundo plano.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000,
             )
             self._has_shown_tray_message = True
 

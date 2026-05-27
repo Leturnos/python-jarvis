@@ -1,10 +1,10 @@
 /* resources/styles.qss */
-QLabel#StateLabel {
+#StateLabel {
     font-size: 14px;
     font-weight: bold;
 }
 
-QLabel#WakeWordLabel {
+#WakeWordLabel {
     color: #00ffff;
     font-size: 12px;
 }
