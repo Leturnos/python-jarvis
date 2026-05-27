@@ -19,12 +19,13 @@ dependencies = [
     "pyautogui>=0.9.54",
     "pygetwindow>=0.0.9",
     "pyperclip>=1.11.0",
-    "pystray>=0.19.5",
+    "pyqtdarktheme>=2.1.0",
+    "pyside6>=6.11.1",
+    "pyside6-fluent-widgets>=1.11.2",
     "python-dotenv>=1.2.2",
     "pyttsx3>=2.99",
     "pywin32>=311",
     "pyyaml>=6.0.3",
-    "rich>=14.3.3",
     "setuptools>=82.0.1",
 ]
 
