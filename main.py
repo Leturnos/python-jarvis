@@ -4,14 +4,14 @@ import queue
 import sys
 import threading
 import time
+import traceback
 
 import win32con
 import win32gui
+from PySide6.QtWidgets import QApplication
 from win32api import GetLastError
 from win32event import CreateMutex
 from winerror import ERROR_ALREADY_EXISTS
-
-from PySide6.QtWidgets import QApplication
 
 from core.audio.audio_engine import (
     get_audio_stream,
@@ -29,6 +29,14 @@ from core.ui.adapter import JarvisTrayAdapter, JarvisUIAdapter
 from core.ui.app_controller import QtAppController
 from core.ui.command_palette import CommandPalette
 from core.ui.notifications import JarvisNotifier
+
+
+def qt_exception_hook(exctype, value, tb):
+    from core.infra.logger_config import logger
+    logger.error("Uncaught Qt Exception:", exc_info=(exctype, value, tb))
+    sys.__excepthook__(exctype, value, tb)
+
+sys.excepthook = qt_exception_hook
 
 
 def main():
@@ -91,9 +99,10 @@ def main():
     tray_adapter = JarvisTrayAdapter(notifier=notifier)
 
     app = QApplication(sys.argv)
-    
+    app.setQuitOnLastWindowClosed(False)
+
     app_controller = QtAppController(app, ui_adapter, tray_adapter)
-    
+
     if not is_minimized:
         app_controller.show_window()
 
@@ -139,7 +148,7 @@ def main():
     controller_thread.start()
 
     exit_code = app.exec()
-    
+
     logger.info("Cleaning up bootstrap layer...")
     stop_event.set()
     if "memory_monitor" in locals():

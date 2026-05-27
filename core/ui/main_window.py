@@ -1,19 +1,25 @@
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
 from PySide6.QtGui import QCloseEvent
-from qfluentwidgets import SplitTitleBarWindow
+from PySide6.QtCore import Signal
 
 from core.ui.widgets.status_card import StatusCardWidget
 
-class MainWindow(SplitTitleBarWindow):
+
+class MainWindow(QMainWindow):
+    minimized_to_tray = Signal()
+
     def __init__(self, ui_adapter):
         super().__init__()
         self.setWindowTitle("Jarvis Dashboard")
         self.resize(500, 350)
         
-        self.status_card = StatusCardWidget(ui_adapter.wakeword_name, self)
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
         
-        layout = QVBoxLayout(self.windowEffect)
-        layout.setContentsMargins(20, 50, 20, 20)  # Top margin for title bar
+        self.status_card = StatusCardWidget(ui_adapter.wakeword_name)
+        
+        layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.addWidget(self.status_card)
         
         ui_adapter.visual_state_updated.connect(self.status_card.update_from_snapshot)
@@ -21,3 +27,4 @@ class MainWindow(SplitTitleBarWindow):
     def closeEvent(self, event: QCloseEvent):
         event.ignore()
         self.hide()
+        self.minimized_to_tray.emit()
