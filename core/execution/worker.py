@@ -94,6 +94,37 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
 
     if action_json.get("type") == "chat":
         dispatcher.handle_dynamic(action_json)
+    elif action_json.get("type") == "media":
+        from core.media.resolver import MediaResolver
+        from core.media.models import MediaIntent, MediaAction, AutoplayStrategy
+        from core.execution.execution_plan import ExecutionPlan, ExecutionStep, StepType, RiskLevel
+        
+        try:
+            m_action = MediaAction(action_json.get("action"))
+        except ValueError:
+            m_action = MediaAction.PLAY_QUERY
+            
+        m_intent = MediaIntent(action=m_action, query=action_json.get("query"))
+        
+        resolver_obj = MediaResolver()
+        resolved_plan = resolver_obj.resolve_intent(m_intent)
+        
+        plan = ExecutionPlan(
+            intent=action_json.get("action", "media"),
+            explanation=action_json.get("description", "Ação de mídia"),
+            steps=resolved_plan.steps,
+            global_risk=RiskLevel.SAFE
+        )
+        
+        if resolved_plan.strategy == AutoplayStrategy.TAB_ENTER:
+            plan.steps.append(ExecutionStep(type=StepType.HOTKEY, payload={"keys": ["tab"]}, description="Focus result"))
+            plan.steps.append(ExecutionStep(type=StepType.WAIT, payload={"duration": 0.5}))
+            plan.steps.append(ExecutionStep(type=StepType.HOTKEY, payload={"keys": ["enter"]}, description="Play result"))
+        elif resolved_plan.strategy == AutoplayStrategy.MEDIA_KEY:
+            plan.steps.append(ExecutionStep(type=StepType.WAIT, payload={"duration": 1.5}))
+            plan.steps.append(ExecutionStep(type=StepType.HOTKEY, payload={"keys": ["playpause"]}, description="System Play"))
+
+        dispatcher.handle_plan(plan)
     elif action_json.get("intent") in ["replay", "create_macro"]:
         matched_intent = action_json.get("intent")
         job_type = (
