@@ -96,7 +96,7 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
         dispatcher.handle_dynamic(action_json)
     elif action_json.get("type") == "media":
         from core.media.resolver import MediaResolver
-        from core.media.models import MediaIntent, MediaAction, AutoplayStrategy
+        from core.media.models import MediaIntent, MediaAction, AutoplayStrategy, QueryType
         from core.execution.execution_plan import ExecutionPlan, ExecutionStep, StepType, RiskLevel
         
         try:
@@ -104,7 +104,15 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
         except ValueError:
             m_action = MediaAction.PLAY_QUERY
             
-        m_intent = MediaIntent(action=m_action, query=action_json.get("query"))
+        q_type_str = action_json.get("query_type")
+        q_type = None
+        if q_type_str:
+            try:
+                q_type = QueryType(q_type_str)
+            except ValueError:
+                q_type = QueryType.MIXED
+                
+        m_intent = MediaIntent(action=m_action, query=action_json.get("query"), query_type=q_type)
         
         resolver_obj = MediaResolver()
         resolved_plan = resolver_obj.resolve_intent(m_intent)

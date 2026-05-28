@@ -153,9 +153,14 @@ class LLMAgent:
             "type": "media",
             "action": "PLAY_QUERY", 
             "query": "nome da música, artista ou humor",
+            "query_type": "mood",
             "description": "Tocando sua música"
         }}
         Valores de 'action' para mídia: PLAY_QUERY, PLAY, PAUSE, NEXT, PREV. (Para buscas/pedidos, use sempre PLAY_QUERY com o campo 'query').
+        O campo 'query_type' é obrigatório para PLAY_QUERY:
+        - "entity": Bandas, artistas, álbuns específicos (ex: "Linkin Park", "Thriller").
+        - "mood": Humores, atividades, intenções abstratas (ex: "música alegre", "para estudar").
+        - "mixed": Uma mistura dos dois (ex: "rock animado", "lofi triste").
 
         Tiers de Risco:
         - "safe": Consultas, abrir pastas, git status. (Default)
