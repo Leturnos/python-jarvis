@@ -11,6 +11,8 @@ data/*
 jarvis.log
 Jarvis.lnk
 resources/launcher.vbs
+.ruff_cache/
+scratch/
 
 # IDEs
 .vscode/

@@ -7,6 +7,7 @@ Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", p
 ## ✨ O que ele faz?
 
 - **Ativação Inteligente (Novo! 🎙️):** Você escolhe como o Jarvis deve te ouvir. Ele pode ficar sempre atento à frase "Hey Jarvis", funcionar apenas quando você aperta uma tecla (Push-to-Talk), ou ambos!
+- **Controle de Mídia Inteligente (Spotify 🎵 - Novo!):** Diga ao Jarvis para tocar um artista, música ou playlist. Ele trará o Spotify para o primeiro plano e usará inteligência visual (OpenCV) para localizar e clicar nos botões corretos na tela, iniciando a música instantaneamente. Veja o [Guia de Configuração de Mídia](file:///c:/Programacao/python-jarvis/data/media/README.md) para aprender a cadastrar suas playlists favoritas.
 - **Modo Gamer e Reunião (Auto-Suspend):** O Jarvis é educado. Se ele perceber que você está jogando ou em uma apresentação (tela cheia), ele entra em suspensão automaticamente para não te interromper.
 - **Entende seu jeito de falar (IA):** Não precisa decorar comandos rígidos. Após ativar o assistente, fale de forma natural e ele usará IA (Google Gemini) para entender sua intenção.
 - **Paleta de Comandos (⌨️):** Falar alto nem sempre é o ideal. Aperte `Ctrl + Alt + P` a qualquer momento para abrir uma barra de pesquisa rápida na tela e execute suas automações silenciosamente.
