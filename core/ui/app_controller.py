@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from qfluentwidgets import Theme, setTheme
 
 from core.runtime.state import JarvisState, state_manager
-from core.shared.utils import is_autostart_enabled_check, manage_autostart
+from core.shared.utils import is_autostart_enabled_check, manage_autostart, get_resources_dir
 from core.ui.main_window import MainWindow
 
 
@@ -25,8 +25,9 @@ class QtAppController(QObject):
         self.main_window.minimized_to_tray.connect(self._show_minimized_message)
 
         # Load Stylesheet only on MainWindow to avoid breaking Fluent UI styles globally
-        qss_path = os.path.abspath("resources/styles.qss")
-        if os.path.exists(qss_path):
+        resources_dir = get_resources_dir()
+        qss_path = resources_dir / "styles.qss"
+        if qss_path.exists():
             with open(qss_path, "r", encoding="utf-8") as f:
                 self.main_window.setStyleSheet(f.read())
 
@@ -34,9 +35,10 @@ class QtAppController(QObject):
 
     def _setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
-        icon_path = os.path.abspath("resources/icon.ico")
-        if os.path.exists(icon_path):
-            self.tray_icon.setIcon(QIcon(icon_path))
+        resources_dir = get_resources_dir()
+        icon_path = resources_dir / "icon.ico"
+        if icon_path.exists():
+            self.tray_icon.setIcon(QIcon(str(icon_path)))
         else:
             self.tray_icon.setIcon(
                 self.main_window.style().standardIcon(

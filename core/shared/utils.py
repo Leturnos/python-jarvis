@@ -44,7 +44,7 @@ def normalize_text(text):
 
 def get_resources_dir():
     """Returns and ensures the resources directory exists."""
-    project_dir = Path(__file__).parent.parent.absolute()
+    project_dir = Path(__file__).parent.parent.parent.absolute()
     resources_dir = project_dir / "resources"
     resources_dir.mkdir(exist_ok=True)
     return resources_dir
@@ -82,7 +82,7 @@ def manage_autostart(enable=True):
     """Adds or removes Jarvis from Windows Startup using a Shortcut in the Registry."""
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
     app_name = "JarvisAI"
-    project_dir = Path(__file__).parent.parent.absolute()
+    project_dir = Path(__file__).parent.parent.parent.absolute()
     resources_dir = get_resources_dir()
     shortcut_path = str(resources_dir / "Jarvis.lnk")
     vbs_path = resources_dir / "launcher.vbs"
