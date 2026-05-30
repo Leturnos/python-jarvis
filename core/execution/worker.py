@@ -124,13 +124,15 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
             global_risk=RiskLevel.SAFE
         )
         
+        uri = resolved_plan.steps[0].payload.get("target") if resolved_plan.steps else None
         if resolved_plan.strategy == AutoplayStrategy.TAB_ENTER:
-            plan.steps.append(ExecutionStep(type=StepType.HOTKEY, payload={"keys": ["tab"]}, description="Focus result"))
-            plan.steps.append(ExecutionStep(type=StepType.WAIT, payload={"duration": 0.5}))
-            plan.steps.append(ExecutionStep(type=StepType.HOTKEY, payload={"keys": ["enter"]}, description="Play result"))
+            # We use the click + tab + enter sequence as the primary autoplay strategy
+            # for search results to ensure reliable playback initialization.
+            # Keyboard-only navigation (Ctrl+L -> Tabs) is inconsistent across Spotify versions
+            # and when the window has previously paused states.
+            plan.steps.append(ExecutionStep(type=StepType.SPOTIFY_CLICK_PLAY, payload={"click_type": "search", "uri": uri}, description="Spotify Click & Play Autoplay (Search)"))
         elif resolved_plan.strategy == AutoplayStrategy.MEDIA_KEY:
-            plan.steps.append(ExecutionStep(type=StepType.WAIT, payload={"duration": 1.5}))
-            plan.steps.append(ExecutionStep(type=StepType.HOTKEY, payload={"keys": ["playpause"]}, description="System Play"))
+            plan.steps.append(ExecutionStep(type=StepType.SPOTIFY_CLICK_PLAY, payload={"click_type": "playlist", "uri": uri}, description="Spotify Click & Play Autoplay (Playlist)"))
 
         dispatcher.handle_plan(plan)
     elif action_json.get("intent") in ["replay", "create_macro"]:

@@ -1,13 +1,13 @@
 {
   "intents": {
     "happy_hits": "spotify:playlist:37i9dQZF1DXdPec7aLTmlC",
-    "focus": "spotify:playlist:37i9dQZF1DWZeKzbUnE3Yv",
-    "workout": "spotify:playlist:37i9dQZF1DX70RN3TfRZZG",
-    "chill": "spotify:playlist:37i9dQZF1DX4WYpdVIPcm4",
-    "sad_songs": "spotify:playlist:37i9dQZF1DX7qK8ma5csG5",
+    "focus": "spotify:playlist:37i9dQZF1DWZeKCadgRdKQ",
+    "workout": "spotify:playlist:37i9dQZF1DXe6bgV3TmZOL",
+    "chill": "spotify:playlist:37i9dQZF1EVHGWrwldPRtj",
+    "sad_songs": "spotify:playlist:2pnoYeER1oat11B3Vkpnm7",
     "party": "spotify:playlist:37i9dQZF1DXaXB8fQg7xif",
     "gaming": "spotify:playlist:37i9dQZF1DWTyiBJ6yEqeu",
-    "fallback_playlist": "spotify:playlist:37i9dQZF1E36uuQzQ"
+    "fallback_playlist": "spotify:user:spotify:collection"
   },
   "keywords": {
     "happy_hits": ["alegre", "feliz", "animad", "pra cima", "bom humor", "radiante"],

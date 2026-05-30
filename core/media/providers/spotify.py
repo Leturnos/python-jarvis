@@ -41,6 +41,8 @@ class SpotifyProvider:
                     uri = intents_dict.get("fallback_playlist")
                     confidence = 0.0
                     playlist_key = "fallback_playlist"
+                
+                strategy = AutoplayStrategy.MEDIA_KEY
             
             # Absolute fallback if json is broken
             if not uri:
@@ -49,8 +51,11 @@ class SpotifyProvider:
 
             steps = [
                 ExecutionStep(type=StepType.OPEN_APP, payload={"target": uri}, description=f"Open Spotify: {query}"),
-                ExecutionStep(type=StepType.WAIT, payload={"duration": 3.0}, description="Wait for Spotify load")
+                ExecutionStep(type=StepType.WAIT, payload={"duration": 2.5}, description="Wait for Spotify load")
             ]
+            if strategy in (AutoplayStrategy.TAB_ENTER, AutoplayStrategy.MEDIA_KEY):
+                steps.append(ExecutionStep(type=StepType.FOCUS_WINDOW, payload={"target": "spotify"}, description="Focus Spotify"))
+
             return ResolvedMediaPlan(steps=steps, strategy=strategy, confidence=confidence, playlist_key=playlist_key)
         return None
 

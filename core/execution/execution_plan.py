@@ -13,6 +13,8 @@ class StepType(Enum):
     WAIT = "wait"  # Delay
     HOTKEY = "hotkey"
     TYPE_AND_ENTER = "type_and_enter"
+    FOCUS_WINDOW = "focus_window"
+    SPOTIFY_CLICK_PLAY = "spotify_click_play"
 
 
 class RiskLevel(Enum):
@@ -57,6 +59,8 @@ class ExecutionStep:
             payload["text"] = str(data.get("text", ""))
         elif step_type == StepType.NAVIGATE:
             payload["target"] = str(data.get("target", ""))
+        elif step_type == StepType.FOCUS_WINDOW:
+            payload["target"] = str(data.get("target", ""))
         elif step_type == StepType.WAIT:
             try:
                 payload["duration"] = float(data.get("duration", 1.0))
@@ -69,6 +73,10 @@ class ExecutionStep:
             )
         elif step_type == StepType.TYPE_AND_ENTER:
             payload["text"] = str(data.get("text", ""))
+        elif step_type == StepType.SPOTIFY_CLICK_PLAY:
+            payload["click_type"] = str(data.get("click_type", "search"))
+            if "uri" in data:
+                payload["uri"] = str(data.get("uri"))
 
         return cls(
             type=step_type,
