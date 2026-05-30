@@ -54,9 +54,8 @@ def test_check_authorization_blocked(dispatcher, mock_automator):
 
 
 @patch("core.execution.dispatcher.SecurityDialog")
-@patch("core.execution.dispatcher.threading.Thread")
 def test_check_authorization_dangerous_approved(
-    mock_thread, mock_dialog_class, dispatcher, mock_automator
+    mock_dialog_class, dispatcher, mock_automator
 ):
     action_config = {"risk_level": "dangerous", "description": "Format Drive"}
 
@@ -69,9 +68,8 @@ def test_check_authorization_dangerous_approved(
 
 
 @patch("core.execution.dispatcher.SecurityDialog")
-@patch("core.execution.dispatcher.threading.Thread")
 def test_check_authorization_dangerous_rejected(
-    mock_thread, mock_dialog_class, dispatcher, mock_automator
+    mock_dialog_class, dispatcher, mock_automator
 ):
     action_config = {"risk_level": "dangerous", "description": "Format Drive"}
 

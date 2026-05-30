@@ -356,6 +356,15 @@ class ActionDispatcher:
                 self.automator.type_text(step.payload.get("text", ""))
                 pyautogui.press("enter")
                 return True
+            elif step.type == StepType.FOCUS_WINDOW:
+                target = step.payload.get("target", "")
+                if target == "spotify":
+                    return self.automator.activate_spotify_window()
+                return True
+            elif step.type == StepType.SPOTIFY_CLICK_PLAY:
+                click_type = step.payload.get("click_type", "search")
+                uri = step.payload.get("uri")
+                return self.automator.spotify_click_play(click_type=click_type, uri=uri)
             return False
         except Exception as e:
             logger.error(f"Step execution error ({step.type.value}): {e}")

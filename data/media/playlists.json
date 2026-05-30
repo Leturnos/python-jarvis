@@ -1,0 +1,21 @@
+{
+  "intents": {
+    "happy_hits": "spotify:playlist:37i9dQZF1DXdPec7aLTmlC",
+    "focus": "spotify:playlist:37i9dQZF1DWZeKCadgRdKQ",
+    "workout": "spotify:playlist:37i9dQZF1DXe6bgV3TmZOL",
+    "chill": "spotify:playlist:37i9dQZF1EVHGWrwldPRtj",
+    "sad_songs": "spotify:playlist:2pnoYeER1oat11B3Vkpnm7",
+    "party": "spotify:playlist:37i9dQZF1DXaXB8fQg7xif",
+    "gaming": "spotify:playlist:37i9dQZF1DWTyiBJ6yEqeu",
+    "fallback_playlist": "spotify:user:spotify:collection"
+  },
+  "keywords": {
+    "happy_hits": ["alegre", "feliz", "animad", "pra cima", "bom humor", "radiante"],
+    "focus": ["focar", "concentrar", "estudar", "trabalhar", "foco", "produtividade", "ler"],
+    "workout": ["treinar", "malhar", "academia", "correr", "exercicio", "treino", "peso"],
+    "chill": ["relaxar", "calma", "dormir", "tranquil", "paz", "suave", "descansar"],
+    "sad_songs": ["triste", "bad", "melancolic", "chorar", "depre", "fossa"],
+    "party": ["festa", "curtir", "comemorar", "dancar", "balada", "agito"],
+    "gaming": ["jogar", "game", "partida", "play", "lol", "cs", "valorant"]
+  }
+}

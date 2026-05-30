@@ -148,6 +148,20 @@ class LLMAgent:
             "message": "Sua resposta curta e natural aqui."
         }}
 
+        3. Se for uma MÍDIA (tocar música, pausar, pular no Spotify ou sistema):
+        {{
+            "type": "media",
+            "action": "PLAY_QUERY", 
+            "query": "nome da música, artista ou humor",
+            "query_type": "mood",
+            "description": "Tocando sua música"
+        }}
+        Valores de 'action' para mídia: PLAY_QUERY, PLAY, PAUSE, NEXT, PREV. (Para buscas/pedidos, use sempre PLAY_QUERY com o campo 'query').
+        O campo 'query_type' é obrigatório para PLAY_QUERY:
+        - "entity": Bandas, artistas, álbuns específicos (ex: "Linkin Park", "Thriller").
+        - "mood": Humores, atividades, intenções abstratas (ex: "música alegre", "para estudar").
+        - "mixed": Uma mistura dos dois (ex: "rock animado", "lofi triste").
+
         Tiers de Risco:
         - "safe": Consultas, abrir pastas, git status. (Default)
         - "low": Abrir apps, navegar em pastas.
@@ -213,7 +227,7 @@ class LLMAgent:
             json_data = PromptGuard.sanitize_output(json_data)
 
             # 3. Save to cache
-            if json_data.get("type") == "action":
+            if json_data.get("type") in ["action", "media"]:
                 llm_cache.set(text, json_data)
 
             return json_data
