@@ -32,6 +32,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.0.1",
     "pytest>=9.0.3",
     "ruff>=0.15.14",
 ]
@@ -41,6 +42,15 @@ line-length = 88
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N"]
-ignore = []
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "N",
+    "B",   # bugbear
+    "UP",  # pyupgrade
+]
+ignore = ["E501"]
+
 
