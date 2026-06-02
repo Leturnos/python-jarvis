@@ -78,12 +78,16 @@ class LiteLLMProvider(BaseLLMProvider):
         except litellm.exceptions.AuthenticationError as e:
             raise LLMAuthenticationError(
                 f"Authentication failed for {self.provider}: {e}"
-            )
+            ) from e
         except litellm.exceptions.RateLimitError as e:
-            raise LLMRateLimitError(f"Rate limit exceeded for {self.provider}: {e}")
+            raise LLMRateLimitError(
+                f"Rate limit exceeded for {self.provider}: {e}"
+            ) from e
         except Exception as e:
             logger.error(f"LiteLLM error: {e}")
-            raise LLMProviderError(f"Error from LLM provider {self.provider}: {e}")
+            raise LLMProviderError(
+                f"Error from LLM provider {self.provider}: {e}"
+            ) from e
 
     def get_capabilities(self) -> dict:
         """Returns provider capabilities."""

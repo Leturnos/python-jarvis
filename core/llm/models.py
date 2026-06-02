@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass
@@ -10,14 +10,14 @@ class LLMResponse:
     raw_response: Any = None
     model: str = ""
     provider: str = ""
-    usage: Dict[str, int] = field(
+    usage: dict[str, int] = field(
         default_factory=lambda: {
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "total_tokens": 0,
         }
     )
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class LLMError(Exception):

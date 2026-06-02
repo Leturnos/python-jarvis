@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Dict, Optional
+from typing import Any
 
 import keyboard
 import win32api
@@ -31,7 +31,7 @@ class ActivationAction:
 @dataclass
 class ActivationContext:
     wakeword_score: float
-    wakeword_detected: Optional[str]
+    wakeword_detected: str | None
     is_fullscreen: bool
     is_hotkey_pressed: bool
     current_state: JarvisState
@@ -45,7 +45,7 @@ class ActivationManager:
 
     MIN_SUSPEND_DURATION = 2.0  # Hysteresis to prevent flickering
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.full_config = config  # Keep reference for threshold lookup
         self.config = config.get("voice_activation", {})
         self.mode = self.config.get("mode", "hybrid")

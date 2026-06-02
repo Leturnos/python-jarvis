@@ -4,7 +4,7 @@ import os
 import re
 import sqlite3
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.cache.base import LLMCacheBase
 from core.infra.logger_config import logger
@@ -48,7 +48,7 @@ class SQLiteLLMCache(LLMCacheBase):
         """Generates a SHA-256 hash for the normalized text."""
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    def get(self, instruction: str) -> Optional[Dict[str, Any]]:
+    def get(self, instruction: str) -> dict[str, Any] | None:
         normalized = self._normalize(instruction)
         if not normalized:
             self.misses += 1
@@ -85,7 +85,7 @@ class SQLiteLLMCache(LLMCacheBase):
         self.misses += 1
         return None
 
-    def set(self, instruction: str, response: Dict[str, Any]) -> None:
+    def set(self, instruction: str, response: dict[str, Any]) -> None:
         # Only cache actions (e.g., skip 'chat' type)
         if response.get("type") != "action":
             return
@@ -123,7 +123,7 @@ class SQLiteLLMCache(LLMCacheBase):
         except Exception as e:
             logger.error(f"Error clearing cache: {e}")
 
-    def get_stats(self) -> Dict[str, float]:
+    def get_stats(self) -> dict[str, float]:
         total = self.hits + self.misses
         hit_rate = (self.hits / total * 100) if total > 0 else 0.0
         return {

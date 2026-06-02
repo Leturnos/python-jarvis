@@ -1,8 +1,15 @@
 import json
-from typing import List
-from core.media.models import MediaIntent, ResolvedMediaPlan, AutoplayStrategy, MediaAction, QueryType
+
 from core.execution.execution_plan import ExecutionStep, StepType
+from core.media.models import (
+    AutoplayStrategy,
+    MediaAction,
+    MediaIntent,
+    QueryType,
+    ResolvedMediaPlan,
+)
 from core.media.nlp import NLPProcessor
+
 
 class SpotifyProvider:
     def __init__(self, playlists_path="data/media/playlists.json"):
@@ -11,9 +18,9 @@ class SpotifyProvider:
 
     def _load_intents(self):
         try:
-            with open(self.playlists_path, 'r', encoding='utf-8') as f:
+            with open(self.playlists_path, encoding="utf-8") as f:
                 return json.load(f).get("intents", {})
-        except:
+        except Exception:
             return {}
 
     def resolve(self, intent: MediaIntent) -> ResolvedMediaPlan:
@@ -21,7 +28,7 @@ class SpotifyProvider:
             intents_dict = self._load_intents()
             query = intent.query.lower() if intent.query else ""
             q_type = intent.query_type
-            
+
             uri = None
             strategy = AutoplayStrategy.MEDIA_KEY
             confidence = 1.0
@@ -41,21 +48,39 @@ class SpotifyProvider:
                     uri = intents_dict.get("fallback_playlist")
                     confidence = 0.0
                     playlist_key = "fallback_playlist"
-                
+
                 strategy = AutoplayStrategy.MEDIA_KEY
-            
+
             # Absolute fallback if json is broken
             if not uri:
                 uri = f"spotify:search:{query.replace(' ', '+')}"
                 strategy = AutoplayStrategy.TAB_ENTER
 
             steps = [
-                ExecutionStep(type=StepType.OPEN_APP, payload={"target": uri}, description=f"Open Spotify: {query}"),
-                ExecutionStep(type=StepType.WAIT, payload={"duration": 2.5}, description="Wait for Spotify load")
+                ExecutionStep(
+                    type=StepType.OPEN_APP,
+                    payload={"target": uri},
+                    description=f"Open Spotify: {query}",
+                ),
+                ExecutionStep(
+                    type=StepType.WAIT,
+                    payload={"duration": 2.5},
+                    description="Wait for Spotify load",
+                ),
             ]
             if strategy in (AutoplayStrategy.TAB_ENTER, AutoplayStrategy.MEDIA_KEY):
-                steps.append(ExecutionStep(type=StepType.FOCUS_WINDOW, payload={"target": "spotify"}, description="Focus Spotify"))
+                steps.append(
+                    ExecutionStep(
+                        type=StepType.FOCUS_WINDOW,
+                        payload={"target": "spotify"},
+                        description="Focus Spotify",
+                    )
+                )
 
-            return ResolvedMediaPlan(steps=steps, strategy=strategy, confidence=confidence, playlist_key=playlist_key)
+            return ResolvedMediaPlan(
+                steps=steps,
+                strategy=strategy,
+                confidence=confidence,
+                playlist_key=playlist_key,
+            )
         return None
-

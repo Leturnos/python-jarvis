@@ -1,4 +1,3 @@
-import os
 import time
 
 from PySide6.QtCore import QObject
@@ -7,7 +6,11 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from qfluentwidgets import Theme, setTheme
 
 from core.runtime.state import JarvisState, state_manager
-from core.shared.utils import is_autostart_enabled_check, manage_autostart, get_resources_dir
+from core.shared.utils import (
+    get_resources_dir,
+    is_autostart_enabled_check,
+    manage_autostart,
+)
 from core.ui.main_window import MainWindow
 
 
@@ -28,7 +31,7 @@ class QtAppController(QObject):
         resources_dir = get_resources_dir()
         qss_path = resources_dir / "styles.qss"
         if qss_path.exists():
-            with open(qss_path, "r", encoding="utf-8") as f:
+            with open(qss_path, encoding="utf-8") as f:
                 self.main_window.setStyleSheet(f.read())
 
         self._setup_tray()

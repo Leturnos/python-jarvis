@@ -9,7 +9,6 @@ import json
 import os
 import subprocess
 import time
-from typing import Optional
 
 import pyautogui
 
@@ -64,10 +63,10 @@ class ActionDispatcher:
         self.last_input_source = "voice"
         self.last_confidence = 1.0
         self.waiting_for_auth = False
-        self.active_dialog: Optional[SecurityDialog] = (
+        self.active_dialog: SecurityDialog | None = (
             None  # Access for main.py voice confirmation
         )
-        self.last_plan: Optional[ExecutionPlan] = None
+        self.last_plan: ExecutionPlan | None = None
 
     def handle_plan(self, plan: ExecutionPlan) -> bool:
         """Processes an ExecutionPlan, including validation and user confirmation.

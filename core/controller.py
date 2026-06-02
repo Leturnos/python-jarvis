@@ -416,5 +416,5 @@ class JarvisController:
             self.stream.stop_stream()
             self.stream.close()
             self.pa.terminate()
-        except:
+        except Exception:
             pass

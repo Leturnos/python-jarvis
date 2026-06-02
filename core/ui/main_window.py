@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
 
         ui_adapter.visual_state_updated.connect(self.status_card.update_from_snapshot)
 
-    def closeEvent(self, event: QCloseEvent):
+    def closeEvent(self, event: QCloseEvent):  # noqa: N802
         event.ignore()
         self.hide()
         self.minimized_to_tray.emit()

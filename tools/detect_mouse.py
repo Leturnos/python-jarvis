@@ -3,9 +3,11 @@ Mouse Position Detector Utility
 This script prints the X and Y screen coordinates of the mouse in real-time.
 """
 
-import time
 import sys
+import time
+
 import pyautogui
+
 
 def main():
     print("=========================================")
@@ -14,7 +16,7 @@ def main():
     print("Move your mouse to the desired position.")
     print("Press Ctrl+C in this terminal to exit.")
     print("-----------------------------------------")
-    
+
     try:
         while True:
             x, y = pyautogui.position()
@@ -27,6 +29,7 @@ def main():
         print("\n\nPosition detection stopped.")
         print(f"Final logged position: X: {x} | Y: {y}")
         print("Use these coordinates in your automation configuration.")
+
 
 if __name__ == "__main__":
     main()

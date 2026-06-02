@@ -7,7 +7,6 @@ import pythoncom
 from core.ai.command_resolver import CommandResolver
 from core.ai.llm_agent import llm_agent
 from core.audio.stt_engine import stt_engine
-from core.execution.execution_plan import ExecutionPlan
 from core.execution.job_queue import Job, JobStatus, JobType, job_manager
 from core.infra.logger_config import logger
 from core.plugins.plugin_manager import plugin_manager
@@ -95,15 +94,25 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
     if action_json.get("type") == "chat":
         dispatcher.handle_dynamic(action_json)
     elif action_json.get("type") == "media":
+        from core.execution.execution_plan import (
+            ExecutionPlan,
+            ExecutionStep,
+            RiskLevel,
+            StepType,
+        )
+        from core.media.models import (
+            AutoplayStrategy,
+            MediaAction,
+            MediaIntent,
+            QueryType,
+        )
         from core.media.resolver import MediaResolver
-        from core.media.models import MediaIntent, MediaAction, AutoplayStrategy, QueryType
-        from core.execution.execution_plan import ExecutionPlan, ExecutionStep, StepType, RiskLevel
-        
+
         try:
             m_action = MediaAction(action_json.get("action"))
         except ValueError:
             m_action = MediaAction.PLAY_QUERY
-            
+
         q_type_str = action_json.get("query_type")
         q_type = None
         if q_type_str:
@@ -111,28 +120,46 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
                 q_type = QueryType(q_type_str)
             except ValueError:
                 q_type = QueryType.MIXED
-                
-        m_intent = MediaIntent(action=m_action, query=action_json.get("query"), query_type=q_type)
-        
+
+        m_intent = MediaIntent(
+            action=m_action, query=action_json.get("query"), query_type=q_type
+        )
+
         resolver_obj = MediaResolver()
         resolved_plan = resolver_obj.resolve_intent(m_intent)
-        
+
         plan = ExecutionPlan(
             intent=action_json.get("action", "media"),
             explanation=action_json.get("description", "Ação de mídia"),
             steps=resolved_plan.steps,
-            global_risk=RiskLevel.SAFE
+            global_risk=RiskLevel.SAFE,
         )
-        
-        uri = resolved_plan.steps[0].payload.get("target") if resolved_plan.steps else None
+
+        uri = (
+            resolved_plan.steps[0].payload.get("target")
+            if resolved_plan.steps
+            else None
+        )
         if resolved_plan.strategy == AutoplayStrategy.TAB_ENTER:
             # We use the click + tab + enter sequence as the primary autoplay strategy
             # for search results to ensure reliable playback initialization.
             # Keyboard-only navigation (Ctrl+L -> Tabs) is inconsistent across Spotify versions
             # and when the window has previously paused states.
-            plan.steps.append(ExecutionStep(type=StepType.SPOTIFY_CLICK_PLAY, payload={"click_type": "search", "uri": uri}, description="Spotify Click & Play Autoplay (Search)"))
+            plan.steps.append(
+                ExecutionStep(
+                    type=StepType.SPOTIFY_CLICK_PLAY,
+                    payload={"click_type": "search", "uri": uri},
+                    description="Spotify Click & Play Autoplay (Search)",
+                )
+            )
         elif resolved_plan.strategy == AutoplayStrategy.MEDIA_KEY:
-            plan.steps.append(ExecutionStep(type=StepType.SPOTIFY_CLICK_PLAY, payload={"click_type": "playlist", "uri": uri}, description="Spotify Click & Play Autoplay (Playlist)"))
+            plan.steps.append(
+                ExecutionStep(
+                    type=StepType.SPOTIFY_CLICK_PLAY,
+                    payload={"click_type": "playlist", "uri": uri},
+                    description="Spotify Click & Play Autoplay (Playlist)",
+                )
+            )
 
         dispatcher.handle_plan(plan)
     elif action_json.get("intent") in ["replay", "create_macro"]:

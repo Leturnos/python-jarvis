@@ -62,7 +62,7 @@ class STTEngine:
             return text
         except Exception as e:
             logger.error(f"STT Error: {e}")
-            raise TechnicalError(f"STT processing failed: {e}")
+            raise TechnicalError(f"STT processing failed: {e}") from e
 
 
 stt_engine = STTEngine("tiny")

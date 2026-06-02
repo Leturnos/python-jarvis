@@ -86,7 +86,7 @@ class SecurityDialog:
         height = self.root.winfo_height()
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        self.root.geometry("{}x{}+{}+{}".format(width, height, x, y))
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
 
         # Handle window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", on_nao)

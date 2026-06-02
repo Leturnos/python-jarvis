@@ -29,7 +29,7 @@ class MacroManager:
                 intent = data.get("intent", "unknown")
                 explanation = data.get("explanation", "")
                 history_summary.append(f"Action {i + 1}: {intent} - {explanation}")
-            except:
+            except Exception:
                 continue
 
         history_text = "\n".join(history_summary)
@@ -99,7 +99,7 @@ class MacroManager:
             # Load existing macros
             existing_macros = []
             if os.path.exists(self.macros_path):
-                with open(self.macros_path, "r", encoding="utf-8") as f:
+                with open(self.macros_path, encoding="utf-8") as f:
                     content = yaml.safe_load(f)
                     if isinstance(content, list):
                         existing_macros = content

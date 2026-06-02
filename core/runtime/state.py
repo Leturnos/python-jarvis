@@ -1,6 +1,7 @@
 import threading
+from collections.abc import Callable
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from core.infra.logger_config import logger
 
@@ -49,10 +50,10 @@ class StateManager:
     def __init__(self):
         """Initializes the StateManager with the IDLE state and empty context."""
         self._state = JarvisState.IDLE
-        self._context: Dict[str, Any] = {}
+        self._context: dict[str, Any] = {}
         self._lock = threading.Lock()
-        self._callbacks: List[
-            Callable[[JarvisState, JarvisState, Dict[str, Any]], None]
+        self._callbacks: list[
+            Callable[[JarvisState, JarvisState, dict[str, Any]], None]
         ] = []
 
         # Define allowed transitions: {FROM: [TO]}
@@ -123,7 +124,7 @@ class StateManager:
         with self._lock:
             return self._state
 
-    def get_context(self) -> Dict[str, Any]:
+    def get_context(self) -> dict[str, Any]:
         """Returns a copy of the current state context dictionary.
 
         Returns:
@@ -132,9 +133,7 @@ class StateManager:
         with self._lock:
             return self._context.copy()
 
-    def set_state(
-        self, new_state: JarvisState, context: Optional[Dict[str, Any]] = None
-    ):
+    def set_state(self, new_state: JarvisState, context: dict[str, Any] | None = None):
         """Attempts to change the system state and updates the context.
 
         This method validates the transition against the internal allowed_transitions
@@ -182,7 +181,7 @@ class StateManager:
                     logger.error(f"Error in state callback: {e}")
 
     def add_callback(
-        self, callback: Callable[[JarvisState, JarvisState, Dict[str, Any]], None]
+        self, callback: Callable[[JarvisState, JarvisState, dict[str, Any]], None]
     ):
         """Registers a callback function to be notified of state changes.
 

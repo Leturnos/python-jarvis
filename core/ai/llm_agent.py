@@ -151,7 +151,7 @@ class LLMAgent:
         3. Se for uma MÍDIA (tocar música, pausar, pular no Spotify ou sistema):
         {{
             "type": "media",
-            "action": "PLAY_QUERY", 
+            "action": "PLAY_QUERY",
             "query": "nome da música, artista ou humor",
             "query_type": "mood",
             "description": "Tocando sua música"
@@ -206,7 +206,7 @@ class LLMAgent:
                 if "risk_level" in json_data and "global_risk" not in json_data:
                     json_data["global_risk"] = json_data["risk_level"]
 
-                ALLOWED_RISKS = [
+                allowed_risks = [
                     "safe",
                     "low",
                     "medium",
@@ -214,7 +214,7 @@ class LLMAgent:
                     "dangerous",
                     "blocked",
                 ]
-                if json_data.get("global_risk") not in ALLOWED_RISKS:
+                if json_data.get("global_risk") not in allowed_risks:
                     json_data["global_risk"] = "safe"
 
             logger.info(f"LLM Response Parsed: {json_data}")
@@ -233,10 +233,10 @@ class LLMAgent:
             return json_data
         except LLMError as e:
             logger.error(f"LLM Provider Error: {e}")
-            raise TechnicalError(f"LLM processing failed: {e}")
+            raise TechnicalError(f"LLM processing failed: {e}") from e
         except Exception as e:
             logger.error(f"LLM Error: {e}")
-            raise TechnicalError(f"LLM processing failed: {e}")
+            raise TechnicalError(f"LLM processing failed: {e}") from e
 
     @time_it
     def generate_text(self, prompt: str) -> str:

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.infra.logger_config import logger
 
@@ -29,12 +29,12 @@ class RiskLevel(Enum):
 @dataclass
 class ExecutionStep:
     type: StepType
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     step_risk: RiskLevel = RiskLevel.SAFE
-    description: Optional[str] = None
+    description: str | None = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ExecutionStep":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionStep":
         # Explicit parser to prevent casting bugs
         s_type = data.get("type", "command")
         try:
@@ -90,12 +90,12 @@ class ExecutionStep:
 class ExecutionPlan:
     intent: str
     explanation: str
-    steps: List[ExecutionStep] = field(default_factory=list)
+    steps: list[ExecutionStep] = field(default_factory=list)
     global_risk: RiskLevel = RiskLevel.SAFE
     schema_version: str = "1.0"
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ExecutionPlan":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionPlan":
         steps_raw = data.get("steps", [])
         parsed_steps = [ExecutionStep.from_dict(s) for s in steps_raw]
 
@@ -130,7 +130,7 @@ class ExecutionPlan:
         ]
         return levels.index(r1) - levels.index(r2)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "intent": self.intent,

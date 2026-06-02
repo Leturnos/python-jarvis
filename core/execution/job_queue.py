@@ -3,7 +3,7 @@ import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Optional
+from typing import Any
 
 from core.infra.logger_config import logger
 
@@ -30,14 +30,14 @@ class Job:
     type: JobType
     payload: Any
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    payload_text: Optional[str] = None
+    payload_text: str | None = None
     status: JobStatus = JobStatus.PENDING
     retries: int = 0
     max_retries: int = 2
-    timeout: Optional[float] = 30.0
+    timeout: float | None = 30.0
     created_at: float = field(default_factory=time.time)
-    finished_at: Optional[float] = None
-    error: Optional[str] = None
+    finished_at: float | None = None
+    error: str | None = None
 
 
 class JobManager:

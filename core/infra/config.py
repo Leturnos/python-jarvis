@@ -23,7 +23,7 @@ def expand_env_vars(data):
 def load_config():
     """Loads application configuration from config.yaml."""
     try:
-        with open("config.yaml", "r", encoding="utf-8") as f:
+        with open("config.yaml", encoding="utf-8") as f:
             config_raw = yaml.safe_load(f)
             config = expand_env_vars(config_raw)
             return config

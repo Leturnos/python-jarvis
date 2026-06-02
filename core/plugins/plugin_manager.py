@@ -56,7 +56,7 @@ class PluginManager:
 
         for file_path in plugin_files:
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     plugin_data = yaml.safe_load(f)
 
                 if not plugin_data or "commands" not in plugin_data:
