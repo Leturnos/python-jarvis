@@ -14,7 +14,7 @@ from core.plugins.plugin_manager import plugin_manager
 
 
 class CommandPalette:
-    def __init__(self, dispatcher) -> None:
+    def __init__(self, dispatcher: Any) -> None:
         self.dispatcher = dispatcher
         self.root: tk.Tk | None = None
         self.search_var: tk.StringVar | None = None
@@ -26,7 +26,7 @@ class CommandPalette:
         self.cmd_queue: queue.Queue[str] = queue.Queue()
         self._is_visible = False
 
-    def _fetch_commands(self):
+    def _fetch_commands(self) -> None:
         """Loads available commands from plugins and configurations."""
         self.all_commands = []
         # Load plugin intents
@@ -45,7 +45,7 @@ class CommandPalette:
         # For now, we focus on the newly created DSL intents.
         self.filtered_commands = self.all_commands.copy()
 
-    def _create_ui(self):
+    def _create_ui(self) -> None:
         self.root = tk.Tk()
         self.root.title("Jarvis Command Palette")
         self.root.overrideredirect(True)  # No title bar
@@ -113,7 +113,7 @@ class CommandPalette:
         self._update_listbox()
         self._is_visible = True
 
-    def _on_search_change(self, *args):
+    def _on_search_change(self, *args: Any) -> None:
         if not self.search_var:
             return
         query = self.search_var.get().lower()
@@ -125,7 +125,7 @@ class CommandPalette:
             ]
         self._update_listbox()
 
-    def _update_listbox(self):
+    def _update_listbox(self) -> None:
         if not self.listbox:
             return
         self.listbox.delete(0, tk.END)
@@ -134,7 +134,7 @@ class CommandPalette:
         if self.filtered_commands:
             self.listbox.selection_set(0)
 
-    def _move_selection(self, direction):
+    def _move_selection(self, direction: int) -> None:
         if not self.filtered_commands or not self.listbox:
             return
 
@@ -154,7 +154,7 @@ class CommandPalette:
         self.listbox.selection_set(new_index)
         self.listbox.see(new_index)
 
-    def _execute_selected(self):
+    def _execute_selected(self) -> None:
         if not self.listbox:
             return
         selection = self.listbox.curselection()
@@ -168,7 +168,7 @@ class CommandPalette:
         self.hide()
 
         # Dispatch the command in a separate thread so we don't block the UI loop (if it was still alive)
-        def run_action():
+        def run_action() -> None:
             if selected_cmd["action_type"] == "plugin":
                 action_config = {
                     "action": "plugin",
@@ -183,7 +183,7 @@ class CommandPalette:
 
         threading.Thread(target=run_action, daemon=True).start()
 
-    def show(self):
+    def show(self) -> None:
         """Called from the hotkey thread to signal the UI thread to show."""
         # Double check modifier keys are physically pressed to prevent stuck-key bugs
         try:
@@ -201,13 +201,13 @@ class CommandPalette:
 
         self.cmd_queue.put("show")
 
-    def hide(self):
+    def hide(self) -> None:
         if self.root:
             self.root.destroy()
             self.root = None
             self._is_visible = False
 
-    def _check_queue(self):
+    def _check_queue(self) -> None:
         """Periodically checks if the hotkey thread requested to show the UI."""
         try:
             while True:
@@ -243,20 +243,20 @@ class CommandPalette:
         if self.root:
             self.root.after(100, self._check_queue)
 
-    def _ui_loop(self):
+    def _ui_loop(self) -> None:
         """The main Tkinter loop. Runs in its own thread."""
         # Create a hidden dummy root so the after() loop can run even when the palette is hidden
         dummy_root = tk.Tk()
         dummy_root.withdraw()
 
-        def master_check():
+        def master_check() -> None:
             self._check_queue()
             dummy_root.after(100, master_check)
 
         master_check()
         dummy_root.mainloop()
 
-    def start_background_loop(self):
+    def start_background_loop(self) -> None:
         """Starts the Tkinter UI loop in a dedicated background thread and registers the hotkey."""
         ui_thread = threading.Thread(target=self._ui_loop, daemon=True)
         ui_thread.start()

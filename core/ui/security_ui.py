@@ -5,13 +5,13 @@ from core.infra.logger_config import logger
 
 
 class SecurityDialog:
-    def __init__(self, action_desc):
+    def __init__(self, action_desc: str) -> None:
         self.action_desc = action_desc
         self.result = False
         self.confirmed_event = Event()
-        self.root = None
+        self.root: tk.Tk | None = None
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         self.root = tk.Tk()
         self.root.title("Jarvis - Autorização de Segurança")
 
@@ -46,13 +46,13 @@ class SecurityDialog:
         btn_frame = tk.Frame(container, bg="#2c3e50")
         btn_frame.pack()
 
-        def on_sim():
+        def on_sim() -> None:
             self.result = True
             self.confirmed_event.set()
             if self.root:
                 self.root.destroy()
 
-        def on_nao():
+        def on_nao() -> None:
             self.result = False
             self.confirmed_event.set()
             if self.root:
@@ -93,7 +93,7 @@ class SecurityDialog:
         # Handle window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", on_nao)
 
-    def ask(self):
+    def ask(self) -> bool:
         """Shows the dialog and blocks until the user responds."""
         try:
             self._setup_ui()
@@ -107,17 +107,17 @@ class SecurityDialog:
 
         return self.result
 
-    def approve(self):
+    def approve(self) -> None:
         """Externally approves the dialog."""
         self.result = True
         self.close()
 
-    def reject(self):
+    def reject(self) -> None:
         """Externally rejects the dialog."""
         self.result = False
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         """Closes the dialog programmatically."""
         if self.root:
             try:

@@ -70,6 +70,11 @@ warn_unused_ignores = true
 module = "tests.*"
 ignore_errors = true
 
+# Ignorar código legado de UI
+[[tool.mypy.overrides]]
+module = "core.ui.legacy.*"
+ignore_errors = true
+
 # Exigir assinaturas tipadas apenas nas pastas saneadas gradualmente
 [[tool.mypy.overrides]]
 module = [
@@ -80,7 +85,8 @@ module = [
     "core.persistence.*",
     "core.plugins.*",
     "core.ai.*",
-    "core.execution.*"
+    "core.execution.*",
+    "core.ui.*"
 ]
 disallow_untyped_defs = true
 

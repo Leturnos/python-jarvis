@@ -1,4 +1,5 @@
 import time
+from typing import Any
 
 from PySide6.QtCore import QObject
 from PySide6.QtGui import QAction, QIcon
@@ -15,7 +16,7 @@ from core.ui.main_window import MainWindow
 
 
 class QtAppController(QObject):
-    def __init__(self, app: QApplication, ui_adapter, tray_adapter):
+    def __init__(self, app: QApplication, ui_adapter: Any, tray_adapter: Any) -> None:
         super().__init__()
         self.app = app
         self.app.setQuitOnLastWindowClosed(False)
@@ -36,7 +37,7 @@ class QtAppController(QObject):
 
         self._setup_tray()
 
-    def _setup_tray(self):
+    def _setup_tray(self) -> None:
         self.tray_icon = QSystemTrayIcon(self)
         resources_dir = get_resources_dir()
         icon_path = resources_dir / "icon.ico"
@@ -107,7 +108,7 @@ class QtAppController(QObject):
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.show()
 
-    def _update_menu_states(self):
+    def _update_menu_states(self) -> None:
         """Refreshes the checkmarks in the tray menu before showing it."""
         current_state = state_manager.get_state()
 
@@ -119,11 +120,11 @@ class QtAppController(QObject):
         self.suspended_action.setChecked(is_suspended)
 
         # Mute durations
-        def get_mute_checked(minutes):
-            if self.tray_adapter.mute_until == 0:
+        def get_mute_checked(minutes: int) -> bool:
+            if self.tray_adapter.mute_until == 0.0:
                 return False
             remaining = self.tray_adapter.mute_until - time.time()
-            return (minutes - 5) * 60 < remaining <= (minutes + 5) * 60
+            return bool((minutes - 5) * 60 < remaining <= (minutes + 5) * 60)
 
         self.mute_30m.setChecked(get_mute_checked(30))
         self.mute_1h.setChecked(get_mute_checked(60))
@@ -132,19 +133,19 @@ class QtAppController(QObject):
         # Autostart
         self.autostart_action.setChecked(is_autostart_enabled_check())
 
-    def _set_suspended(self):
+    def _set_suspended(self) -> None:
         state_manager.set_state(JarvisState.SLEEPING)
 
-    def _toggle_autostart(self):
+    def _toggle_autostart(self) -> None:
         new_state = not is_autostart_enabled_check()
         manage_autostart(enable=new_state)
 
-    def show_window(self):
+    def show_window(self) -> None:
         self.main_window.show()
         self.main_window.raise_()
         self.main_window.activateWindow()
 
-    def _show_minimized_message(self):
+    def _show_minimized_message(self) -> None:
         if hasattr(self, "tray_icon") and not self._has_shown_tray_message:
             from PySide6.QtWidgets import QSystemTrayIcon
 
@@ -156,14 +157,14 @@ class QtAppController(QObject):
             )
             self._has_shown_tray_message = True
 
-    def _on_tray_activated(self, reason):
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             if self.main_window.isVisible():
                 self.main_window.hide()
             else:
                 self.show_window()
 
-    def quit_app(self):
+    def quit_app(self) -> None:
         if hasattr(self, "tray_icon"):
             self.tray_icon.hide()
             self.tray_icon.deleteLater()

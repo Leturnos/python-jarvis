@@ -1,9 +1,11 @@
+from typing import Any
+
 from PySide6.QtWidgets import QVBoxLayout
 from qfluentwidgets import BodyLabel, ProgressBar, SimpleCardWidget, TitleLabel
 
 
 class StatusCardWidget(SimpleCardWidget):
-    def __init__(self, wakeword_name, parent=None):
+    def __init__(self, wakeword_name: str, parent: Any = None) -> None:
         super().__init__(parent)
 
         self.layout = QVBoxLayout(self)
@@ -32,7 +34,7 @@ class StatusCardWidget(SimpleCardWidget):
         self.vol_progress.setValue(0)
         self.layout.addWidget(self.vol_progress)
 
-    def update_from_snapshot(self, snapshot):
+    def update_from_snapshot(self, snapshot: dict[str, Any]) -> None:
         self.status_label.setText(f"Status: {snapshot['status']}")
         self.score_label.setText(f"Wake Word Score: {snapshot['score']:.2f}")
         self.vol_progress.setValue(snapshot["volume"])

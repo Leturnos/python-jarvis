@@ -4,10 +4,10 @@ from core.infra.logger_config import logger
 
 
 class JarvisNotifier:
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
-    def notify(self, title, message, duration=3):
+    def notify(self, title: str, message: str, duration: int = 3) -> None:
         """Sends a native Windows notification using Plyer."""
         try:
             notification.notify(

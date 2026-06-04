@@ -1,3 +1,5 @@
+from typing import Any
+
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
@@ -8,7 +10,7 @@ from core.ui.widgets.status_card import StatusCardWidget
 class MainWindow(QMainWindow):
     minimized_to_tray = Signal()
 
-    def __init__(self, ui_adapter):
+    def __init__(self, ui_adapter: Any) -> None:
         super().__init__()
         self.setWindowTitle("Jarvis Dashboard")
         self.resize(500, 350)
@@ -24,7 +26,7 @@ class MainWindow(QMainWindow):
 
         ui_adapter.visual_state_updated.connect(self.status_card.update_from_snapshot)
 
-    def closeEvent(self, event: QCloseEvent):  # noqa: N802
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         event.ignore()
         self.hide()
         self.minimized_to_tray.emit()
