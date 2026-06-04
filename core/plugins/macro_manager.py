@@ -11,10 +11,10 @@ from core.plugins.plugin_manager import plugin_manager
 
 
 class MacroManager:
-    def __init__(self, macros_path="plugins/macros.yaml"):
+    def __init__(self, macros_path: str = "plugins/macros.yaml") -> None:
         self.macros_path = macros_path
 
-    def create_macro_from_recent(self, recent_jsons):
+    def create_macro_from_recent(self, recent_jsons: list[str]) -> ExecutionPlan | None:
         """
         Takes a list of JSON strings representing recent actions and
         uses LLM to generate a single unified ExecutionPlan with smart naming.
@@ -70,7 +70,7 @@ class MacroManager:
             logger.error(f"Error generating macro with LLM: {e}")
             return None
 
-    def save_macro_as_plugin(self, plan: ExecutionPlan):
+    def save_macro_as_plugin(self, plan: ExecutionPlan) -> bool:
         """Converts an ExecutionPlan into a plugin YAML and saves it."""
         try:
             # Convert ExecutionPlan to Plugin-like dictionary

@@ -32,7 +32,7 @@ class CommandResolver:
         ],
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def get_available_commands_map(self) -> dict[str, str]:

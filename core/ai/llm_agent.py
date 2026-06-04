@@ -23,7 +23,7 @@ class LLMAgent:
         provider (BaseLLMProvider): The LLM provider instance.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initializes the LLM provider based on config."""
         llm_config = config.get("llm", {})
         active_provider = llm_config.get("active_provider", "gemini")

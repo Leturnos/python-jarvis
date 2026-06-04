@@ -1,5 +1,6 @@
 import glob
 import os
+from typing import Any, cast
 
 import yaml
 
@@ -7,12 +8,14 @@ from core.infra.logger_config import logger
 
 
 class PluginManager:
-    def __init__(self, plugins_dir="plugins"):
+    def __init__(self, plugins_dir: str = "plugins") -> None:
         self.plugins_dir = plugins_dir
-        self.intents = {}  # Map of intent_name -> { description, risk_level, actions, phrases, plugin_name }
+        self.intents: dict[
+            str, Any
+        ] = {}  # Map of intent_name -> { description, risk_level, actions, phrases, plugin_name }
         self.load_plugins()
 
-    def _expand_vars(self, data):
+    def _expand_vars(self, data: Any) -> Any:
         """Recursively expand environment variables in a dictionary or list."""
         if isinstance(data, dict):
             return {k: self._expand_vars(v) for k, v in data.items()}
@@ -23,9 +26,14 @@ class PluginManager:
         else:
             return data
 
-    def _resolve_actions(self, actions, shared_actions, plugin_name):
+    def _resolve_actions(
+        self,
+        actions: list[dict[str, Any]],
+        shared_actions: dict[str, Any],
+        plugin_name: str,
+    ) -> list[dict[str, Any]]:
         """Resolves 'include' actions by replacing them with shared actions."""
-        resolved = []
+        resolved: list[dict[str, Any]] = []
         for action in actions:
             if action.get("type") == "include":
                 ref_name = action.get("name")
@@ -39,7 +47,7 @@ class PluginManager:
                 resolved.append(action)
         return resolved
 
-    def load_plugins(self):
+    def load_plugins(self) -> None:
         """Loads all YAML/JSON plugin files from the plugins directory."""
         if not os.path.exists(self.plugins_dir):
             logger.warning(
@@ -101,7 +109,7 @@ class PluginManager:
             f"PluginManager initialization complete. Loaded {len(self.intents)} intents total."
         )
 
-    def get_intents(self):
+    def get_intents(self) -> list[dict[str, Any]]:
         """Returns a list of all loaded intent names, descriptions and phrases."""
         return [
             {
@@ -113,10 +121,10 @@ class PluginManager:
             for k, v in self.intents.items()
         ]
 
-    def get_actions_for_intent(self, intent_name):
+    def get_actions_for_intent(self, intent_name: str) -> list[dict[str, Any]] | None:
         """Returns the list of actions for a specific intent."""
         if intent_name in self.intents:
-            return self.intents[intent_name]["actions"]
+            return cast(list[dict[str, Any]], self.intents[intent_name]["actions"])
         return None
 
 
