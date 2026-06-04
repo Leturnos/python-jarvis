@@ -98,7 +98,10 @@ module = [
     "pythoncom.*",
     "psutil.*",
     "faster_whisper.*",
-    "pystray.*"
+    "pystray.*",
+    "qdarktheme.*",
+    "win32event.*",
+    "winerror.*"
 ]
 ignore_missing_imports = true
 

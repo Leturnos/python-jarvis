@@ -4,6 +4,7 @@ import queue
 import sys
 import threading
 import time
+from typing import Any
 
 import qdarktheme
 import win32con
@@ -31,7 +32,7 @@ from core.ui.command_palette import CommandPalette
 from core.ui.notifications import JarvisNotifier
 
 
-def qt_exception_hook(exctype, value, tb):
+def qt_exception_hook(exctype: Any, value: Any, tb: Any) -> None:
     logger.error("Uncaught Qt Exception:", exc_info=(exctype, value, tb))
     sys.__excepthook__(exctype, value, tb)
 
@@ -39,7 +40,7 @@ def qt_exception_hook(exctype, value, tb):
 sys.excepthook = qt_exception_hook
 
 
-def main():
+def main() -> None:
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
 
@@ -85,7 +86,7 @@ def main():
 
     stop_event = threading.Event()
     worker_busy = threading.Event()
-    task_queue = queue.Queue()
+    task_queue: queue.Queue[Any] = queue.Queue()
 
     automator = WarpAutomator(config)
     pa, stream = get_audio_stream()
@@ -140,7 +141,7 @@ def main():
         stream=stream,
     )
 
-    def run_controller_safely():
+    def run_controller_safely() -> None:
         try:
             controller.start()
         except Exception as e:
