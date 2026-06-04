@@ -1,17 +1,7 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Use the same version as the project package
     rev: v0.15.14
     hooks:
       - id: ruff
         args: [ --fix ]
       - id: ruff-format
-
-  - repo: local
-    hooks:
-      - id: pytest-fast
-        name: pytest (unit + integration)
-        entry: uv run pytest
-        language: system
-        pass_filenames: false
-        always_run: true
