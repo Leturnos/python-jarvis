@@ -13,6 +13,9 @@ Jarvis.lnk
 resources/launcher.vbs
 .ruff_cache/
 .mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
 scratch/
 
 # IDEs
