@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any
 
 import yaml
 
@@ -73,7 +74,7 @@ class MacroManager:
         """Converts an ExecutionPlan into a plugin YAML and saves it."""
         try:
             # Convert ExecutionPlan to Plugin-like dictionary
-            plugin_data = {
+            plugin_data: dict[str, Any] = {
                 "intent": plan.intent,
                 "description": plan.explanation,
                 "phrases": [
@@ -85,10 +86,12 @@ class MacroManager:
             }
 
             # Map ExecutionSteps back to legacy Plugin actions for the DSL
+            actions = []
             for step in plan.steps:
                 action = {"type": step.type.value}
                 action.update(step.payload)
-                plugin_data["actions"].append(action)
+                actions.append(action)
+            plugin_data["actions"] = actions
 
             # Ensure directory exists
             os.makedirs(os.path.dirname(self.macros_path), exist_ok=True)

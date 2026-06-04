@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from core.ai.prompt_guard import PromptGuard
 from core.cache import llm_cache
@@ -38,7 +39,9 @@ class LLMAgent:
         self.provider = LiteLLMProvider(provider=active_provider, model=model_name)
 
     @time_it
-    def process_instruction(self, text: str, context_commands: list = None) -> dict:
+    def process_instruction(
+        self, text: str, context_commands: list[Any] | None = None
+    ) -> dict[str, Any]:
         """Analyzes user text and returns a structured decision (action or chat).
 
         This method coordinates the entire AI processing pipeline:

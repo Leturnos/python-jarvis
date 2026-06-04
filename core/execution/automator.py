@@ -23,11 +23,11 @@ class WarpAutomator:
         self.warp_path = ""
         self.commands = []
         self.last_spoken_text = ""
-        self.last_spoken_time = 0
+        self.last_spoken_time = 0.0
         self.is_speaking = False
 
         # Dedicated TTS Thread to avoid blocking and thread-safety issues
-        self._speech_queue = queue.Queue()
+        self._speech_queue: queue.Queue[str] = queue.Queue()
         self._stop_tts = threading.Event()
         self._tts_thread = threading.Thread(target=self._tts_worker, daemon=True)
         self._tts_thread.start()
@@ -407,7 +407,7 @@ class WarpAutomator:
                 f"Multiscale match for {os.path.basename(template_path)}: best confidence {best_val:.4f} at scale {best_scale} at {best_loc}"
             )
 
-            if best_val >= confidence:
+            if best_val >= confidence and best_loc is not None:
                 w = int(template_gray.shape[1] * best_scale)
                 h = int(template_gray.shape[0] * best_scale)
 

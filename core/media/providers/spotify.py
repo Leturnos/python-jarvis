@@ -23,7 +23,7 @@ class SpotifyProvider:
         except Exception:
             return {}
 
-    def resolve(self, intent: MediaIntent) -> ResolvedMediaPlan:
+    def resolve(self, intent: MediaIntent) -> ResolvedMediaPlan | None:
         if intent.action == MediaAction.PLAY_QUERY:
             intents_dict = self._load_intents()
             query = intent.query.lower() if intent.query else ""

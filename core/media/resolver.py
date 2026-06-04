@@ -12,7 +12,7 @@ class MediaResolver:
     def __init__(self):
         self.spotify = SpotifyProvider()
 
-    def resolve_intent(self, intent: MediaIntent) -> ResolvedMediaPlan:
+    def resolve_intent(self, intent: MediaIntent) -> ResolvedMediaPlan | None:
         if intent.action == MediaAction.PLAY_QUERY:
             return self.spotify.resolve(intent)
 

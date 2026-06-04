@@ -50,7 +50,7 @@ class ExecutionStep:
             risk = RiskLevel.SAFE
 
         # Extract payload based on type with validation
-        payload = {}
+        payload: dict[str, Any] = {}
         if step_type == StepType.COMMAND:
             payload["command"] = str(data.get("command", ""))
         elif step_type == StepType.OPEN_APP:

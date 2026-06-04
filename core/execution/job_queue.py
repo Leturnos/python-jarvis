@@ -41,10 +41,10 @@ class Job:
 
 
 class JobManager:
-    def __init__(self):
-        self.history = deque(maxlen=50)
+    def __init__(self) -> None:
+        self.history: deque[Job] = deque(maxlen=50)
 
-    def add_job(self, job: Job):
+    def add_job(self, job: Job) -> None:
         self.history.append(job)
         logger.info(f"Job added to history: {job.id} ({job.type.name})")
 

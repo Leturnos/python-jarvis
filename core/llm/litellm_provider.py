@@ -46,7 +46,7 @@ class LiteLLMProvider(BaseLLMProvider):
         os.environ[key_name] = api_key if api_key else ""
 
     def generate_content(
-        self, prompt: str, system_instruction: str = None
+        self, prompt: str, system_instruction: str | None = None
     ) -> LLMResponse:
         """Generates content using LiteLLM."""
         messages = []

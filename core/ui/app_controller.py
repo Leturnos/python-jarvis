@@ -2,7 +2,7 @@ import time
 
 from PySide6.QtCore import QObject
 from PySide6.QtGui import QAction, QIcon
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
 from qfluentwidgets import Theme, setTheme
 
 from core.runtime.state import JarvisState, state_manager
@@ -45,7 +45,7 @@ class QtAppController(QObject):
         else:
             self.tray_icon.setIcon(
                 self.main_window.style().standardIcon(
-                    QSystemTrayIcon.StandardPixmap.SP_ComputerIcon
+                    QStyle.StandardPixmap.SP_ComputerIcon
                 )
             )
 

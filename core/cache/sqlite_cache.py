@@ -4,7 +4,7 @@ import os
 import re
 import sqlite3
 import time
-from typing import Any
+from typing import Any, cast
 
 from core.cache.base import LLMCacheBase
 from core.infra.logger_config import logger
@@ -70,7 +70,7 @@ class SQLiteLLMCache(LLMCacheBase):
                     if time.time() - created_at <= self.ttl_seconds:
                         self.hits += 1
                         logger.debug(f"Cache HIT for: '{instruction}'")
-                        return json.loads(response_json_str)
+                        return cast(dict[str, Any], json.loads(response_json_str))
                     else:
                         # Expired
                         cursor.execute(

@@ -8,7 +8,7 @@ class BaseLLMProvider(ABC):
 
     @abstractmethod
     def generate_content(
-        self, prompt: str, system_instruction: str = None
+        self, prompt: str, system_instruction: str | None = None
     ) -> LLMResponse:
         """Generates content based on a prompt and optional system instruction."""
         pass

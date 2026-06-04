@@ -5,7 +5,7 @@ from core.infra.logger_config import logger
 
 class KeyringManager:
     @staticmethod
-    def get_secret(service: str, username: str) -> str:
+    def get_secret(service: str, username: str) -> str | None:
         """Retrieves a secret from the OS keyring."""
         try:
             return keyring.get_password(service, username)

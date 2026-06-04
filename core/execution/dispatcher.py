@@ -131,7 +131,7 @@ class ActionDispatcher:
                 return False
 
         # 3. Execute
-        return self.execute_plan(plan)
+        return bool(self.execute_plan(plan))
 
     def _confirm_dry_run(self, plan: ExecutionPlan) -> bool:
         """Requests user confirmation for the execution plan."""
@@ -157,7 +157,7 @@ class ActionDispatcher:
 
         self.waiting_for_auth = False
         self.active_dialog = None
-        return result
+        return bool(result)
 
     @time_it
     def execute_plan(self, plan: ExecutionPlan) -> bool:
@@ -325,11 +325,11 @@ class ActionDispatcher:
         """Executes a single step based on its type."""
         try:
             if step.type == StepType.COMMAND:
-                cmd = step.payload.get("command")
+                cmd = str(step.payload.get("command", ""))
                 subprocess.run(["cmd", "/c", cmd], shell=False, check=True)
                 return True
             elif step.type == StepType.OPEN_APP:
-                target = step.payload.get("target")
+                target = str(step.payload.get("target", ""))
                 os.startfile(target)
                 return True
             elif step.type == StepType.WRITE:
@@ -337,7 +337,7 @@ class ActionDispatcher:
                 self.automator.type_text(text)
                 return True
             elif step.type == StepType.NAVIGATE:
-                target = step.payload.get("target")
+                target = str(step.payload.get("target", ""))
                 subprocess.run(
                     ["cmd", "/c", f"cd /d {target}"], shell=False, check=True
                 )
@@ -358,12 +358,14 @@ class ActionDispatcher:
             elif step.type == StepType.FOCUS_WINDOW:
                 target = step.payload.get("target", "")
                 if target == "spotify":
-                    return self.automator.activate_spotify_window()
+                    return bool(self.automator.activate_spotify_window())
                 return True
             elif step.type == StepType.SPOTIFY_CLICK_PLAY:
                 click_type = step.payload.get("click_type", "search")
                 uri = step.payload.get("uri")
-                return self.automator.spotify_click_play(click_type=click_type, uri=uri)
+                return bool(
+                    self.automator.spotify_click_play(click_type=click_type, uri=uri)
+                )
             return False
         except Exception as e:
             logger.error(f"Step execution error ({step.type.value}): {e}")

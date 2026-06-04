@@ -49,12 +49,14 @@ class SecurityDialog:
         def on_sim():
             self.result = True
             self.confirmed_event.set()
-            self.root.destroy()
+            if self.root:
+                self.root.destroy()
 
         def on_nao():
             self.result = False
             self.confirmed_event.set()
-            self.root.destroy()
+            if self.root:
+                self.root.destroy()
 
         sim_btn = tk.Button(
             btn_frame,
@@ -96,7 +98,8 @@ class SecurityDialog:
         try:
             self._setup_ui()
             logger.info(f"Showing security dialog for action: {self.action_desc}")
-            self.root.mainloop()
+            if self.root:
+                self.root.mainloop()
         except Exception as e:
             logger.error(f"Error in SecurityDialog: {e}")
             self.result = False

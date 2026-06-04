@@ -3,6 +3,7 @@ import queue
 import sqlite3
 import threading
 from datetime import datetime
+from typing import Any
 
 from core.infra.logger_config import logger
 
@@ -14,7 +15,7 @@ class HistoryManager:
         self._init_db()
 
         # Metrics background writer
-        self.metrics_queue = queue.Queue()
+        self.metrics_queue: queue.Queue[Any] = queue.Queue()
         self.worker_thread = threading.Thread(target=self._metrics_worker, daemon=True)
         self.worker_thread.start()
 
@@ -194,7 +195,9 @@ class HistoryManager:
             if conn:
                 conn.close()
 
-    def log_metric(self, metric_name: str, metric_value: float, tags: str = None):
+    def log_metric(
+        self, metric_name: str, metric_value: float, tags: str | None = None
+    ):
         """Enqueues a metric to be logged to the database asynchronously."""
         self.metrics_queue.put(
             (datetime.now().isoformat(), metric_name, metric_value, tags)

@@ -7,6 +7,12 @@ import pythoncom
 from core.ai.command_resolver import CommandResolver
 from core.ai.llm_agent import llm_agent
 from core.audio.stt_engine import stt_engine
+from core.execution.execution_plan import (
+    ExecutionPlan,
+    ExecutionStep,
+    RiskLevel,
+    StepType,
+)
 from core.execution.job_queue import Job, JobStatus, JobType, job_manager
 from core.infra.logger_config import logger
 from core.plugins.plugin_manager import plugin_manager
@@ -94,12 +100,6 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
     if action_json.get("type") == "chat":
         dispatcher.handle_dynamic(action_json)
     elif action_json.get("type") == "media":
-        from core.execution.execution_plan import (
-            ExecutionPlan,
-            ExecutionStep,
-            RiskLevel,
-            StepType,
-        )
         from core.media.models import (
             AutoplayStrategy,
             MediaAction,
@@ -127,6 +127,10 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
 
         resolver_obj = MediaResolver()
         resolved_plan = resolver_obj.resolve_intent(m_intent)
+        if not resolved_plan:
+            logger.warning("Failed to resolve media plan.")
+            dispatcher.automator.speak("Desculpe, não consegui preparar a mídia.")
+            return True
 
         plan = ExecutionPlan(
             intent=action_json.get("action", "media"),
@@ -199,13 +203,13 @@ def _handle_wakeword(job: Job, dispatcher, notifier) -> bool:
 
 def _handle_replay(job: Job, dispatcher, notifier) -> bool:
     """Handles replay of the last successful command."""
-    return dispatcher.replay_last_command()
+    return bool(dispatcher.replay_last_command())
 
 
 def _handle_create_macro(job: Job, dispatcher, notifier) -> bool:
     """Initiates intelligent macro creation from history."""
     n = job.payload.get("n", 3) if isinstance(job.payload, dict) else 3
-    return dispatcher.initiate_macro_creation(n=n)
+    return bool(dispatcher.initiate_macro_creation(n=n))
 
 
 HANDLERS = {

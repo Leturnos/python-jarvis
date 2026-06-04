@@ -2,6 +2,7 @@ import queue
 import threading
 import tkinter as tk
 from tkinter import ttk
+from typing import Any
 
 import keyboard
 import win32api
@@ -13,16 +14,16 @@ from core.plugins.plugin_manager import plugin_manager
 
 
 class CommandPalette:
-    def __init__(self, dispatcher):
+    def __init__(self, dispatcher) -> None:
         self.dispatcher = dispatcher
-        self.root = None
-        self.search_var = None
-        self.listbox = None
-        self.all_commands = []
-        self.filtered_commands = []
+        self.root: tk.Tk | None = None
+        self.search_var: tk.StringVar | None = None
+        self.listbox: tk.Listbox | None = None
+        self.all_commands: list[dict[str, Any]] = []
+        self.filtered_commands: list[dict[str, Any]] = []
 
         # We use a queue to safely communicate from the keyboard hook thread to the Tkinter thread
-        self.cmd_queue = queue.Queue()
+        self.cmd_queue: queue.Queue[str] = queue.Queue()
         self._is_visible = False
 
     def _fetch_commands(self):
@@ -113,6 +114,8 @@ class CommandPalette:
         self._is_visible = True
 
     def _on_search_change(self, *args):
+        if not self.search_var:
+            return
         query = self.search_var.get().lower()
         if not query:
             self.filtered_commands = self.all_commands.copy()
@@ -123,6 +126,8 @@ class CommandPalette:
         self._update_listbox()
 
     def _update_listbox(self):
+        if not self.listbox:
+            return
         self.listbox.delete(0, tk.END)
         for cmd in self.filtered_commands:
             self.listbox.insert(tk.END, cmd["label"])
@@ -130,7 +135,7 @@ class CommandPalette:
             self.listbox.selection_set(0)
 
     def _move_selection(self, direction):
-        if not self.filtered_commands:
+        if not self.filtered_commands or not self.listbox:
             return
 
         current_selection = self.listbox.curselection()
@@ -150,6 +155,8 @@ class CommandPalette:
         self.listbox.see(new_index)
 
     def _execute_selected(self):
+        if not self.listbox:
+            return
         selection = self.listbox.curselection()
         if not selection:
             return
