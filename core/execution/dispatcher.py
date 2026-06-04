@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import time
+from typing import Any
 
 import pyautogui
 
@@ -48,7 +49,9 @@ class ActionDispatcher:
         last_plan (Optional[ExecutionPlan]): The most recently executed or proposed plan.
     """
 
-    def __init__(self, config, automator, audio_stream=None):
+    def __init__(
+        self, config: dict[str, Any], automator: Any, audio_stream: Any = None
+    ) -> None:
         """Initializes the ActionDispatcher with its dependencies.
 
         Args:
@@ -298,7 +301,7 @@ class ActionDispatcher:
 
         return False
 
-    def _handle_explain_last_action(self):
+    def _handle_explain_last_action(self) -> None:
         """Fetches the last successful action and asks LLM to explain it."""
         last_json = history_manager.get_last_successful_json()
         if not last_json:
@@ -371,7 +374,7 @@ class ActionDispatcher:
             logger.error(f"Step execution error ({step.type.value}): {e}")
             return False
 
-    def _check_authorization(self, action_config):
+    def _check_authorization(self, action_config: dict[str, Any]) -> bool:
         risk_level = action_config.get("risk_level", "safe")
         intent = action_config.get("intent", action_config.get("action", "unknown"))
 
@@ -423,11 +426,11 @@ class ActionDispatcher:
                     confidence=self.last_confidence,
                     error_msg="User Refused",
                 )
-            return result
+            return bool(result)
 
         return True
 
-    def handle(self, wakeword_name, confidence=1.0):
+    def handle(self, wakeword_name: str, confidence: float = 1.0) -> None:
         logger.info(f"Dispatching action for: {wakeword_name}")
         self.last_confidence = confidence
         wakewords = self.config.get("wakewords", {})
@@ -454,7 +457,7 @@ class ActionDispatcher:
             logger.error(f"Unknown action: {action_type}")
             self.automator.speak("Tipo de ação desconhecida.")
 
-    def handle_dynamic(self, action_config):
+    def handle_dynamic(self, action_config: dict[str, Any]) -> None:
         """Legacy handler for non-ExecutionPlan actions. Chat responses are NOT logged as executable actions."""
         logger.info(f"Dispatching dynamic action: {action_config}")
 
@@ -483,7 +486,7 @@ class ActionDispatcher:
         elif action_type == "plugin":
             self._handle_plugin(action_config)
 
-    def _handle_warp(self, action_config):
+    def _handle_warp(self, action_config: dict[str, Any]) -> None:
         default_warp_path = (
             self.config.get("integrations", {})
             .get("warp", {})
@@ -547,7 +550,7 @@ class ActionDispatcher:
         )
         self.execute_plan(plan)
 
-    def _handle_system(self, action_config):
+    def _handle_system(self, action_config: dict[str, Any]) -> None:
         commands = action_config.get("commands", [])
         risk_level_str = action_config.get("risk_level", "safe")
         try:
@@ -573,8 +576,10 @@ class ActionDispatcher:
         )
         self.execute_plan(plan)
 
-    def _handle_plugin(self, action_config):
+    def _handle_plugin(self, action_config: dict[str, Any]) -> None:
         intent_name = action_config.get("intent")
+        if not isinstance(intent_name, str):
+            return
         actions = plugin_manager.get_actions_for_intent(intent_name)
         if not actions:
             return

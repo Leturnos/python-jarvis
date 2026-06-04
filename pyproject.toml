@@ -79,7 +79,8 @@ module = [
     "core.infra.*",
     "core.persistence.*",
     "core.plugins.*",
-    "core.ai.*"
+    "core.ai.*",
+    "core.execution.*"
 ]
 disallow_untyped_defs = true
 

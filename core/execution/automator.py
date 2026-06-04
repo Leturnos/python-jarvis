@@ -2,6 +2,7 @@ import queue
 import subprocess
 import threading
 import time
+from typing import Any
 
 import psutil
 import pyautogui
@@ -18,10 +19,10 @@ from core.shared.utils import time_it
 
 
 class WarpAutomator:
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.warp_path = ""
-        self.commands = []
+        self.commands: list[str] = []
         self.last_spoken_text = ""
         self.last_spoken_time = 0.0
         self.is_speaking = False
@@ -32,7 +33,7 @@ class WarpAutomator:
         self._tts_thread = threading.Thread(target=self._tts_worker, daemon=True)
         self._tts_thread.start()
 
-    def _tts_worker(self):
+    def _tts_worker(self) -> None:
         """Dedicated worker for TTS processing using native Windows SAPI5."""
         try:
             # Initialize COM in this thread
@@ -108,7 +109,7 @@ class WarpAutomator:
             pythoncom.CoUninitialize()
             logger.info("TTS Worker thread finishing.")
 
-    def speak(self, text):
+    def speak(self, text: str) -> None:
         """Adds text to the speech queue with deduplication."""
         now = time.time()
         if text == self.last_spoken_text and (now - self.last_spoken_time) < 2.0:
@@ -118,7 +119,7 @@ class WarpAutomator:
         self.last_spoken_text = text
         self._speech_queue.put(text)
 
-    def is_open(self):
+    def is_open(self) -> bool:
         """Checks if the Warp process is running."""
         try:
             for p in psutil.process_iter(["name"]):
@@ -128,7 +129,7 @@ class WarpAutomator:
             pass
         return False
 
-    def find_window(self):
+    def find_window(self) -> Any:
         """Finds the Warp terminal window using PID or title matching."""
         try:
             # 1. Get all PIDs for processes named "warp"
@@ -161,7 +162,7 @@ class WarpAutomator:
 
         return None
 
-    def activate_window(self, win):
+    def activate_window(self, win: Any) -> bool:
         """Brings the terminal window to the foreground and clicks it."""
         try:
             hwnd = win._hWnd
@@ -194,7 +195,7 @@ class WarpAutomator:
             logger.error(f"Error activating window: {e}")
             return False
 
-    def type_text(self, text):
+    def type_text(self, text: str) -> None:
         """Types text using the clipboard to handle special characters."""
         try:
             pyperclip.copy(text)
@@ -204,7 +205,7 @@ class WarpAutomator:
             logger.error(f"Error typing text: {e}")
 
     @time_it
-    def run_workflow(self):
+    def run_workflow(self) -> None:
         """Executes the full automation workflow with window validation."""
         logger.info("Starting automation workflow...")
 
@@ -288,7 +289,7 @@ class WarpAutomator:
             logger.warning("Could not activate Warp window.")
             self.speak("Não consegui focar na janela do Warp.")
 
-    def find_spotify_window(self):
+    def find_spotify_window(self) -> Any:
         """Finds the Spotify window using process name search."""
         try:
             spotify_pids = set()
@@ -312,7 +313,7 @@ class WarpAutomator:
             logger.error(f"Error searching for Spotify window: {e}")
         return None
 
-    def activate_spotify_window(self):
+    def activate_spotify_window(self) -> bool:
         """Brings the Spotify window to the foreground without clicking."""
         win = self.find_spotify_window()
         if not win:
@@ -343,7 +344,7 @@ class WarpAutomator:
             logger.error(f"Error activating Spotify window: {e}")
             return False
 
-    def is_spotify_playing(self):
+    def is_spotify_playing(self) -> bool:
         """Checks if Spotify is currently playing a song based on the window title."""
         win = self.find_spotify_window()
         if not win or not win.title:
@@ -352,7 +353,12 @@ class WarpAutomator:
         non_playing = {"spotify", "spotify premium", "spotify free"}
         return title not in non_playing
 
-    def locate_template_multiscale(self, template_path, region=None, confidence=0.7):
+    def locate_template_multiscale(
+        self,
+        template_path: str,
+        region: tuple[int, int, int, int] | None = None,
+        confidence: float = 0.7,
+    ) -> Any:
         """
         Locates a template image on the screen using multi-scale OpenCV matching.
         Tolerates screen resolution and DPI scaling differences.
@@ -428,7 +434,9 @@ class WarpAutomator:
 
         return None
 
-    def spotify_click_play(self, click_type="search", uri=None):
+    def spotify_click_play(
+        self, click_type: str = "search", uri: str | None = None
+    ) -> bool:
         """
         Main autoplay logic:
         - For 'playlist': tries to locate the green play button (spotify_play_button.png) on the screen.

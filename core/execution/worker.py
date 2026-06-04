@@ -1,5 +1,7 @@
 import queue
+import threading
 import time
+from typing import Any
 
 import numpy as np
 import pythoncom
@@ -23,7 +25,7 @@ from core.shared.errors import BusinessError, TechnicalError
 resolver = CommandResolver()
 
 
-def _handle_llm(job: Job, dispatcher, notifier) -> bool:
+def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
     """
     Handles LLM-based dynamic commands with one-shot STT and CommandResolver.
     """
@@ -185,7 +187,7 @@ def _handle_llm(job: Job, dispatcher, notifier) -> bool:
     return True
 
 
-def _handle_wakeword(job: Job, dispatcher, notifier) -> bool:
+def _handle_wakeword(job: Job, dispatcher: Any, notifier: Any) -> bool:
     """Handles wakeword detection events."""
     if isinstance(job.payload, (list, tuple)) and len(job.payload) == 2:
         wakeword_name, score = job.payload
@@ -201,12 +203,12 @@ def _handle_wakeword(job: Job, dispatcher, notifier) -> bool:
     return True
 
 
-def _handle_replay(job: Job, dispatcher, notifier) -> bool:
+def _handle_replay(job: Job, dispatcher: Any, notifier: Any) -> bool:
     """Handles replay of the last successful command."""
     return bool(dispatcher.replay_last_command())
 
 
-def _handle_create_macro(job: Job, dispatcher, notifier) -> bool:
+def _handle_create_macro(job: Job, dispatcher: Any, notifier: Any) -> bool:
     """Initiates intelligent macro creation from history."""
     n = job.payload.get("n", 3) if isinstance(job.payload, dict) else 3
     return bool(dispatcher.initiate_macro_creation(n=n))
@@ -220,7 +222,13 @@ HANDLERS = {
 }
 
 
-def command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy):
+def command_worker(
+    task_queue: queue.Queue[Any],
+    dispatcher: Any,
+    notifier: Any,
+    stop_event: threading.Event,
+    worker_busy: threading.Event,
+) -> None:
     """Worker thread that executes commands with separated Business/Technical errors."""
     pythoncom.CoInitialize()
     logger.info("Command worker thread initialized.")
