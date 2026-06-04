@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 
+import qdarktheme
 import win32con
 import win32gui
 from PySide6.QtWidgets import QApplication
@@ -31,8 +32,6 @@ from core.ui.notifications import JarvisNotifier
 
 
 def qt_exception_hook(exctype, value, tb):
-    from core.infra.logger_config import logger
-
     logger.error("Uncaught Qt Exception:", exc_info=(exctype, value, tb))
     sys.__excepthook__(exctype, value, tb)
 
@@ -44,21 +43,23 @@ def main():
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
 
-    # Transparent migration of the API key from .env to Keyring on startup
-    api_key = KeyringManager.get_secret("python-jarvis", "GEMINI_API_KEY")
-    env_key = os.getenv("GEMINI_API_KEY")
+    # Transparent migration of the active LLM provider API key to Keyring on startup
+    llm_config = config.get("llm", {})
+    active_provider = llm_config.get("active_provider", "gemini")
+    key_name = f"{active_provider.upper()}_API_KEY"
+
+    api_key = KeyringManager.get_secret("python-jarvis", key_name)
+    env_key = os.getenv(key_name)
 
     if env_key and (not api_key or env_key != api_key):
-        logger.info("Migrating GEMINI_API_KEY from .env to secure Keyring.")
-        KeyringManager.set_secret("python-jarvis", "GEMINI_API_KEY", env_key)
-        logger.info(
-            "Security tip: You can now remove GEMINI_API_KEY from your .env file."
-        )
+        logger.info(f"Migrating {key_name} from .env to secure Keyring.")
+        KeyringManager.set_secret("python-jarvis", key_name, env_key)
+        logger.info(f"Security tip: You can now remove {key_name} from your .env file.")
     elif not api_key and not env_key:
-        logger.error("ERROR: GEMINI_API_KEY not found in Keyring or .env!")
-        print("\n[!] Error: API Key not configured.")
+        logger.error(f"ERROR: {key_name} not found in Keyring or .env!")
+        print(f"\n[!] Error: API Key for '{active_provider}' not configured.")
         print(
-            "[!] Please set GEMINI_API_KEY in your .env file to start the automatic migration."
+            f"[!] Please set {key_name} in your .env file to start the automatic migration."
         )
         time.sleep(5)
         sys.exit(1)
@@ -103,8 +104,6 @@ def main():
     app.setQuitOnLastWindowClosed(False)
 
     # Initialize dark theme as early as possible to avoid flash of white or bugged colors
-    import qdarktheme
-
     qdarktheme.setup_theme()
 
     app_controller = QtAppController(app, ui_adapter, tray_adapter)
