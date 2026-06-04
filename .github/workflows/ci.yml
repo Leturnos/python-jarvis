@@ -36,5 +36,6 @@ jobs:
       - name: Run MyPy
         run: uv run mypy
 
-      - name: Run Test Suite (Unit & Integration)
-        run: uv run pytest
+      - name: Run Test Suite + Coverage
+        run: uv run pytest --cov=core --cov-report=term-missing --cov-report=xml --cov-fail-under=50
+        
