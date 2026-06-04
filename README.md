@@ -7,7 +7,7 @@ Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", p
 ## ✨ O que ele faz?
 
 - **Ativação Inteligente (Novo! 🎙️):** Você escolhe como o Jarvis deve te ouvir. Ele pode ficar sempre atento à frase "Hey Jarvis", funcionar apenas quando você aperta uma tecla (Push-to-Talk), ou ambos!
-- **Controle de Mídia Inteligente (Spotify 🎵 - Novo!):** Diga ao Jarvis para tocar um artista, música ou playlist. Ele trará o Spotify para o primeiro plano e usará inteligência visual (OpenCV) para localizar e clicar nos botões corretos na tela, iniciando a música instantaneamente. Veja o [Guia de Configuração de Mídia](file:///c:/Programacao/python-jarvis/data/media/README.md) para aprender a cadastrar suas playlists favoritas.
+- **Controle de Mídia Inteligente (Spotify 🎵 - Novo!):** Diga ao Jarvis para tocar um artista, música ou playlist. Ele trará o Spotify para o primeiro plano e usará inteligência visual (OpenCV) para localizar e clicar nos botões corretos na tela, iniciando a música instantaneamente. Veja o [Guia de Configuração de Mídia](./data/media/README.md) para aprender a cadastrar suas playlists favoritas.
 - **Modo Gamer e Reunião (Auto-Suspend):** O Jarvis é educado. Se ele perceber que você está jogando ou em uma apresentação (tela cheia), ele entra em suspensão automaticamente para não te interromper.
 - **Entende seu jeito de falar (IA):** Não precisa decorar comandos rígidos. Após ativar o assistente, fale de forma natural e ele usará IA (Google Gemini) para entender sua intenção.
 - **Paleta de Comandos (⌨️):** Falar alto nem sempre é o ideal. Aperte `Ctrl + Alt + P` a qualquer momento para abrir uma barra de pesquisa rápida na tela e execute suas automações silenciosamente.
@@ -49,7 +49,7 @@ Nós separamos as coisas para facilitar sua vida. Existem três arquivos princip
 
 1. **Arquivo `.env` (Suas Chaves e Caminhos Locais):**
    Faça uma cópia do arquivo `.env.example` e renomeie para `.env`.
-   Aqui você coloca sua chave de IA (`GEMINI_API_KEY`) e onde estão instalados seus programas.
+   Coloque aqui a chave de API da IA do provedor ativo escolhido (ex: `GEMINI_API_KEY`, `OPENAI_API_KEY` ou `ANTHROPIC_API_KEY`) e os caminhos dos seus programas locais.
 
 2. **Arquivo `config.yaml` (Ajustes de Motor):**
    Aqui você mexe na "mecânica" do Jarvis.
@@ -58,7 +58,7 @@ Nós separamos as coisas para facilitar sua vida. Existem três arquivos princip
      - `push_to_talk`: Configure a tecla (ex: `ctrl+alt`) e se quer segurar para falar (`hold`) ou apenas um toque (`toggle`).
      - `auto_suspend`: Ative o `fullscreen: true` para o Jarvis silenciar automaticamente em jogos ou vídeos em tela cheia.
    - **Cérebro do Jarvis (`llm`):** Você pode escolher qual IA o Jarvis usa! No campo `active_provider`, você pode colocar `gemini`, `openai` ou `anthropic`. 
-     - *Dica:* Lembre-se de colocar a chave correspondente (`OPENAI_API_KEY`, etc) no seu `.env`.
+     - *Segurança e Migração Automatizada:* Coloque a chave correspondente ao provedor configurado no seu `.env` ao iniciar o Jarvis pela primeira vez. Ele detectará a chave do provedor ativo, fará a migração automática para o Keyring seguro do Windows (Gerenciador de Credenciais) e você poderá remover a chave do arquivo `.env` por segurança.
    - **Voz do Jarvis (`tts`):** Quer que o Jarvis tenha uma voz diferente? No campo `voice_keyword`, coloque parte do nome da voz que você tem instalada no Windows (ex: "maria", "zira", "david"). Se ele não encontrar a que você pediu, ele tentará usar uma voz em Português automaticamente.
 
 3. **A pasta `plugins/` (Ensinando novas habilidades):**
