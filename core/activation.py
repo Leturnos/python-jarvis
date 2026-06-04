@@ -155,11 +155,43 @@ class ActivationManager:
     def is_hotkey_pressed(self) -> bool:
         """Checks if the configured PTT hotkey is currently pressed."""
         try:
-            # Native keyboard combination check is more robust for modifiers
-            return keyboard.is_pressed(self.ptt_key)
+            # Map standard modifier keys to Windows Virtual Key Codes (VK)
+            vk_map = {
+                "ctrl": win32con.VK_CONTROL,
+                "control": win32con.VK_CONTROL,
+                "alt": win32con.VK_MENU,
+                "menu": win32con.VK_MENU,
+                "shift": win32con.VK_SHIFT,
+                "win": win32con.VK_LWIN,
+                "windows": win32con.VK_LWIN,
+            }
+
+            parts = [p.strip().lower() for p in self.ptt_key.split("+")]
+            all_pressed = True
+            for part in parts:
+                vk = vk_map.get(part)
+                if vk is not None:
+                    # Async state: if MSB (highest bit) is set, key is physically down
+                    if not (win32api.GetAsyncKeyState(vk) & 0x8000):
+                        all_pressed = False
+                        break
+                else:
+                    if len(part) == 1:
+                        vk_char = ord(part.upper())
+                        if not (win32api.GetAsyncKeyState(vk_char) & 0x8000):
+                            all_pressed = False
+                            break
+                    else:
+                        # Fallback for complex key names through standard keyboard check
+                        if not keyboard.is_pressed(part):
+                            all_pressed = False
+                            break
+            return all_pressed
         except Exception as e:
-            # Common in non-admin or restricted environments
             logger.warning(
-                f"Keyboard hotkey check failed: {e}. Disabling PTT for this tick."
+                f"Physical PTT hotkey check failed: {e}. Falling back to logical check."
             )
-            return False
+            try:
+                return keyboard.is_pressed(self.ptt_key)
+            except Exception:
+                return False

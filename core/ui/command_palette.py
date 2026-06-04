@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import keyboard
+import win32api
 import win32con
 import win32gui
 
@@ -177,6 +178,20 @@ class CommandPalette:
 
     def show(self):
         """Called from the hotkey thread to signal the UI thread to show."""
+        # Double check modifier keys are physically pressed to prevent stuck-key bugs
+        try:
+            ctrl_pressed = (
+                win32api.GetAsyncKeyState(win32con.VK_CONTROL) & 0x8000
+            ) != 0
+            alt_pressed = (win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000) != 0
+            if not (ctrl_pressed and alt_pressed):
+                logger.debug(
+                    "Suppressing Command Palette trigger: ctrl or alt keys are not physically pressed."
+                )
+                return
+        except Exception as e:
+            logger.warning(f"Failed physical key validation for Command Palette: {e}")
+
         self.cmd_queue.put("show")
 
     def hide(self):
