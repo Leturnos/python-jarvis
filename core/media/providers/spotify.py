@@ -1,4 +1,5 @@
 import json
+from typing import Any, cast
 
 from core.execution.execution_plan import ExecutionStep, StepType
 from core.media.models import (
@@ -12,14 +13,14 @@ from core.media.nlp import NLPProcessor
 
 
 class SpotifyProvider:
-    def __init__(self, playlists_path="data/media/playlists.json"):
+    def __init__(self, playlists_path: str = "data/media/playlists.json") -> None:
         self.playlists_path = playlists_path
         self.nlp = NLPProcessor(playlists_path)
 
-    def _load_intents(self):
+    def _load_intents(self) -> dict[str, Any]:
         try:
             with open(self.playlists_path, encoding="utf-8") as f:
-                return json.load(f).get("intents", {})
+                return cast(dict[str, Any], json.load(f).get("intents", {}))
         except Exception:
             return {}
 

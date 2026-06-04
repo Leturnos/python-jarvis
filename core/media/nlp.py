@@ -21,11 +21,11 @@ class NLPProcessor:
         "e",
     }
 
-    def __init__(self, dict_path: str):
+    def __init__(self, dict_path: str) -> None:
         self.keywords: dict[str, list[str]] = {}
         self._load_dict(dict_path)
 
-    def _load_dict(self, path: str):
+    def _load_dict(self, path: str) -> None:
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)

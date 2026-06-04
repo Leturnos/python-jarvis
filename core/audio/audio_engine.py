@@ -1,6 +1,7 @@
 import glob
 import os
 import time
+from typing import Any
 
 import numpy as np
 import openwakeword
@@ -10,7 +11,7 @@ from openwakeword.model import Model
 from core.infra.logger_config import logger
 
 
-def get_audio_stream():
+def get_audio_stream() -> tuple[pyaudio.PyAudio, pyaudio.Stream]:
     """Initializes and returns the PyAudio stream."""
     pa = pyaudio.PyAudio()
     stream = pa.open(
@@ -23,7 +24,7 @@ def get_audio_stream():
     return pa, stream
 
 
-def load_wakeword_model():
+def load_wakeword_model() -> tuple[Model | None, list[str]]:
     """Loads openWakeWord models (defaults and custom from models/ folder)."""
     # Pre-trained paths
     pretrained_paths = openwakeword.get_pretrained_model_paths()
@@ -58,7 +59,9 @@ def load_wakeword_model():
     return Model(wakeword_model_paths=selected_paths), loaded_names
 
 
-def safe_reset_audio(pa, stream):
+def safe_reset_audio(
+    pa: pyaudio.PyAudio | None, stream: pyaudio.Stream | None
+) -> tuple[pyaudio.PyAudio, pyaudio.Stream]:
     """Deep cleanup and re-initialization of the PyAudio engine."""
     logger.info("Performing hard reset of the audio engine...")
     try:
@@ -75,13 +78,13 @@ def safe_reset_audio(pa, stream):
 
 
 def record_command_audio(
-    stream,
-    max_seconds=10,
-    silence_duration=1.5,
-    silence_threshold=15.0,
-    stop_event=None,
-    volume_multiplier=1.0,
-):
+    stream: pyaudio.Stream,
+    max_seconds: int = 10,
+    silence_duration: float = 1.5,
+    silence_threshold: float = 15.0,
+    stop_event: Any = None,
+    volume_multiplier: float = 1.0,
+) -> bytes:
     """Utility to record audio synchronously. Used by background threads (e.g. Security Dialog)."""
     logger.info("Recording command...")
     frames = []

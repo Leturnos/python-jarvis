@@ -1,5 +1,8 @@
 import logging
+import queue
+import threading
 import time
+from typing import Any
 
 import numpy as np
 
@@ -37,18 +40,18 @@ class JarvisController:
 
     def __init__(
         self,
-        config,
-        automator,
-        dispatcher,
-        model,
-        loaded_names,
-        ui,
-        tray,
-        task_queue,
-        stop_event,
-        pa,
-        stream,
-    ):
+        config: dict[str, Any],
+        automator: Any,
+        dispatcher: Any,
+        model: Any,
+        loaded_names: list[str],
+        ui: Any,
+        tray: Any,
+        task_queue: queue.Queue[Any],
+        stop_event: threading.Event,
+        pa: Any,
+        stream: Any,
+    ) -> None:
         """Initializes the controller with injected dependencies.
 
         Args:
@@ -75,10 +78,10 @@ class JarvisController:
         self.ignore_audio_until = 0.0
         self.cooldown = 0
         self.consecutive_zero_rms = 0
-        self.command_frames = []
-        self.confirmation_frames = []
-        self.silence_start = None
-        self.command_start_time = None
+        self.command_frames: list[bytes] = []
+        self.confirmation_frames: list[bytes] = []
+        self.silence_start: float | None = None
+        self.command_start_time: float | None = None
 
         # Constants from config or defaults
         self.volume_multiplier = config.get("jarvis", {}).get("volume_multiplier", 1.0)
@@ -86,7 +89,7 @@ class JarvisController:
         self.cooldown_seconds = config.get("jarvis", {}).get("cooldown_seconds", 5)
         self.MAX_ZERO_RMS_BEFORE_RESET = 30
 
-    def start(self):
+    def start(self) -> None:
         """Starts the main orchestration loop.
 
         This method enters an infinite loop (until stop_event is set) that
@@ -200,7 +203,12 @@ class JarvisController:
         finally:
             self._cleanup()
 
-    def _on_state_change(self, old_state, new_state, context):
+    def _on_state_change(
+        self,
+        old_state: JarvisState,
+        new_state: JarvisState,
+        context: dict[str, Any] | None,
+    ) -> None:
         # 1. Resource Management (Memory Optimization)
         if new_state == JarvisState.MUTED:
             # Unload heavy models when entering muted state
@@ -225,7 +233,7 @@ class JarvisController:
             except Exception as e:
                 logger.error(f"Error during post-execution reset: {e}")
 
-    def _read_audio(self):
+    def _read_audio(self) -> tuple[np.ndarray | None, float]:
         try:
             audio_data = self.stream.read(1280, exception_on_overflow=False)
             pcm = np.frombuffer(audio_data, dtype=np.int16)
@@ -245,7 +253,7 @@ class JarvisController:
                 time.sleep(1)
             return None, 0
 
-    def _check_dead_silence(self, rms):
+    def _check_dead_silence(self, rms: float) -> bool:
         if rms < 0.1:
             self.consecutive_zero_rms += 1
         else:
@@ -261,7 +269,7 @@ class JarvisController:
             return True
         return False
 
-    def _handle_confirmation(self, pcm, now):
+    def _handle_confirmation(self, pcm: np.ndarray, now: float) -> None:
         self.ui.update(status="Aguardando Confirmação...")
         self.confirmation_frames.append(pcm.tobytes())
 
@@ -290,7 +298,7 @@ class JarvisController:
             except Exception as e:
                 logger.error(f"STT Error during confirmation: {e}")
 
-    def _handle_busy_state(self, current_state):
+    def _handle_busy_state(self, current_state: JarvisState) -> None:
         status_map = {
             JarvisState.THINKING: "Processando...",
             JarvisState.EXECUTING: "Executando...",
@@ -298,7 +306,7 @@ class JarvisController:
         }
         self.ui.update(status=status_map.get(current_state, "Ocupado"))
 
-    def _handle_listening(self, pcm, rms, now):
+    def _handle_listening(self, pcm: np.ndarray, rms: float, now: float) -> None:
         self.ui.update(status="Gravando...")
         self.command_frames.append(pcm.tobytes())
 
@@ -311,28 +319,30 @@ class JarvisController:
         else:
             self.silence_start = None
 
-        if now - self.command_start_time > 10.0:
+        if self.command_start_time is not None and now - self.command_start_time > 10.0:
             logger.warning("Listening timeout reached.")
             stop_recording = True
 
         if stop_recording:
             self._stop_listening_and_process(now)
 
-    def _stop_listening_and_process(self, now):
+    def _stop_listening_and_process(self, now: float) -> None:
         audio_bytes = b"".join(self.command_frames)
         state_manager.set_state(JarvisState.THINKING)
         self.task_queue.put(Job(type=JobType.LLM_DYNAMIC, payload=audio_bytes))
         self.command_frames = []
         self.silence_start = None
 
-    def _handle_suspended(self, context: ActivationContext):
+    def _handle_suspended(self, context: ActivationContext) -> None:
         self.ui.update(status="SUSPENDED (Fullscreen)")
         action_obj = self.activation_manager.evaluate(context)
         if action_obj.action_type == ActivationActionType.RESUME:
             logger.info("Fullscreen app closed/minimized. Resuming to IDLE.")
             state_manager.set_state(JarvisState.IDLE)
 
-    def _handle_idle(self, pcm, rms, context: ActivationContext):
+    def _handle_idle(
+        self, pcm: np.ndarray, rms: float, context: ActivationContext
+    ) -> None:
         self.ui.update(
             status="Listening" if context.timestamp > self.cooldown else "Cooldown"
         )
@@ -410,7 +420,7 @@ class JarvisController:
 
             self.cooldown = context.timestamp + self.cooldown_seconds
 
-    def _cleanup(self):
+    def _cleanup(self) -> None:
         logger.info("Cleaning up controller...")
         try:
             self.stream.stop_stream()

@@ -125,7 +125,7 @@ class ActivationManager:
 
         return ActivationAction(ActivationActionType.NONE, "NONE")
 
-    def _update_metric(self, name: str):
+    def _update_metric(self, name: str) -> None:
         self.metrics[name] += 1
         logger.info(f"Metric Update: {name}={self.metrics[name]}")
 

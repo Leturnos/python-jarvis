@@ -12,7 +12,7 @@ class OSMediaController:
     }
 
     @staticmethod
-    def send_command(action: MediaAction):
+    def send_command(action: MediaAction) -> bool:
         key = OSMediaController.MAP.get(action)
         if key:
             pyautogui.press(key)

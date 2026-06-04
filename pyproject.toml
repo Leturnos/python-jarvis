@@ -60,6 +60,7 @@ python_version = "3.13"
 
 # Configuração Gradual Inicial
 check_untyped_defs = true
+disallow_untyped_defs = true
 warn_return_any = true
 warn_unused_configs = true
 warn_redundant_casts = true
@@ -74,21 +75,6 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = "core.ui.legacy.*"
 ignore_errors = true
-
-# Exigir assinaturas tipadas apenas nas pastas saneadas gradualmente
-[[tool.mypy.overrides]]
-module = [
-    "core.runtime.*",
-    "core.shared.*",
-    "core.cache.*",
-    "core.infra.*",
-    "core.persistence.*",
-    "core.plugins.*",
-    "core.ai.*",
-    "core.execution.*",
-    "core.ui.*"
-]
-disallow_untyped_defs = true
 
 # Ignorar missing imports apenas de libs específicas de terceiros sem stubs
 [[tool.mypy.overrides]]

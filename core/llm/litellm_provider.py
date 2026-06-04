@@ -14,7 +14,7 @@ from core.llm.models import (
 class LiteLLMProvider(BaseLLMProvider):
     """LLM provider implementation using LiteLLM."""
 
-    def __init__(self, provider: str, model: str):
+    def __init__(self, provider: str, model: str) -> None:
         self.provider = provider
         self.model = model
         # LiteLLM model format is often 'provider/model' (e.g., 'gemini/gemini-pro')
@@ -22,7 +22,7 @@ class LiteLLMProvider(BaseLLMProvider):
         self.full_model_name = f"{provider}/{model}" if "/" not in model else model
         self._setup_auth()
 
-    def _setup_auth(self):
+    def _setup_auth(self) -> None:
         """Sets up authentication for LiteLLM."""
         key_name = f"{self.provider.upper()}_API_KEY"
         api_key = KeyringManager.get_secret("python-jarvis", key_name)

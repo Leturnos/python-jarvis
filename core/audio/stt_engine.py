@@ -8,16 +8,16 @@ from core.shared.errors import TechnicalError
 
 
 class STTEngine:
-    def __init__(self, model_size="tiny"):
+    def __init__(self, model_size: str = "tiny") -> None:
         self.model_size = model_size
-        self.model = None
+        self.model: WhisperModel | None = None
         # Lazy loading: we don't load in __init__ anymore,
         # or we could load once then allow unload.
         # For now, let's load it immediately to preserve startup behavior,
         # but through the new load() method.
         self.load()
 
-    def load(self):
+    def load(self) -> None:
         """Loads the Whisper model into memory if not already loaded."""
         if self.model is None:
             logger.info(f"Loading Faster Whisper model ({self.model_size}) on CPU...")
@@ -29,7 +29,7 @@ class STTEngine:
             except Exception as e:
                 logger.error(f"Failed to load STT model: {e}")
 
-    def unload(self):
+    def unload(self) -> None:
         """Unloads the model and clears memory references."""
         if self.model is not None:
             logger.info(
@@ -41,7 +41,7 @@ class STTEngine:
             # Explicitly call garbage collector to free memory
             gc.collect()
 
-    def transcribe(self, audio_bytes, sample_rate=16000):
+    def transcribe(self, audio_bytes: bytes, sample_rate: int = 16000) -> str:
         try:
             # Ensure model is loaded (safety fallback)
             if self.model is None:

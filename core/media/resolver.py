@@ -9,7 +9,7 @@ from core.media.providers.spotify import SpotifyProvider
 
 
 class MediaResolver:
-    def __init__(self):
+    def __init__(self) -> None:
         self.spotify = SpotifyProvider()
 
     def resolve_intent(self, intent: MediaIntent) -> ResolvedMediaPlan | None:
