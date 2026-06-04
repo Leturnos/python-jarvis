@@ -57,7 +57,7 @@ class ActivationManager:
         self.ptt_behavior = self.ptt_config.get("behavior", "hold")
 
         # State tracking for hysteresis and transitions
-        self.last_state_change_time = 0
+        self.last_state_change_time = 0.0
         self.is_ptt_active = False
 
         # Metrics
@@ -147,7 +147,7 @@ class ActivationManager:
             screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
             screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
 
-            return width >= screen_width and height >= screen_height
+            return bool(width >= screen_width and height >= screen_height)
         except Exception as e:
             logger.error(f"Error detecting fullscreen window: {e}")
             return False
@@ -192,6 +192,6 @@ class ActivationManager:
                 f"Physical PTT hotkey check failed: {e}. Falling back to logical check."
             )
             try:
-                return keyboard.is_pressed(self.ptt_key)
+                return bool(keyboard.is_pressed(self.ptt_key))
             except Exception:
                 return False

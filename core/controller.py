@@ -72,7 +72,7 @@ class JarvisController:
         self.activation_manager = ActivationManager(config)
 
         # State Variables
-        self.ignore_audio_until = 0
+        self.ignore_audio_until = 0.0
         self.cooldown = 0
         self.consecutive_zero_rms = 0
         self.command_frames = []
