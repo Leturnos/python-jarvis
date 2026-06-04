@@ -70,6 +70,17 @@ warn_unused_ignores = true
 module = "tests.*"
 ignore_errors = true
 
+# Exigir assinaturas tipadas apenas nas pastas saneadas gradualmente
+[[tool.mypy.overrides]]
+module = [
+    "core.runtime.*",
+    "core.shared.*",
+    "core.cache.*",
+    "core.infra.*",
+    "core.persistence.*"
+]
+disallow_untyped_defs = true
+
 # Ignorar missing imports apenas de libs específicas de terceiros sem stubs
 [[tool.mypy.overrides]]
 module = [

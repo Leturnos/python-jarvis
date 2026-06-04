@@ -8,14 +8,14 @@ from core.infra.logger_config import logger
 
 
 class MemoryMonitor:
-    def __init__(self, interval_seconds=60, threshold_mb=800):
+    def __init__(self, interval_seconds: int = 60, threshold_mb: float = 800.0) -> None:
         self.interval_seconds = interval_seconds
         self.threshold_mb = threshold_mb
         self.stop_event = threading.Event()
-        self.monitor_thread = None
+        self.monitor_thread: threading.Thread | None = None
         self.process = psutil.Process(os.getpid())
 
-    def _monitor_loop(self):
+    def _monitor_loop(self) -> None:
         logger.info(
             f"Memory monitor started (Threshold: {self.threshold_mb}MB, Interval: {self.interval_seconds}s)"
         )
@@ -49,7 +49,7 @@ class MemoryMonitor:
             # Wait for the interval, but allow quick exit if stop_event is set
             self.stop_event.wait(self.interval_seconds)
 
-    def start(self):
+    def start(self) -> None:
         if self.monitor_thread is None or not self.monitor_thread.is_alive():
             self.stop_event.clear()
             self.monitor_thread = threading.Thread(
@@ -57,7 +57,7 @@ class MemoryMonitor:
             )
             self.monitor_thread.start()
 
-    def stop(self):
+    def stop(self) -> None:
         if self.monitor_thread and self.monitor_thread.is_alive():
             self.stop_event.set()
             self.monitor_thread.join(timeout=2.0)

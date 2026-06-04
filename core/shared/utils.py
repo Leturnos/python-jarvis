@@ -2,7 +2,9 @@ import functools
 import re
 import time
 import winreg
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import win32com.client
 from PIL import Image, ImageDraw
@@ -10,11 +12,11 @@ from PIL import Image, ImageDraw
 from core.infra.logger_config import logger
 
 
-def time_it(func):
+def time_it[F: Callable[..., Any]](func: F) -> F:
     """Decorator to measure and log the execution time of a function."""
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         start_time = time.perf_counter()
         try:
             result = func(*args, **kwargs)
@@ -32,17 +34,17 @@ def time_it(func):
             except Exception as e:
                 logger.error(f"Failed to enqueue performance metric: {e}")
 
-    return wrapper
+    return wrapper  # type: ignore
 
 
-def normalize_text(text):
+def normalize_text(text: str) -> str:
     """Normalizes text for matching: lowercase, remove punctuation, spaces to underscores."""
     text = text.lower()
     text = re.sub(r"[^\w\s]", "", text)
     return text.strip().replace(" ", "_")
 
 
-def get_resources_dir():
+def get_resources_dir() -> Path:
     """Returns and ensures the resources directory exists."""
     project_dir = Path(__file__).parent.parent.parent.absolute()
     resources_dir = project_dir / "resources"
@@ -50,7 +52,7 @@ def get_resources_dir():
     return resources_dir
 
 
-def generate_icon_if_needed():
+def generate_icon_if_needed() -> str:
     """Generates the icon.ico file if it doesn't exist in resources."""
     resources_dir = get_resources_dir()
     icon_path = resources_dir / "icon.ico"
@@ -78,7 +80,7 @@ def generate_icon_if_needed():
     return str(icon_path)
 
 
-def manage_autostart(enable=True):
+def manage_autostart(enable: bool = True) -> str:
     """Adds or removes Jarvis from Windows Startup using a Shortcut in the Registry."""
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
     app_name = "JarvisAI"
@@ -140,7 +142,7 @@ objShell.Run "uv run main.py --hidden", 0, False
         return f"Error: {e}"
 
 
-def is_autostart_enabled_check():
+def is_autostart_enabled_check() -> bool:
     """Checks if the registry key exists."""
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
     app_name = "JarvisAI"

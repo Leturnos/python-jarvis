@@ -1,4 +1,5 @@
 import os
+from typing import Any, cast
 
 import yaml
 from dotenv import load_dotenv
@@ -8,7 +9,7 @@ from core.infra.logger_config import logger
 load_dotenv()
 
 
-def expand_env_vars(data):
+def expand_env_vars(data: Any) -> Any:
     """Recursively expand environment variables in a dictionary."""
     if isinstance(data, dict):
         return {k: expand_env_vars(v) for k, v in data.items()}
@@ -20,12 +21,12 @@ def expand_env_vars(data):
         return data
 
 
-def load_config():
+def load_config() -> dict[str, Any]:
     """Loads application configuration from config.yaml."""
     try:
         with open("config.yaml", encoding="utf-8") as f:
             config_raw = yaml.safe_load(f)
-            config = expand_env_vars(config_raw)
+            config = cast(dict[str, Any], expand_env_vars(config_raw))
             return config
     except Exception as e:
         logger.error(f"Error loading config.yaml: {e}")

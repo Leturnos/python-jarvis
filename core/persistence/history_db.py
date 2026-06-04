@@ -9,7 +9,7 @@ from core.infra.logger_config import logger
 
 
 class HistoryManager:
-    def __init__(self, db_path="data/history.db"):
+    def __init__(self, db_path: str = "data/history.db") -> None:
         self.db_path = db_path
         self._ensure_dir()
         self._init_db()
@@ -19,12 +19,12 @@ class HistoryManager:
         self.worker_thread = threading.Thread(target=self._metrics_worker, daemon=True)
         self.worker_thread.start()
 
-    def _ensure_dir(self):
+    def _ensure_dir(self) -> None:
         directory = os.path.dirname(self.db_path)
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         """Initializes the SQLite database and creates the history table if it doesn't exist."""
         try:
             conn = sqlite3.connect(self.db_path)
@@ -81,15 +81,15 @@ class HistoryManager:
 
     def log_execution(
         self,
-        input_text,
-        input_source,
-        intent,
-        risk_level,
-        status,
-        confidence=1.0,
-        error_msg=None,
-        action_json=None,
-    ):
+        input_text: str,
+        input_source: str,
+        intent: str,
+        risk_level: str,
+        status: str,
+        confidence: float = 1.0,
+        error_msg: str | None = None,
+        action_json: str | None = None,
+    ) -> None:
         """Logs a command execution into the database."""
         try:
             conn = sqlite3.connect(self.db_path)
@@ -120,7 +120,7 @@ class HistoryManager:
         except Exception as e:
             logger.error(f"Failed to log execution to history: {e}")
 
-    def get_last_successful_json(self):
+    def get_last_successful_json(self) -> str | None:
         """Returns the action_json of the most recent successful action (excluding replay/macro)."""
         try:
             conn = sqlite3.connect(self.db_path)
@@ -139,7 +139,7 @@ class HistoryManager:
             logger.error(f"Error retrieving last successful json: {e}")
             return None
 
-    def get_recent_history_json(self, n=5):
+    def get_recent_history_json(self, n: int = 5) -> list[str]:
         """Returns a list of action_json for the last N successful actions."""
         try:
             conn = sqlite3.connect(self.db_path)
@@ -161,7 +161,7 @@ class HistoryManager:
             logger.error(f"Error retrieving recent history json: {e}")
             return []
 
-    def _metrics_worker(self):
+    def _metrics_worker(self) -> None:
         """Background thread that reads from metrics_queue and writes to SQLite."""
         # Create a dedicated connection for this thread
         conn = None
@@ -197,13 +197,13 @@ class HistoryManager:
 
     def log_metric(
         self, metric_name: str, metric_value: float, tags: str | None = None
-    ):
+    ) -> None:
         """Enqueues a metric to be logged to the database asynchronously."""
         self.metrics_queue.put(
             (datetime.now().isoformat(), metric_name, metric_value, tags)
         )
 
-    def close(self):
+    def close(self) -> None:
         """Stops the background worker thread and closes the SQLite connection."""
         self.metrics_queue.put(None)
         if hasattr(self, "worker_thread") and self.worker_thread.is_alive():

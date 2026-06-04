@@ -1,7 +1,7 @@
 import logging
 
 
-def setup_logger():
+def setup_logger() -> logging.Logger:
     """Configures the logging system for console and file output."""
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
 

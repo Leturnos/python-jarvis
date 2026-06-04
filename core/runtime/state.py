@@ -47,7 +47,7 @@ class StateManager:
         _callbacks (list): A list of functions to be called on every state change.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initializes the StateManager with the IDLE state and empty context."""
         self._state = JarvisState.IDLE
         self._context: dict[str, Any] = {}
@@ -133,7 +133,9 @@ class StateManager:
         with self._lock:
             return self._context.copy()
 
-    def set_state(self, new_state: JarvisState, context: dict[str, Any] | None = None):
+    def set_state(
+        self, new_state: JarvisState, context: dict[str, Any] | None = None
+    ) -> None:
         """Attempts to change the system state and updates the context.
 
         This method validates the transition against the internal allowed_transitions
@@ -182,7 +184,7 @@ class StateManager:
 
     def add_callback(
         self, callback: Callable[[JarvisState, JarvisState, dict[str, Any]], None]
-    ):
+    ) -> None:
         """Registers a callback function to be notified of state changes.
 
         The callback must accept three arguments: old_state, new_state, and context.

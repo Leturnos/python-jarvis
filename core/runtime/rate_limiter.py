@@ -7,17 +7,17 @@ from core.persistence.history_db import history_manager
 
 
 class RateLimiter:
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_path = history_manager.db_path
         # Extract quotas safely, defaulting to None if missing
         quotas = config.get("quotas", {}).get("llm", {})
         self.max_requests = quotas.get("max_requests_per_day", 100)
         self.max_tokens = quotas.get("max_tokens_per_day", 500000)
 
-    def _get_today_str(self):
+    def _get_today_str(self) -> str:
         return datetime.now().strftime("%Y-%m-%d")
 
-    def check_quotas(self):
+    def check_quotas(self) -> bool:
         """Returns True if within quotas, False if exceeded."""
         today = self._get_today_str()
         try:
@@ -45,7 +45,7 @@ class RateLimiter:
             logger.error(f"Error checking quotas: {e}")
             return True  # Fail open to prevent locking out on DB error
 
-    def log_usage(self, token_count=0):
+    def log_usage(self, token_count: int = 0) -> None:
         """Logs an API call and its token usage."""
         today = self._get_today_str()
         try:
