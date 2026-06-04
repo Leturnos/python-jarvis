@@ -56,10 +56,7 @@ class MacroManager:
 
         try:
             # We bypass the normal process_instruction because we want a specific macro generation
-            response = llm_agent.client.models.generate_content(
-                model=llm_agent.model_id, contents=prompt
-            )
-            result = response.text.strip()
+            result = llm_agent.generate_text(prompt)
 
             if result.startswith("```json"):
                 result = result[7:-3].strip()
@@ -97,18 +94,19 @@ class MacroManager:
             os.makedirs(os.path.dirname(self.macros_path), exist_ok=True)
 
             # Load existing macros
-            existing_macros = []
+            existing_commands = []
             if os.path.exists(self.macros_path):
                 with open(self.macros_path, encoding="utf-8") as f:
                     content = yaml.safe_load(f)
-                    if isinstance(content, list):
-                        existing_macros = content
+                    if isinstance(content, dict) and "commands" in content:
+                        existing_commands = content["commands"]
 
             # Append new macro
-            existing_macros.append(plugin_data)
+            existing_commands.append(plugin_data)
+            plugin_file_data = {"name": "macros", "commands": existing_commands}
 
             with open(self.macros_path, "w", encoding="utf-8") as f:
-                yaml.dump(existing_macros, f, allow_unicode=True, sort_keys=False)
+                yaml.dump(plugin_file_data, f, allow_unicode=True, sort_keys=False)
 
             logger.info(f"Macro '{plan.intent}' saved to {self.macros_path}")
 
