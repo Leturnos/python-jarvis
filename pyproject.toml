@@ -56,6 +56,8 @@ select = [
 ignore = ["E501"]
 
 [tool.mypy]
+files = ["core", "main.py"]
+show_error_codes = true
 python_version = "3.13"
 
 # Configuração Gradual Inicial
@@ -66,7 +68,7 @@ warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 
-# Ignorar validações nos testes automatizados
+# Ignorar validações nos testes automatizados(por enquanto)
 [[tool.mypy.overrides]]
 module = "tests.*"
 ignore_errors = true

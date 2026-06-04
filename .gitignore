@@ -12,6 +12,7 @@ jarvis.log
 Jarvis.lnk
 resources/launcher.vbs
 .ruff_cache/
+.mypy_cache/
 scratch/
 
 # IDEs
