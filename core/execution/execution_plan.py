@@ -55,6 +55,10 @@ class ExecutionStep:
             payload["command"] = str(data.get("command", ""))
         elif step_type == StepType.OPEN_APP:
             payload["target"] = str(data.get("target", ""))
+            if "window_title_pattern" in data:
+                payload["window_title_pattern"] = str(data.get("window_title_pattern"))
+            if "process_name" in data:
+                payload["process_name"] = str(data.get("process_name"))
         elif step_type == StepType.WRITE:
             payload["text"] = str(data.get("text", ""))
         elif step_type == StepType.NAVIGATE:

@@ -51,6 +51,12 @@ def load_config() -> dict[str, Any]:
                 },
             },
             "tts": {"provider": "sapi5", "voice_keyword": "maria"},
+            "timeouts": {
+                "process_start": 5.0,
+                "window_appear": 10.0,
+                "focus": 3.0,
+                "focus_retries": 3,
+            },
             "quotas": {
                 "llm": {
                     "max_requests_per_day": 100,

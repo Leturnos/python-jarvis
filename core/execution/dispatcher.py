@@ -6,7 +6,6 @@ orchestrating the execution of both static (wakeword-based) and dynamic
 """
 
 import json
-import os
 import subprocess
 import time
 from typing import Any
@@ -70,6 +69,8 @@ class ActionDispatcher:
             None  # Access for main.py voice confirmation
         )
         self.last_plan: ExecutionPlan | None = None
+        self._current_plan_window = None
+        self._current_plan_window_pattern = None
 
     def handle_plan(self, plan: ExecutionPlan) -> bool:
         """Processes an ExecutionPlan, including validation and user confirmation.
@@ -178,6 +179,8 @@ class ActionDispatcher:
         logger.info(f"Starting execution of plan: {plan.intent}")
         state_manager.set_state(JarvisState.EXECUTING, context={"intent": plan.intent})
         self.last_plan = plan
+        self._current_plan_window = None
+        self._current_plan_window_pattern = None
 
         action_json = json.dumps(plan.to_dict())
 
@@ -325,15 +328,46 @@ class ActionDispatcher:
             self.automator.speak("Tive um problema ao tentar gerar a explicação.")
 
     def _execute_step(self, step: ExecutionStep) -> bool:
-        """Executes a single step based on its type."""
+        """Executes a single step based on its type with timing and focus safety."""
         try:
+            # Focus safety check before typing or sending hotkeys
+            if step.type in (StepType.WRITE, StepType.TYPE_AND_ENTER, StepType.HOTKEY):
+                if self._current_plan_window:
+                    active_win = self.automator.get_foreground_window_info()
+                    if not self.automator.check_focus_match(
+                        active_win,
+                        self._current_plan_window,
+                        self._current_plan_window_pattern,
+                    ):
+                        if active_win is None:
+                            logger.warning(
+                                "Active window is None during typing step. Allowing execution as fallback (likely non-interactive session)."
+                            )
+                        else:
+                            logger.error(
+                                f"Safety Abort: Foreground focus lost. Expected: {self._current_plan_window.title} (HWND: {self._current_plan_window.hwnd}). Active: {active_win.title if active_win else 'None'}."
+                            )
+                            self.automator.speak(
+                                "Abortado por segurança. O aplicativo alvo perdeu o foco."
+                            )
+                            return False
+
             if step.type == StepType.COMMAND:
                 cmd = str(step.payload.get("command", ""))
                 subprocess.run(["cmd", "/c", cmd], shell=False, check=True)
                 return True
             elif step.type == StepType.OPEN_APP:
                 target = str(step.payload.get("target", ""))
-                os.startfile(target)
+                window_title_pattern = step.payload.get("window_title_pattern")
+                process_name = step.payload.get("process_name")
+
+                window = self.automator.open_and_stabilize_app(
+                    target=target,
+                    window_title_pattern=window_title_pattern,
+                    process_name=process_name,
+                )
+                self._current_plan_window = window
+                self._current_plan_window_pattern = window_title_pattern
                 return True
             elif step.type == StepType.WRITE:
                 text = step.payload.get("text")

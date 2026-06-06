@@ -33,6 +33,12 @@ dry_run:
   bypass_for_safe_intents: true
   timeout_seconds: 15
 
+timeouts:
+  process_start: 5.0     # Maximum time (s) to wait for new process PIDs to appear
+  window_appear: 10.0    # Maximum time (s) to wait for a visible window to be created
+  focus: 3.0             # Maximum time (s) to wait for a window to gain focus during a try
+  focus_retries: 3       # Number of activation/focus retries before aborting
+
 integrations:
   warp:
     path: "${WARP_PATH}"
