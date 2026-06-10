@@ -19,6 +19,7 @@ from core.execution.worker import (
     _handle_wakeword,
     command_worker,
 )
+from core.llm import LLMAuthenticationError, LLMRateLimitError
 from core.runtime.state import JarvisState, state_manager
 from core.shared.errors import BusinessError, TechnicalError
 
@@ -592,3 +593,67 @@ def test_worker_thread_ignores_non_jobs(
     command_worker(task_queue, mock_dispatcher, mock_notifier, stop_event, worker_busy)
 
     task_queue.task_done.assert_called_once()
+
+
+@patch("core.execution.worker.pythoncom")
+@patch("core.execution.worker.HANDLERS")
+def test_worker_thread_speaks_on_llm_auth_and_quota_errors(
+    mock_handlers: MagicMock,
+    mock_pythoncom: MagicMock,
+    mock_dispatcher: MagicMock,
+    mock_notifier: MagicMock,
+    clean_job_history: Any,
+) -> None:
+    """Verifies that command_worker speaks specific messages for auth and quota exhaustion and skips retries."""
+    import queue
+    import threading
+    from unittest.mock import MagicMock
+
+    # 1. Test Auth Error
+    task_queue = queue.Queue()
+    stop_event = threading.Event()
+    worker_busy = threading.Event()
+
+    job_auth = Job(type=JobType.LLM_DYNAMIC, payload=b"audio")
+    task_queue.put(job_auth)
+
+    auth_err = LLMAuthenticationError("Invalid API key")
+    te_auth = TechnicalError("LLM failed")
+    te_auth.__cause__ = auth_err
+
+    mock_handlers.get.return_value = MagicMock(side_effect=te_auth)
+
+    def stop_worker(*args, **kwargs):
+        stop_event.set()
+
+    state_manager.add_callback(
+        lambda o, n, c: stop_worker() if n == JarvisState.IDLE else None
+    )
+
+    command_worker(task_queue, mock_dispatcher, mock_notifier, stop_event, worker_busy)
+
+    assert job_auth.status == JobStatus.FAILED
+    assert job_auth.retries == 0
+    mock_dispatcher.automator.speak.assert_called_with(
+        "Chave de API inválida ou não configurada."
+    )
+
+    # 2. Test Quota Exhausted Error (Rate limit with status_code == 429)
+    stop_event.clear()
+    job_quota = Job(type=JobType.LLM_DYNAMIC, payload=b"audio")
+    task_queue.put(job_quota)
+
+    rate_err = LLMRateLimitError("Resource exhausted")
+    rate_err.status_code = 429
+    te_rate = TechnicalError("LLM failed")
+    te_rate.__cause__ = rate_err
+
+    mock_handlers.get.return_value = MagicMock(side_effect=te_rate)
+
+    command_worker(task_queue, mock_dispatcher, mock_notifier, stop_event, worker_busy)
+
+    assert job_quota.status == JobStatus.FAILED
+    assert job_quota.retries == 0
+    mock_dispatcher.automator.speak.assert_called_with(
+        "Desculpe, estou sem cota ou créditos no provedor de IA no momento."
+    )

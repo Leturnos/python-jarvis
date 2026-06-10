@@ -17,6 +17,7 @@ from core.execution.execution_plan import (
 )
 from core.execution.job_queue import Job, JobStatus, JobType, job_manager
 from core.infra.logger_config import logger
+from core.llm import LLMAuthenticationError, LLMRateLimitError
 from core.plugins.plugin_manager import plugin_manager
 from core.runtime.state import JarvisState, state_manager
 from core.shared.errors import BusinessError, TechnicalError
@@ -273,6 +274,44 @@ def command_worker(
                     break  # STOP immediately, do not retry business errors
 
                 except TechnicalError as te:
+                    cause = te.__cause__
+                    is_auth_error = isinstance(cause, LLMAuthenticationError)
+                    is_rate_limit = isinstance(cause, LLMRateLimitError)
+
+                    status_code = getattr(cause, "status_code", None)
+                    is_quota_exhausted = status_code == 429
+
+                    if not is_quota_exhausted and is_rate_limit:
+                        err_msg = str(cause).lower()
+                        if any(
+                            k in err_msg
+                            for k in [
+                                "quota",
+                                "credit",
+                                "balance",
+                                "exhausted",
+                                "limit",
+                            ]
+                        ):
+                            is_quota_exhausted = True
+
+                    # Check for permanent API errors to speak and stop immediately
+                    if is_auth_error or is_quota_exhausted:
+                        job.status = JobStatus.FAILED
+                        job.finished_at = time.time()
+                        job.error = str(te)
+
+                        if is_auth_error:
+                            dispatcher.automator.speak(
+                                "Chave de API inválida ou não configurada."
+                            )
+                        else:
+                            dispatcher.automator.speak(
+                                "Desculpe, estou sem cota ou créditos no provedor de IA no momento."
+                            )
+                        break
+
+                    # Standard retry loop for transient technical errors
                     job.retries += 1
                     logger.error(
                         f"Technical error in job {job.id} (Attempt {job.retries}): {te}"
@@ -285,6 +324,16 @@ def command_worker(
                         job.status = JobStatus.FAILED
                         job.finished_at = time.time()
                         job.error = str(te)
+
+                        # Speak fallback on final failure
+                        if is_rate_limit:
+                            dispatcher.automator.speak(
+                                "Desculpe, estou sem cota ou créditos no provedor de IA no momento."
+                            )
+                        else:
+                            dispatcher.automator.speak(
+                                "Desculpe, ocorreu um erro de conexão com o provedor de IA."
+                            )
 
                 except Exception as e:
                     logger.error(f"Unexpected exception in job {job.id}: {e}")

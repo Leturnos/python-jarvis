@@ -49,7 +49,7 @@ Nós separamos as coisas para facilitar sua vida. Existem três arquivos princip
 
 1. **Arquivo `.env` (Suas Chaves e Caminhos Locais):**
    Faça uma cópia do arquivo `.env.example` e renomeie para `.env`.
-   Coloque aqui a chave de API da IA do provedor ativo escolhido (ex: `GEMINI_API_KEY`, `OPENAI_API_KEY` ou `ANTHROPIC_API_KEY`) e os caminhos dos seus programas locais.
+   Coloque aqui a chave de API da IA do provedor ativo escolhido (ex: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY` ou `OPENROUTER_API_KEY`) e os caminhos dos seus programas locais.
 
 2. **Arquivo `config.yaml` (Ajustes de Motor):**
    Aqui você mexe na "mecânica" do Jarvis.
@@ -57,7 +57,7 @@ Nós separamos as coisas para facilitar sua vida. Existem três arquivos princip
      - `mode`: Escolha entre `hybrid` (Frase + Tecla), `push_to_talk` (Apenas tecla), `always_listening` (Apenas frase) ou `disabled`.
      - `push_to_talk`: Configure a tecla (ex: `ctrl+alt`) e se quer segurar para falar (`hold`) ou apenas um toque (`toggle`).
      - `auto_suspend`: Ative o `fullscreen: true` para o Jarvis silenciar automaticamente em jogos ou vídeos em tela cheia.
-   - **Cérebro do Jarvis (`llm`):** Você pode escolher qual IA o Jarvis usa! No campo `active_provider`, você pode colocar `gemini`, `openai` ou `anthropic`. 
+   - **Cérebro do Jarvis (`llm`):** Você pode escolher qual IA o Jarvis usa! No campo `active_provider`, você pode colocar `gemini`, `openai`, `anthropic`, `deepseek` ou `openrouter`. 
      - *Segurança e Migração Automatizada:* Coloque a chave correspondente ao provedor configurado no seu `.env` ao iniciar o Jarvis pela primeira vez. Ele detectará a chave do provedor ativo, fará a migração automática para o Keyring seguro do Windows (Gerenciador de Credenciais) e você poderá remover a chave do arquivo `.env` por segurança.
    - **Voz do Jarvis (`tts`):** Quer que o Jarvis tenha uma voz diferente? No campo `voice_keyword`, coloque parte do nome da voz que você tem instalada no Windows (ex: "maria", "zira", "david"). Se ele não encontrar a que você pediu, ele tentará usar uma voz em Português automaticamente.
 
