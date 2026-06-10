@@ -1,11 +1,18 @@
+import os
+import threading
 import time
 from typing import Any
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
 from qfluentwidgets import Theme, setTheme
 
+from core.ai.llm_agent import llm_agent
+from core.infra.config import config, reload_config
+from core.infra.keyring_manager import KeyringManager
+from core.infra.logger_config import logger
+from core.llm import LiteLLMProvider
 from core.runtime.state import JarvisState, state_manager
 from core.shared.utils import (
     get_resources_dir,
@@ -15,9 +22,43 @@ from core.shared.utils import (
 from core.ui.main_window import MainWindow
 
 
+def update_yaml_active_provider(provider_name: str) -> None:
+    yaml_path = "config.yaml"
+    if not os.path.exists(yaml_path):
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_llm_block = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("llm:"):
+            in_llm_block = True
+        elif in_llm_block and stripped.startswith("active_provider:"):
+            # Preserve indentation
+            indent = line[: line.find("active_provider:")]
+            lines[i] = f'{indent}active_provider: "{provider_name}"\n'
+            break
+        elif in_llm_block and line.strip() == "":
+            pass
+        elif (
+            in_llm_block
+            and not line.startswith(" ")
+            and not line.startswith("active_provider:")
+            and stripped != ""
+        ):
+            in_llm_block = False
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
 class QtAppController(QObject):
+    provider_switch_done = Signal(bool, str)
+
     def __init__(self, app: QApplication, ui_adapter: Any, tray_adapter: Any) -> None:
         super().__init__()
+        self.provider_switch_done.connect(self._on_provider_switch_done)
         self.app = app
         self.app.setQuitOnLastWindowClosed(False)
         self.tray_adapter = tray_adapter
@@ -91,6 +132,26 @@ class QtAppController(QObject):
 
         self.tray_menu.addSeparator()
 
+        # LLM Provider Submenu
+        self.provider_menu = self.tray_menu.addMenu("LLM Provider")
+        self.provider_actions = {}
+        provider_labels = {
+            "gemini": "Gemini",
+            "openai": "OpenAI",
+            "anthropic": "Anthropic",
+            "deepseek": "DeepSeek",
+            "openrouter": "OpenRouter",
+        }
+        for prov in ["gemini", "openai", "anthropic", "deepseek", "openrouter"]:
+            label = provider_labels.get(prov, prov.capitalize())
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked, p=prov: self._switch_provider(p))
+            self.provider_menu.addAction(action)
+            self.provider_actions[prov] = action
+
+        self.tray_menu.addSeparator()
+
         # Autostart Action
         self.autostart_action = QAction("Autostart", self)
         self.autostart_action.setCheckable(True)
@@ -133,12 +194,68 @@ class QtAppController(QObject):
         # Autostart
         self.autostart_action.setChecked(is_autostart_enabled_check())
 
+        # LLM Provider
+        active_provider = config.get("llm", {}).get("active_provider", "gemini")
+        for prov, action in self.provider_actions.items():
+            action.setChecked(prov == active_provider)
+
     def _set_suspended(self) -> None:
         state_manager.set_state(JarvisState.SLEEPING)
 
     def _toggle_autostart(self) -> None:
         new_state = not is_autostart_enabled_check()
         manage_autostart(enable=new_state)
+
+    def _switch_provider(self, provider: str) -> None:
+        # Pre-check existence
+        if not KeyringManager.validate_provider_key(provider):
+            self.tray_icon.showMessage(
+                "Jarvis",
+                f"API Key for {provider} not configured.",
+                QSystemTrayIcon.MessageIcon.Warning,
+                3000,
+            )
+            self._update_menu_states()
+            return
+
+        # Reload configuration dynamically in case the user modified config.yaml
+        current_config = reload_config()
+
+        # Run 1-token completion test in background
+        def run_test():
+            llm_config = current_config.get("llm", {})
+            model_name = (
+                llm_config.get("providers", {}).get(provider, {}).get("model", "")
+            )
+            try:
+                test_provider = LiteLLMProvider(provider=provider, model=model_name)
+                success = test_provider.test_connection()
+            except Exception as e:
+                logger.error(f"Failed to create test provider or run check: {e}")
+                success = False
+            self.provider_switch_done.emit(success, provider)
+
+        threading.Thread(target=run_test, daemon=True).start()
+
+    def _on_provider_switch_done(self, success: bool, provider: str) -> None:
+        if success:
+            config["llm"]["active_provider"] = provider
+            update_yaml_active_provider(provider)
+            llm_agent.reinit_provider()
+            self.tray_icon.showMessage(
+                "Jarvis",
+                f"IA alterada para {provider.capitalize()}.",
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+        else:
+            self.tray_icon.showMessage(
+                "Jarvis",
+                f"Falha na conexão ou chave inválida para {provider.capitalize()}.",
+                QSystemTrayIcon.MessageIcon.Warning,
+                3000,
+            )
+        self._update_menu_states()
 
     def show_window(self) -> None:
         self.main_window.show()

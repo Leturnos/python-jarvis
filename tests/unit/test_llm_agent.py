@@ -39,3 +39,33 @@ def test_llm_agent_initialization_fallback_and_migration(
     mock_set_secret.assert_called_once_with(
         "python-jarvis", "GEMINI_API_KEY", "env_key_456"
     )
+
+
+@patch("core.llm.litellm_provider.KeyringManager.get_secret")
+@patch("os.getenv")
+def test_llm_agent_reinit_provider(mock_getenv, mock_get_secret):
+    mock_get_secret.return_value = "dummy-key"
+    mock_getenv.return_value = None
+
+    agent = LLMAgent()
+    assert agent.provider.provider == "gemini"
+
+    # Now change configuration in config
+    from core.infra.config import config
+
+    original_provider = config["llm"].get("active_provider", "gemini")
+
+    try:
+        config["llm"]["active_provider"] = "deepseek"
+        config["llm"]["providers"]["deepseek"] = {"model": "deepseek-chat"}
+
+        # Reinit
+        agent.reinit_provider()
+
+        # Check that provider was updated
+        assert agent.provider.provider == "deepseek"
+        assert agent.provider.model == "deepseek-chat"
+    finally:
+        # Revert to gemini to avoid contaminating other tests
+        config["llm"]["active_provider"] = original_provider
+        agent.reinit_provider()

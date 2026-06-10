@@ -19,7 +19,10 @@ class LiteLLMProvider(BaseLLMProvider):
         self.model = model
         # LiteLLM model format is often 'provider/model' (e.g., 'gemini/gemini-pro')
         # But for some it might be different. Gemini with litellm is 'gemini/...'
-        self.full_model_name = f"{provider}/{model}" if "/" not in model else model
+        if provider == "openrouter" and not model.startswith("openrouter/"):
+            self.full_model_name = f"openrouter/{model}"
+        else:
+            self.full_model_name = f"{provider}/{model}" if "/" not in model else model
         self._setup_auth()
 
     def _setup_auth(self) -> None:
@@ -29,6 +32,10 @@ class LiteLLMProvider(BaseLLMProvider):
 
         if not api_key:
             import os
+
+            from dotenv import load_dotenv
+
+            load_dotenv()
 
             api_key = os.getenv(key_name)
             if api_key:
@@ -97,3 +104,17 @@ class LiteLLMProvider(BaseLLMProvider):
             "provider": self.provider,
             "model": self.model,
         }
+
+    def test_connection(self) -> bool:
+        """Verifies if the API key and provider connection are valid using a 1-token request."""
+        messages = [{"role": "user", "content": "ping"}]
+        try:
+            litellm.completion(
+                model=self.full_model_name,
+                messages=messages,
+                max_tokens=1,
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Active connection test failed for {self.provider}: {e}")
+            return False

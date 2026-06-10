@@ -16,3 +16,11 @@ def test_keyring_set_and_get():
 
     # Cleanup
     KeyringManager.delete_secret(service, username)
+
+
+def test_new_providers_capabilities():
+    assert KeyringManager.check_capability("deepseek", "json_mode")
+    assert KeyringManager.check_capability("deepseek", "system_instructions")
+    assert KeyringManager.check_capability("openrouter", "json_mode")
+    assert KeyringManager.check_capability("openrouter", "system_instructions")
+    assert not KeyringManager.check_capability("deepseek", "tool_use")

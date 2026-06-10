@@ -15,7 +15,7 @@ voice_activation:
     fullscreen: true
 
 llm:
-  active_provider: "gemini"
+  active_provider: "openrouter"
   providers:
     gemini:
       model: "gemini-2.5-flash"
@@ -23,6 +23,10 @@ llm:
       model: "gpt-4.1-mini"
     anthropic:
       model: "claude-3-5-haiku-latest"
+    deepseek:
+      model: "deepseek-chat"
+    openrouter:
+      model: "google/gemini-2.5-flash"
 
 tts:
   provider: "sapi5"

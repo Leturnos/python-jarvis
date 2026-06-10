@@ -1,4 +1,5 @@
 import json
+import threading
 from typing import Any
 
 from core.ai.prompt_guard import PromptGuard
@@ -25,6 +26,10 @@ class LLMAgent:
 
     def __init__(self) -> None:
         """Initializes the LLM provider based on config."""
+        self._lock = threading.Lock()
+        self._init_provider()
+
+    def _init_provider(self) -> None:
         llm_config = config.get("llm", {})
         active_provider = llm_config.get("active_provider", "gemini")
         model_name = (
@@ -37,6 +42,11 @@ class LLMAgent:
             f"Initializing LLMAgent with provider: {active_provider}, model: {model_name}"
         )
         self.provider = LiteLLMProvider(provider=active_provider, model=model_name)
+
+    def reinit_provider(self) -> None:
+        """Reinitializes the LLM provider instance dynamically when settings change."""
+        with self._lock:
+            self._init_provider()
 
     @time_it
     def process_instruction(
@@ -192,8 +202,9 @@ class LLMAgent:
             }
 
         try:
-            logger.info(f"Sending to LLM Provider ({self.provider.provider})...")
-            response = self.provider.generate_content(prompt=prompt)
+            with self._lock:
+                logger.info(f"Sending to LLM Provider ({self.provider.provider})...")
+                response = self.provider.generate_content(prompt=prompt)
             result = response.content.strip()
 
             # Clean up markdown
@@ -245,10 +256,11 @@ class LLMAgent:
     def generate_text(self, prompt: str) -> str:
         """Generates raw text from the LLM for a given prompt."""
         try:
-            logger.info(
-                f"Sending prompt to LLM ({self.provider.provider}) for raw text generation..."
-            )
-            response = self.provider.generate_content(prompt=prompt)
+            with self._lock:
+                logger.info(
+                    f"Sending prompt to LLM ({self.provider.provider}) for raw text generation..."
+                )
+                response = self.provider.generate_content(prompt=prompt)
             return response.content.strip()
         except Exception as e:
             logger.error(f"Error generating text from LLM: {e}")

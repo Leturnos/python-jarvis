@@ -37,13 +37,24 @@ class KeyringManager:
 
         Returns True if found, False otherwise with a friendly log message.
         """
+        from dotenv import load_dotenv
+
+        load_dotenv()
+
         key_name = f"{provider_name.upper()}_API_KEY"
-        key = KeyringManager.get_secret("python-jarvis", key_name)
+        keyring_key = KeyringManager.get_secret("python-jarvis", key_name)
 
-        if not key:
-            import os
+        import os
 
-            key = os.getenv(key_name)
+        env_key = os.getenv(key_name)
+
+        # Update Keyring if .env key is different or new
+        if env_key and (not keyring_key or env_key != keyring_key):
+            logger.info(f"Migrating/updating {key_name} from .env to secure Keyring.")
+            KeyringManager.set_secret("python-jarvis", key_name, env_key)
+            key = env_key
+        else:
+            key = keyring_key if keyring_key else env_key
 
         if not key:
             logger.error(
@@ -64,5 +75,7 @@ class KeyringManager:
             "gemini": ["json_mode", "system_instructions"],
             "openai": ["json_mode", "system_instructions", "tool_use"],
             "anthropic": ["system_instructions", "tool_use"],
+            "deepseek": ["json_mode", "system_instructions"],
+            "openrouter": ["json_mode", "system_instructions"],
         }
         return capability in capabilities.get(provider_name.lower(), [])

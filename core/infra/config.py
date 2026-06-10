@@ -74,3 +74,12 @@ def load_config() -> dict[str, Any]:
 
 
 config = load_config()
+
+
+def reload_config() -> dict[str, Any]:
+    """Reloads the configuration from config.yaml and updates the global config dict."""
+    global config
+    new_config = load_config()
+    config.clear()
+    config.update(new_config)
+    return config
