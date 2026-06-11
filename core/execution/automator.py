@@ -133,7 +133,7 @@ class WarpAutomator:
         self._speech_queue.put(text)
 
     def find_processes(
-        self, executable_path: str = None, executable_name: str = None
+        self, executable_path: str | None = None, executable_name: str | None = None
     ) -> set[int]:
         """Find running processes matching the given executable name or path."""
         pids = set()
@@ -208,9 +208,9 @@ class WarpAutomator:
 
     def wait_for_window(
         self,
-        candidate_pids: set[int] = None,
-        executable_name: str = None,
-        window_title_pattern: str = None,
+        candidate_pids: set[int] | None = None,
+        executable_name: str | None = None,
+        window_title_pattern: str | None = None,
         timeout: float = 10.0,
     ) -> WindowInfo | None:
         """Waits for a visible window matching candidate PIDs, executable name, or title pattern."""
@@ -220,7 +220,9 @@ class WarpAutomator:
             )
             return None
 
-        def enum_window_callback(hwnd, matching_windows_list):
+        def enum_window_callback(
+            hwnd: int, matching_windows_list: list[WindowInfo]
+        ) -> bool:
             try:
                 if win32gui.IsWindowVisible(hwnd):
                     title = win32gui.GetWindowText(hwnd)
@@ -263,7 +265,7 @@ class WarpAutomator:
 
         start_time = time.time()
         while time.time() - start_time < timeout:
-            matching_windows = []
+            matching_windows: list[WindowInfo] = []
 
             try:
                 win32gui.EnumWindows(enum_window_callback, matching_windows)
@@ -671,7 +673,7 @@ class WarpAutomator:
             )
 
             best_center = None
-            best_area = 0
+            best_area = 0.0
             best_rect = None
 
             for cnt in contours:

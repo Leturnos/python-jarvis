@@ -1,6 +1,36 @@
 from unittest.mock import patch
 
+import pytest
+
 from core.ai.llm_agent import LLMAgent
+from core.infra.config import config
+
+
+@pytest.fixture(autouse=True)
+def mock_default_llm_config():
+    """Forces the LLM active provider to be 'gemini' for unit testing."""
+    llm_section = config.setdefault("llm", {})
+    original_provider = llm_section.get("active_provider")
+    providers = llm_section.setdefault("providers", {})
+    gemini_config = providers.setdefault("gemini", {})
+    original_model = gemini_config.get("model")
+
+    # Force gemini
+    llm_section["active_provider"] = "gemini"
+    gemini_config["model"] = "gemini-2.0-flash"
+
+    yield
+
+    # Restore
+    if original_provider is not None:
+        llm_section["active_provider"] = original_provider
+    else:
+        llm_section.pop("active_provider", None)
+
+    if original_model is not None:
+        gemini_config["model"] = original_model
+    else:
+        gemini_config.pop("model", None)
 
 
 @patch("core.llm.litellm_provider.KeyringManager.get_secret")

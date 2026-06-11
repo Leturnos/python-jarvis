@@ -48,6 +48,8 @@ class KeyringManager:
 
         env_key = os.getenv(key_name)
 
+        key: str | None = None
+
         # Update Keyring if .env key is different or new
         if env_key and (not keyring_key or env_key != keyring_key):
             logger.info(f"Migrating/updating {key_name} from .env to secure Keyring.")

@@ -222,7 +222,7 @@ class QtAppController(QObject):
         current_config = reload_config()
 
         # Run 1-token completion test in background
-        def run_test():
+        def run_test() -> None:
             llm_config = current_config.get("llm", {})
             model_name = (
                 llm_config.get("providers", {}).get(provider, {}).get("model", "")

@@ -69,11 +69,6 @@ warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 
-# Ignorar validações nos testes automatizados(por enquanto)
-[[tool.mypy.overrides]]
-module = "tests.*"
-ignore_errors = true
-
 # Ignorar código legado de UI
 [[tool.mypy.overrides]]
 module = "core.ui.legacy.*"
@@ -87,9 +82,7 @@ module = [
     "pyautogui.*",
     "pygetwindow.*",
     "pyperclip.*",
-    "pyttsx3.*",
     "plyer.*",
-    "pyside6_fluent_widgets.*",
     "qfluentwidgets.*",
     "openwakeword.*",
     "win32gui.*",
