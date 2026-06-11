@@ -120,8 +120,8 @@ def test_automator_spotify_click_play_coordinates(mock_psutil, mock_gw, mock_pya
         automator.config = {}
         res = automator.spotify_click_play(click_type="search")
         assert res
-        # fallback: hover click (600, 600) and playlist fallback click (600, 520)
-        mock_pyautogui.click.assert_any_call(600, 600)
+        # fallback: hover click (350, 480) and playlist fallback click (600, 520)
+        mock_pyautogui.click.assert_any_call(350, 480)
         mock_pyautogui.click.assert_any_call(600, 520)
 
 

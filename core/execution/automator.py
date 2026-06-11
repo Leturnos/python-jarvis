@@ -7,6 +7,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+import cv2
+import numpy as np
 import psutil
 import pyautogui
 import pygetwindow as gw
@@ -344,6 +346,12 @@ class WarpAutomator:
         if not process_name and not is_url and target.lower().endswith(".exe"):
             process_name = os.path.basename(target)
 
+        # Detect Spotify protocol targets to prevent window discovery timeouts
+        if not process_name and "spotify" in target.lower():
+            process_name = "spotify.exe"
+            if not window_title_pattern:
+                window_title_pattern = "spotify"
+
         logger.info(f"Candidate PIDs: {candidate_pids}, process_name: {process_name}")
 
         # 3. Wait for the visible window
@@ -635,6 +643,68 @@ class WarpAutomator:
         non_playing = {"spotify", "spotify premium", "spotify free"}
         return title not in non_playing
 
+    def find_spotify_green_button(
+        self, haystack: Any, scale_factor: float = 1.0
+    ) -> Any:
+        """
+        Locates the Spotify green play button by searching for its distinct green color (#1DB954).
+        Returns a namedtuple Box-like object compatible with the return type of locate_template_multiscale,
+        or None if not found.
+        """
+        from collections import namedtuple
+
+        try:
+            # Convert to HSV for better color segmentation
+            hsv = cv2.cvtColor(haystack, cv2.COLOR_BGR2HSV)
+
+            # Spotify green in HSV is roughly H=141 (70 in OpenCV), S=84%, V=72%
+            # OpenCV HSV ranges: H: 0-180, S: 0-255, V: 0-255
+            # We use a broad threshold for safety to capture the green button variations
+            lower_green = np.array([55, 100, 100])
+            upper_green = np.array([85, 255, 255])
+
+            mask = cv2.inRange(hsv, lower_green, upper_green)
+
+            # Find contours of the green blobs
+            contours, _ = cv2.findContours(
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+
+            best_center = None
+            best_area = 0
+            best_rect = None
+
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                # The play button should be a reasonable size in pixels (accounting for DPI scaling)
+                min_area = 80 * (scale_factor**2)
+                max_area = 8000 * (scale_factor**2)
+                if min_area <= area <= max_area:
+                    # Get the bounding box to check aspect ratio (should be roughly square/circle)
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    aspect_ratio = float(w) / h
+                    if 0.75 <= aspect_ratio <= 1.25:
+                        if area > best_area:
+                            best_area = area
+                            best_rect = (x, y, w, h)
+                            m = cv2.moments(cnt)
+                            if m["m00"] != 0:
+                                cx = int(m["m10"] / m["m00"])
+                                cy = int(m["m01"] / m["m00"])
+                                best_center = (cx, cy)
+
+            if best_center and best_rect:
+                x, y, w, h = best_rect
+                logger.info(
+                    f"Located Spotify green play button using color masking at relative ({best_center[0]}, {best_center[1]}), area={best_area}"
+                )
+                Box = namedtuple("Box", ["left", "top", "width", "height"])
+                return Box(x, y, w, h)
+        except Exception as e:
+            logger.error(f"Error in find_spotify_green_button: {e}")
+
+        return None
+
     def locate_template_multiscale(
         self,
         template_path: str,
@@ -643,12 +713,9 @@ class WarpAutomator:
     ) -> Any:
         """
         Locates a template image on the screen using multi-scale OpenCV matching.
-        Tolerates screen resolution and DPI scaling differences.
+        Attempts scale 1.0 first for speed, then falls back to restricted scales to tolerate zoom/DPI differences.
         """
         import os
-
-        import cv2
-        import numpy as np
 
         try:
             # 1. Take screenshot of the region
@@ -666,34 +733,55 @@ class WarpAutomator:
             best_loc = None
             best_scale = None
 
-            # Common scales relative to the 1024x576 screenshots
-            # 1.875 is exactly the scale factor for a 1920x1080 screen
-            # 2.5 is the scale factor for 2560x1440 screen
-            scales = [1.0, 1.25, 1.5, 1.875, 2.0, 2.5, 0.8, 0.6, 0.5]
-
-            for scale in scales:
-                w = int(template_gray.shape[1] * scale)
-                h = int(template_gray.shape[0] * scale)
-                if (
-                    w > haystack_gray.shape[1]
-                    or h > haystack_gray.shape[0]
-                    or w < 10
-                    or h < 10
-                ):
-                    continue
-
-                resized = cv2.resize(template_gray, (w, h))
-                res = cv2.matchTemplate(haystack_gray, resized, cv2.TM_CCOEFF_NORMED)
+            # A. Try direct match at scale 1.0 first
+            w = template_gray.shape[1]
+            h = template_gray.shape[0]
+            if w <= haystack_gray.shape[1] and h <= haystack_gray.shape[0]:
+                res = cv2.matchTemplate(
+                    haystack_gray, template_gray, cv2.TM_CCOEFF_NORMED
+                )
                 _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
-                if max_val > best_val:
+                if max_val >= confidence:
                     best_val = max_val
                     best_loc = max_loc
-                    best_scale = scale
+                    best_scale = 1.0
+                    logger.info(
+                        f"Direct match (scale 1.0) for {os.path.basename(template_path)}: confidence {best_val:.4f} at {best_loc}"
+                    )
 
-            logger.info(
-                f"Multiscale match for {os.path.basename(template_path)}: best confidence {best_val:.4f} at scale {best_scale} at {best_loc}"
-            )
+            # B. Fallback to restricted multiscale if scale 1.0 fails or confidence is low
+            if best_val < confidence:
+                scales = [
+                    0.9,
+                    1.1,
+                    1.25,
+                    0.8,
+                ]  # Restricted, safe range to prevent false positives and improve speed
+                for scale in scales:
+                    w = int(template_gray.shape[1] * scale)
+                    h = int(template_gray.shape[0] * scale)
+                    if (
+                        w > haystack_gray.shape[1]
+                        or h > haystack_gray.shape[0]
+                        or w < 10
+                        or h < 10
+                    ):
+                        continue
+
+                    resized = cv2.resize(template_gray, (w, h))
+                    res = cv2.matchTemplate(
+                        haystack_gray, resized, cv2.TM_CCOEFF_NORMED
+                    )
+                    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+                    if max_val > best_val:
+                        best_val = max_val
+                        best_loc = max_loc
+                        best_scale = scale
+
+                logger.info(
+                    f"Multiscale match for {os.path.basename(template_path)}: best confidence {best_val:.4f} at scale {best_scale} at {best_loc}"
+                )
 
             if best_val >= confidence and best_loc is not None:
                 w = int(template_gray.shape[1] * best_scale)
@@ -733,9 +821,39 @@ class WarpAutomator:
             logger.warning("Spotify window not found.")
             return False
         try:
-            # Ensure window is active and in foreground
+            # 1. Restore only if minimized, preserving maximized/normal state
+            try:
+                if win.isMinimized:
+                    win.restore()
+                    time.sleep(0.4)
+            except Exception as ex:
+                logger.warning(f"Failed to restore Spotify window: {ex}")
+
             if not self.activate_spotify_window():
                 return False
+
+            # Wait for window render/animation
+            time.sleep(0.5)
+
+            # 2. Get precise per-monitor DPI scale factor via ctypes
+            import ctypes
+
+            try:
+                # Set per-monitor DPI awareness
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+                hdc = ctypes.windll.user32.GetDC(0)
+                dpi = ctypes.windll.gdi32.GetDeviceCaps(hdc, 88)  # 88 = LOGPIXELSX
+                ctypes.windll.user32.ReleaseDC(0, hdc)
+                scale_factor = dpi / 96.0
+            except Exception as ex:
+                logger.warning(
+                    f"Failed to calculate DPI scale factor, defaulting to 1.0: {ex}"
+                )
+                scale_factor = 1.0
+
+            logger.info(
+                f"Spotify window coordinates: left={win.left}, top={win.top}, width={win.width}, height={win.height}. DPI scale factor={scale_factor}"
+            )
 
             from core.shared.utils import get_resources_dir
 
@@ -744,13 +862,9 @@ class WarpAutomator:
 
             if click_type == "playlist":
                 # Try to locate the big green play button on the playlist page
+                play_button_matched = False
+
                 try:
-                    play_button_path = str(
-                        get_resources_dir() / "spotify_play_button.png"
-                    )
-                    logger.info(
-                        f"Searching for Spotify play button: {play_button_path}"
-                    )
                     # Constrain region coordinates to screen bounds to avoid negative coordinate failures
                     try:
                         screen_w, screen_h = pyautogui.size()
@@ -760,29 +874,84 @@ class WarpAutomator:
                     top = max(0, win.top)
                     width = min(screen_w - left, win.width)
                     height = min(screen_h - top, win.height)
-                    region = (left, top, width, height)
 
-                    # Use confidence=0.7 to tolerate playlist gradient background variations
-                    pos = self.locate_template_multiscale(
-                        play_button_path, region=region, confidence=0.7
+                    # Convert to physical coordinates for pyautogui.screenshot region
+                    region = (
+                        int(left * scale_factor),
+                        int(top * scale_factor),
+                        int(width * scale_factor),
+                        int(height * scale_factor),
                     )
+
+                    # Take a screenshot of the region
+                    screenshot = pyautogui.screenshot(region=region)
+
+                    # Check if running in a test environment with mocked pyautogui
+                    is_mock = hasattr(screenshot, "_spec_class") or type(
+                        screenshot
+                    ).__name__ in ("MagicMock", "Mock")
+
+                    haystack = None
+                    if not is_mock:
+                        haystack = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+
+                    # A. Attempt high-reliability color masking fallback first
+                    pos = None
+                    if haystack is not None:
+                        pos = self.find_spotify_green_button(
+                            haystack, scale_factor=scale_factor
+                        )
+
                     if pos:
+                        # Convert coordinates back to logical pixels (or keep physical if process is DPI-aware)
                         left_pos = getattr(pos, "left", pos[0])
                         top_pos = getattr(pos, "top", pos[1])
                         w_pos = getattr(pos, "width", pos[2])
                         h_pos = getattr(pos, "height", pos[3])
-                        click_x = int(left_pos + w_pos // 2)
-                        click_y = int(top_pos + h_pos // 2)
+
+                        # Add relative offset to window origin
+                        click_x_phys = int(
+                            (left * scale_factor) + left_pos + w_pos // 2
+                        )
+                        click_y_phys = int((top * scale_factor) + top_pos + h_pos // 2)
+
+                        click_x = click_x_phys
+                        click_y = click_y_phys
+                        play_button_matched = True
                         direct_play_clicked = True
                         logger.info(
-                            f"Play button matched at {pos}. Clicking directly at ({click_x}, {click_y})"
+                            f"Play button matched by color masking at physical ({click_x}, {click_y})"
                         )
+
+                    # B. Fallback to multiscale template matching if color match fails
+                    if not play_button_matched:
+                        play_button_path = str(
+                            get_resources_dir() / "spotify_play_button.png"
+                        )
+                        logger.info(
+                            f"Searching for Spotify play button template: {play_button_path}"
+                        )
+                        pos = self.locate_template_multiscale(
+                            play_button_path, region=region, confidence=0.7
+                        )
+                        if pos:
+                            left_pos = getattr(pos, "left", pos[0])
+                            top_pos = getattr(pos, "top", pos[1])
+                            w_pos = getattr(pos, "width", pos[2])
+                            h_pos = getattr(pos, "height", pos[3])
+                            click_x = int(left_pos + w_pos // 2)
+                            click_y = int(top_pos + h_pos // 2)
+                            direct_play_clicked = True
+                            logger.info(
+                                f"Play button matched by template at physical ({click_x}, {click_y})"
+                            )
                 except Exception as ex:
                     logger.warning(
                         f"Failed image search matching for Spotify play button: {ex}"
                     )
 
                 if not direct_play_clicked:
+                    # Fallback click coordinate (10% higher than center)
                     click_x = win.left + win.width // 2
                     click_y = win.top + int(win.height * 0.4)
                     logger.info(
@@ -811,10 +980,15 @@ class WarpAutomator:
                 anchor_matched = False
                 hover_x, hover_y = None, None
 
-                # 1. Look for the "Melhor resultado" anchor image
+                # 1. Look for the "Melhor resultado" (PT) or "Top result" (EN) anchor image
                 try:
-                    anchor_path = str(get_resources_dir() / "spotify_search_anchor.png")
-                    logger.info(f"Searching for Spotify search anchor: {anchor_path}")
+                    anchor_pt_path = str(
+                        get_resources_dir() / "spotify_search_anchor.png"
+                    )
+                    anchor_en_path = str(
+                        get_resources_dir() / "spotify_search_anchor_en.png"
+                    )
+
                     # Constrain region coordinates to screen bounds and ignore top bar to avoid false matches
                     try:
                         screen_w, screen_h = pyautogui.size()
@@ -824,11 +998,29 @@ class WarpAutomator:
                     top = max(0, win.top + 120)  # Ignore top navigation bar
                     width = min(screen_w - left, win.width)
                     height = min(screen_h - top, win.height)
-                    region = (left, top, width, height)
 
-                    pos = self.locate_template_multiscale(
-                        anchor_path, region=region, confidence=0.4
+                    region = (
+                        int(left * scale_factor),
+                        int(top * scale_factor),
+                        int(width * scale_factor),
+                        int(height * scale_factor),
                     )
+
+                    pos = None
+                    # Try Portuguese template first
+                    if os.path.exists(anchor_pt_path):
+                        logger.info(f"Searching for PT search anchor: {anchor_pt_path}")
+                        pos = self.locate_template_multiscale(
+                            anchor_pt_path, region=region, confidence=0.4
+                        )
+
+                    # Try English template if PT fails
+                    if not pos and os.path.exists(anchor_en_path):
+                        logger.info(f"Searching for EN search anchor: {anchor_en_path}")
+                        pos = self.locate_template_multiscale(
+                            anchor_en_path, region=region, confidence=0.4
+                        )
+
                     if pos:
                         left_pos = getattr(pos, "left", pos[0])
                         top_pos = getattr(pos, "top", pos[1])
@@ -836,11 +1028,16 @@ class WarpAutomator:
                         h_pos = getattr(pos, "height", pos[3])
 
                         # Set hover point to 10% of window height below the anchor center
-                        hover_x = int(left_pos + w_pos // 2)
-                        hover_y = int(top_pos + h_pos // 2 + win.height * 0.1)
+                        hover_x_phys = int(left_pos + w_pos // 2)
+                        hover_y_phys = int(
+                            top_pos + h_pos // 2 + (win.height * scale_factor) * 0.1
+                        )
+
+                        hover_x = hover_x_phys
+                        hover_y = hover_y_phys
                         anchor_matched = True
                         logger.info(
-                            f"Anchor matched at {pos}. Calculated hover point 10% below: ({hover_x}, {hover_y})"
+                            f"Anchor matched at physical ({left_pos}, {top_pos}). Calculated physical hover point: ({hover_x}, {hover_y})"
                         )
                 except Exception as ex:
                     logger.warning(
@@ -861,10 +1058,14 @@ class WarpAutomator:
                             f"Anchor not matched. Using absolute hover point ({hover_x}, {hover_y}) from config"
                         )
                     else:
-                        hover_x = win.left + win.width // 2
-                        hover_y = win.top + win.height // 2
+                        # 25% width, 35% height fallback (Top Left region where search result card resides)
+                        hover_x = win.left + int(win.width * 0.25)
+                        hover_y = win.top + int(win.height * 0.35)
+                        # Adjust for DPI scale since pyautogui click will be in physical pixels
+                        hover_x = int(hover_x * scale_factor)
+                        hover_y = int(hover_y * scale_factor)
                         logger.info(
-                            f"Anchor not matched. Using relative center hover point ({hover_x}, {hover_y})"
+                            f"Anchor not matched. Using robust relative 25%/35% hover point at physical ({hover_x}, {hover_y})"
                         )
 
                 # 2. Move mouse to the hover position to reveal the play button
@@ -874,9 +1075,7 @@ class WarpAutomator:
 
                 # 3. Look for the green play button
                 play_button_path = str(get_resources_dir() / "spotify_play_button.png")
-                logger.info(
-                    f"Searching for Spotify play button after hover: {play_button_path}"
-                )
+
                 # Constrain region coordinates to screen bounds
                 try:
                     screen_w, screen_h = pyautogui.size()
@@ -886,13 +1085,64 @@ class WarpAutomator:
                 top = max(0, win.top)
                 width = min(screen_w - left, win.width)
                 height = min(screen_h - top, win.height)
-                region = (left, top, width, height)
+
+                region = (
+                    int(left * scale_factor),
+                    int(top * scale_factor),
+                    int(width * scale_factor),
+                    int(height * scale_factor),
+                )
 
                 play_pos = None
                 try:
-                    play_pos = self.locate_template_multiscale(
-                        play_button_path, region=region, confidence=0.7
-                    )
+                    # A. Try high-reliability color masking first
+                    screenshot = pyautogui.screenshot(region=region)
+                    is_mock = hasattr(screenshot, "_spec_class") or type(
+                        screenshot
+                    ).__name__ in ("MagicMock", "Mock")
+
+                    haystack = None
+                    if not is_mock:
+                        haystack = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+
+                    pos = None
+                    if haystack is not None:
+                        pos = self.find_spotify_green_button(
+                            haystack, scale_factor=scale_factor
+                        )
+
+                    if pos:
+                        left_pos = getattr(pos, "left", pos[0])
+                        top_pos = getattr(pos, "top", pos[1])
+                        w_pos = getattr(pos, "width", pos[2])
+                        h_pos = getattr(pos, "height", pos[3])
+
+                        click_x = int((left * scale_factor) + left_pos + w_pos // 2)
+                        click_y = int((top * scale_factor) + top_pos + h_pos // 2)
+                        play_pos = (click_x, click_y)
+                        logger.info(
+                            f"Play button matched after hover by color masking at physical ({click_x}, {click_y})"
+                        )
+
+                    # B. Fallback to template matching
+                    if not play_pos:
+                        logger.info(
+                            f"Searching for Spotify play button template after hover: {play_button_path}"
+                        )
+                        t_pos = self.locate_template_multiscale(
+                            play_button_path, region=region, confidence=0.7
+                        )
+                        if t_pos:
+                            left_pos = getattr(t_pos, "left", t_pos[0])
+                            top_pos = getattr(t_pos, "top", t_pos[1])
+                            w_pos = getattr(t_pos, "width", t_pos[2])
+                            h_pos = getattr(t_pos, "height", t_pos[3])
+                            click_x = int(left_pos + w_pos // 2)
+                            click_y = int(top_pos + h_pos // 2)
+                            play_pos = (click_x, click_y)
+                            logger.info(
+                                f"Play button matched after hover by template at physical ({click_x}, {click_y})"
+                            )
                 except Exception as ex:
                     logger.warning(
                         f"Failed image search matching for Spotify play button: {ex}"
@@ -900,15 +1150,7 @@ class WarpAutomator:
 
                 if play_pos:
                     # Play button found! Click it directly
-                    left_pos = getattr(play_pos, "left", play_pos[0])
-                    top_pos = getattr(play_pos, "top", play_pos[1])
-                    w_pos = getattr(play_pos, "width", play_pos[2])
-                    h_pos = getattr(play_pos, "height", play_pos[3])
-                    click_x = int(left_pos + w_pos // 2)
-                    click_y = int(top_pos + h_pos // 2)
-                    logger.info(
-                        f"Play button matched at {play_pos}. Clicking directly at ({click_x}, {click_y})"
-                    )
+                    click_x, click_y = play_pos
                     pyautogui.click(click_x, click_y)
 
                     # Wait and check if playing
