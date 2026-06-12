@@ -25,18 +25,6 @@ from core.shared.errors import BusinessError, TechnicalError
 
 
 @pytest.fixture
-def mock_dispatcher() -> MagicMock:
-    dispatcher = MagicMock()
-    dispatcher.automator = MagicMock()
-    return dispatcher
-
-
-@pytest.fixture
-def mock_notifier() -> MagicMock:
-    return MagicMock()
-
-
-@pytest.fixture
 def clean_job_history() -> Generator[None]:
     job_manager.history.clear()
     yield

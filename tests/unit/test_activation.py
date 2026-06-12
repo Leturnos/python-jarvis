@@ -2,37 +2,12 @@ import time
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from core.activation import (
     ActivationActionType,
     ActivationContext,
     ActivationManager,
 )
 from core.runtime.state import JarvisState
-
-
-@pytest.fixture
-def base_config() -> dict[str, Any]:
-    return {
-        "jarvis": {
-            "threshold": 0.5,
-        },
-        "voice_activation": {
-            "mode": "hybrid",
-            "push_to_talk": {
-                "key": "ctrl+alt",
-                "behavior": "hold",
-            },
-            "wake_word": {
-                "enabled": True,
-                "keyword": "hey_jarvis",
-            },
-            "auto_suspend": {
-                "fullscreen": True,
-            },
-        },
-    }
 
 
 def test_activation_manager_init(base_config: dict[str, Any]) -> None:

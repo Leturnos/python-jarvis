@@ -10,13 +10,6 @@ from core.controller import JarvisController
 from core.runtime.state import JarvisState, state_manager
 
 
-@pytest.fixture(autouse=True)
-def reset_state():
-    state_manager.set_state(JarvisState.IDLE)
-    state_manager._callbacks = []  # Clear callbacks to avoid cross-test interference
-    yield
-
-
 @pytest.fixture
 def mock_deps():
     stop_event = threading.Event()
