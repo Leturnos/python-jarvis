@@ -69,10 +69,7 @@ warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 
-# Ignorar código legado de UI
-[[tool.mypy.overrides]]
-module = "core.ui.legacy.*"
-ignore_errors = true
+
 
 # Ignorar missing imports apenas de libs específicas de terceiros sem stubs
 [[tool.mypy.overrides]]
@@ -94,7 +91,6 @@ module = [
     "pythoncom.*",
     "psutil.*",
     "faster_whisper.*",
-    "pystray.*",
     "qdarktheme.*",
     "win32event.*",
     "winerror.*"
