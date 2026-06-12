@@ -17,6 +17,17 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 - **`command_resolver.py`**: Lógica de roteamento local (Match Exato e Fuzzy Match).
 - **`prompt_guard.py`**: Camada de segurança contra injeção de prompt e sanitização de saída.
 
+### 🧠 Abstração e Cache de LLM (`core/llm/` & `core/cache/`)
+- **`llm/base.py`**: Definição de `BaseLLMProvider`.
+- **`llm/litellm_provider.py`**: Integração multi-provedor (Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter) via LiteLLM.
+- **`cache/sqlite_cache.py`**: Implementação de cache SQLite das respostas do LLM indexadas por hash SHA-256 das instruções e contexto.
+
+### 🎵 Mídia e Integrações (`core/media/`)
+- **`resolver.py`**: Resolução dinâmica de comandos de mídia para provedores como Spotify ou controle do SO.
+- **`nlp.py`**: Extração local de intenções de mídia usando palavras-chave (play, pause, skip, volume, etc.).
+- **`providers/spotify.py`**: Automação do Spotify baseada em busca visual por templates e controle de janela.
+- **`providers/os_controller.py`**: Controle de mídia nativo do Windows (teclas de mídia virtuais).
+
 ### ⚙️ Execução e Automação (`core/execution/`)
 - **`dispatcher.py`**: Roteia comandos e valida `risk_level` antes da execução.
 - **`execution_plan.py`**: Define o esquema estruturado de passos para automação.
@@ -40,11 +51,12 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 - **`persistence/history_db.py`**: Gerencia o SQLite `data/history.db` para auditoria.
 
 ### 💻 Interface de Usuário (`core/ui/`)
-- **`ui.py`**: Interface Rich no terminal.
-- **`tray.py`**: Ícone e menu na bandeja do sistema.
-- **`security_ui.py`**: Diálogo modal para autorização de comandos perigosos.
-- **`command_palette.py`**: Interface de entrada rápida via teclado.
-- **`notifications.py`**: Notificações nativas do Windows.
+- **`app_controller.py`**: Controlador central da UI baseado em PySide6 e integração do ciclo de vida da aplicação (inclusive `QSystemTrayIcon`).
+- **`main_window.py`**: Janela principal da interface gráfica PySide6.
+- **`command_palette.py`**: Interface de entrada rápida via teclado (Spotlight-like) registrada via hotkey global.
+- **`security_ui.py`**: Diálogo modal PySide6 para autorização de comandos com nível de risco elevado.
+- **`notifications.py`**: Notificações nativas do Windows usando `plyer`.
+- **`widgets/status_card.py`**: Widget personalizado para exibir o status atual do Jarvis.
 
 ### 🧱 Utilitários Compartilhados (`core/shared/`)
 - **`utils.py`**: Funções auxiliares (ex: `normalize_text`).
@@ -54,3 +66,4 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 - **Especificidades do Windows:** Muitos módulos dependem fortemente de `win32gui`, `win32con` e `pythoncom`.
 - **Tratamento de Erros:** A degradação suave é fundamental. Falhas em IA não devem travar o sistema.
 - **Segurança:** O `risk_level` deve ser validado sempre no `dispatcher` antes da execução física.
+- **UI Desacoplada:** *Regra:* Mantenha lógica de negócios e orquestração fora das classes de UI (Widgets/Window). Toda comunicação entre a UI e o Core deve ser feita através do `AppController` ou do `JarvisTrayAdapter`.

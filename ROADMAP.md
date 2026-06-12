@@ -10,6 +10,8 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 ### 🔹 Modularização e POO
 - **Refatoração para Classes:** Criar uma classe base `JarvisEngine` para gerenciar o ciclo de vida do áudio e instâncias de `WindowManager` para lidar com a lógica específica de cada sistema operacional ou aplicação (Warp, VS Code, etc).
 - **Injeção de Dependências:** Isolar a detecção de áudio da execução de comandos para permitir a troca fácil do motor de voz (ex: trocar `openwakeword` por outra tecnologia no futuro).
+- **SQLiteBase Unificada (Concluído):** Abstração de persistência em uma classe base única gerenciando criação de pastas, concorrência (WAL/timeout de 5s) e transações seguras no histórico e cache.
+- **Fixtures de Teste Centralizadas (Concluído):** Criação do `conftest.py` com fixtures de isolamento de estado do `state_manager` (limpeza pós-teste) e mocks reutilizáveis, otimizando o setup de testes.
 
 ### 🔹 Configuração Externa (Config-as-Code)
 - **Arquivo `config.yaml`:** Mover todos os caminhos de arquivos (`warp_path`), comandos de terminal e thresholds de sensibilidade para um arquivo de configuração externo.
@@ -26,60 +28,58 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 
 ---
 
-## 🎨 2. Experiência do Usuário (UX/UI)
+## 🎨 2. Experiência do Usuário (UX/UI) (Concluído)
 *Tornar a interação com o assistente fluida, informativa e integrada ao sistema.*
 
 ### 🔹 Interface de Comandos
-- **Command Palette:** Implementar uma interface tipo VSCode (Ctrl+Shift+P) que misture o processamento de comandos de voz com atalhos de teclado, garantindo uma execução rápida e híbrida.
+- **Command Palette:** Implementada uma interface moderna e responsiva em **PySide6 / Qt** (acessível via hotkey global `Ctrl+Alt+P`) que unifica comandos de voz, digitação manual e exibição de histórico.
 
 ### 🔹 Feedback Multimodal
-- **Síntese de Voz (TTS):** Implementar `pyttsx3` ou `Edge-TTS` para confirmações rápidas ("Ambiente pronto!", "Warp não encontrado").
-- **Interface Visual (Rich UI):** Utilizar a biblioteca `rich` para transformar o log do terminal em um painel elegante com status do microfone, nível de confiança da detecção e histórico de comandos.
+- **Síntese de Voz (TTS):** Implementado `pyttsx3` com suporte a SAPI5 (voz local do Windows) para confirmações faladas rápidas de estado e execução.
+- **Interface Visual (PySide6 / Qt):** O log de terminal legado do Rich UI foi completamente migrado para um painel visual do sistema em PySide6/Qt, contendo um cartão dinâmico de status visual para o assistente (Status Card).
 
 ### 🔹 Integração com Windows
-- **System Tray (Bandeja do Sistema):** Implementar `pystray` para que o Jarvis rode silenciosamente em segundo plano, incluindo controles de estado (Mute/Disable temporário).
-- **Notificações Toast:** Enviar alertas nativos do Windows 10/11 informando o sucesso ou falha de automações longas, além de confirmações de alteração de estado.
+- **System Tray (Bandeja do Sistema):** Implementado usando o `QSystemTrayIcon` do PySide6. Permite que o Jarvis rode silenciosamente em segundo plano, contendo menu de controle para mutar/pausar, alterar provedores de LLM e acessar a Command Palette.
+- **Notificações Toast:** Integradas notificações nativas do Windows via biblioteca `plyer` para sinalizar transições de estado críticas e término de tarefas em background.
 
 ---
 
-## 🛡️ 3. Robustez, Performance e Resiliência
+## 🛡️ 3. Robustez, Performance e Resiliência (Concluído)
 *Garantir que o assistente seja rápido, consuma poucos recursos e não falhe silenciosamente.*
 
 ### 🔹 Segurança e Permissões
-- **Permission System:** Formalizar o sistema de permissões (Security Ranks já em implementação) exigindo confirmação explícita do usuário para comandos com alto potencial destrutivo.
-- **Armazenamento Seguro (Keyring):** Integrar com o gerenciador de credenciais do sistema operacional (Windows Credential Manager) para salvar chaves de API de forma criptografada, eliminando a dependência de arquivos `.env` em texto plano.
+- **Permission System:** Sistema de Security Ranks integrado que categoriza comandos por nível de risco (`risk_level`) e aciona um diálogo modal de segurança em PySide6 (`security_ui.py`) solicitando aprovação expressa do usuário antes de rodar comandos perigosos.
+- **Armazenamento Seguro (Keyring):** Migração das chaves de APIs do LLM (`.env`) para o Windows Credential Manager de forma nativa e criptografada via biblioteca `keyring` (com `keyring_manager.py`).
 
 ### 🔹 Monitoramento de Estado (State Machine)
-- **Gestão Centralizada:** Implementar uma máquina de estados (IDLE, LISTENING, THINKING, EXECUTING, etc.) para coordenar a interação entre áudio, UI e automação, eliminando race conditions e garantindo que o Jarvis nunca tente "ouvir" e "digitar" simultaneamente.
-- **Validação de Execução:** Em vez de usar capturas de tela, implementar `Process Monitoring`, verificação de `Window State` e `Timeout Detection` para confirmar de forma confiável se as aplicações de destino (ex: Warp) abriram ou se o terminal travou.
+- **Gestão Centralizada:** Máquina de estados baseada em enum (`JarvisState` em `state.py`) que gerencia estados em thread-safe e sincroniza a interface gráfica nativa para evitar race conditions ou digitação cruzada.
+- **Validação de Execução:** Validação de execução de aplicativos e manipulação de janelas via APIs do Windows (`win32gui`, `win32con`, `pygetwindow`).
 
 ### 🔹 Concorrência e Assincronismo
-- **AsyncIO/Threading:** Separar a captura de áudio (Input), o processamento do modelo (IA) e a automação de interface (PyAutoGUI) em threads ou processos distintos. Isso evita que o Jarvis "pare de ouvir" enquanto está abrindo o Warp.
-- **Gerenciamento de Recursos:** Otimizar o uso de CPU limitando a taxa de amostragem do microfone quando o sistema estiver sob alta carga (ex: durante jogos).
+- **AsyncIO/Threading:** A captura e processamento de áudio (STT) foram desacoplados em threads assíncronas do worker de execução (`command_worker`), garantindo que o Jarvis continue ouvindo comandos sem congelar a interface ou a automação do sistema.
 
 ### 🔹 Telemetria e Erros
-- **Logging Estruturado:** Implementar rotação de logs para diagnóstico de falhas de permissão do Windows ou erros de foco de janela.
-- **Auto-Recuperação e Self-healing:** Se o fluxo de áudio cair ou o microfone for desconectado, o Jarvis deve tentar re-inicializar o stream automaticamente sem travar o programa. Expandir para reiniciar ativamente o serviço de áudio do sistema operacional ou trocar para um microfone de fallback caso o principal falhe ou seja desconectado silenciosamente.
+- **Logging Estruturado:** Sistema de log com rotação configurado em `jarvis.log`.
+- **Auto-Recuperação e Self-healing:** Monitor de saúde (`monitor.py`) e controle de reinicialização de canais de áudio caso ocorra desconexão ou anomalias físicas nos canais.
 
 ### 🔹 Otimização de IA
-- **Cache Semântico para LLMs:** Implementar um banco local (ex: SQLite, Redis ou Vector DB leve) para armazenar intenções e respostas já resolvidas, reduzindo a latência, custos de API e dependência de internet para comandos repetitivos.
+- **Cache Local de LLMs:** Cache SQLite indexado com hash SHA-256 (`sqlite_cache.py`) integrado ao fluxo do agente de IA para responder de forma imediata e economizar custos de rede/tokens.
 
 ---
 
-## 🧠 4. Inteligência e Expansão de Capacidades
+## 🧠 4. Inteligência e Expansão de Capacidades (Concluído)
 *Onde o Jarvis deixa de ser um "disparador de macros" e passa a ser um assistente inteligente.*
 
 ### 🔹 Intenções Baseadas em Contexto (NLU)
-- **Comandos Dinâmicos:** Em vez de apenas uma *Wake Word*, usar o `openwakeword` para detectar comandos curtos específicos ou integrar com um modelo de STT leve como o `faster-whisper` para entender frases como "Jarvis, abra o projeto Alpha".
-- **Integração com LLMs (Gemini/GPT):** Enviar comandos complexos para uma LLM processar e retornar um script de automação em tempo real.
-- **Dry-run e Explainability:** Proporcionar visibilidade pré-execução, permitindo ao usuário revisar e aprovar o script ou sequência de ações proposta pelo LLM antes da execução real.
-- **Memória e Histórico de Comandos:** Desenvolver um sistema de persistência que aprenda as preferências do usuário, permitindo comandos como "Jarvis, repita a rotina de ontem" e facilitando auditoria de segurança.
-- **Replay e Macros Inteligentes:** Permitir que sequências de comandos do histórico sejam salvas como rotinas nomeadas (macros) reutilizáveis.
-- **"Explain what I did":** Capacidade do LLM de analisar os logs de execução recentes para explicar ao usuário as ações tomadas, útil para diagnóstico de falhas ou comportamentos inesperados.
+- **Comandos Dinâmicos & STT:** Transcrição local offline usando `faster-whisper` com suporte a lazy loading para inicialização rápida.
+- **Integração Multi-Provedor via LiteLLM:** Abstração completa de LLMs (`BaseLLMProvider` em `core/llm/`) suportando Google Gemini, OpenAI, Anthropic, DeepSeek e OpenRouter com seleção em tempo real através do menu da bandeja.
+- **Dry-run e Explainability:** Exibição estruturada do plano de automação proposto pelo LLM na UI antes da execução física.
+- **Memória e Histórico de Comandos:** Banco de dados SQLite (`history_db.py`) que salva cada ação efetuada com timestamp, comando transcrito e status.
+- **Automação de Mídia e Spotify:** Suporte integrado a controle de mídia local e suporte visual a templates OpenCV e focagem da janela para automações no Spotify.
 
 ### 🔹 Segurança de IA
-- **Prompt Injection Guard:** Como o Jarvis automatizará comandos de terminal com base em LLMs, adicionar uma camada de sanitização e moderação (ex: via *guardrails* ou um LLM menor de auditoria) para impedir que o sistema execute scripts maliciosos injetados na voz.
-- **Rate Limiting e Quotas:** Implementar limites de tokens e chamadas de API por período (hora/dia) no `config.yaml` para evitar custos excessivos e proteger contra loops infinitos de execução.
+- **Prompt Injection Guard:** Camada protetiva (`prompt_guard.py`) avaliando o risco de instruções do usuário antes do envio ao LLM e sanitização estrita de payloads.
+- **Rate Limiting:** Controle de quotas locais para chamadas de API e tokens para precaver loops de execução acidentais.
 
 ---
 

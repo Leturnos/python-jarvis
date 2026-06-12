@@ -15,11 +15,11 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 
 ## 🎨 Fase 2: Experiência do Usuário (Dando Vida)
 - [x] **Feedback de Voz (TTS):** Integrar a biblioteca `pyttsx3` para o Jarvis falar "Sim?" ao detectar o comando e "Pronto!" ao terminar.
-- [x] **Interface de Terminal (Rich):** Implementar um painel visual que mostre o status do microfone em tempo real usando a biblioteca `rich`.
+- [x] **Interface Gráfica (PySide6 / Qt):** Desenvolver um painel visual (Status Card) em PySide6/Qt para exibir o estado de ciclo de vida do assistente em tempo real.
 - [x] **Notificações Nativas:** Adicionar notificações de balão (Toast) no Windows para avisar sobre o status da automação.
-- [x] **Ícone na Bandeja (System Tray):** Implementar o `pystray` para permitir minimizar o Jarvis para perto do relógio do Windows.
+- [x] **Ícone na Bandeja (System Tray):** Implementar `QSystemTrayIcon` do PySide6 para permitir rodar o Jarvis silenciosamente perto do relógio do Windows.
 - [x] **Temporizador de Desativação (Disable for...):** Opção para silenciar o Jarvis por 30min, 1h ou 3h via menu da bandeja.
-- [x] **Command Palette:** Criar paleta de comandos (tipo Ctrl+Shift+P) misturando input de teclado com o processamento do assistente.
+- [x] **Command Palette:** Criar paleta de comandos gráfica em PySide6 (Ctrl+Alt+P) misturando atalhos de teclado com o processamento do assistente.
 
 ## 🚀 Fase 3: Performance e Background (Profissionalismo)
 - [x] **Threads Separadas:** Mover a detecção de áudio para uma thread e a execução de comandos para outra (evita "surdez" temporária do script).
@@ -40,10 +40,14 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Integração com Keyring (Segurança):** Migrar a chave da API do LLM do arquivo `.env` em texto plano para o gerenciador de credenciais seguro do Sistema Operacional.
 - [x] **Explain what I did:** Permitir que o usuário pergunte "o que você fez?" e injetar o último log de ação para o LLM gerar uma explicação humana.
 - [x] **Observabilidade (Métricas Leves):** Salvar no SQLite métricas simples como latência da API, cache hit rate e tempo de execução dos comandos.
+- [x] **Refatoração do Banco de Dados (SQLiteBase):** Abstrair conexões redundantes do cache e histórico em uma classe base com suporte a WAL, timeout e conexões atômicas.
+- [x] **Eliminação de Código Morto:** Remover diretório legado de UI (`core/ui/legacy/`) e limpar dependências residuais no linting.
+- [x] **Unificação de Fixtures de Teste:** Criar `conftest.py` com fixtures centralizadas de configuração, mocks (dispatcher, notifier, automator) e limpeza automática de estado do state manager.
 
 ## 🧠 Fase 4: Expansão de Inteligência (O Próximo Nível)
 - [x] **Múltiplos Comandos de Voz:** Treinar ou adicionar modelos para "Jarvis, fechar tudo" ou "Jarvis, modo trabalho".
-- [x] **Integração com LLM:** Permitir que, após o comando "Hey Jarvis", o usuário possa falar uma instrução que será processada por uma IA (ex: "Abra o projeto MVP e rode os testes").
+- [x] **Integração com LLM via LiteLLM:** Abstração completa de LLMs (`BaseLLMProvider`) suportando múltiplos provedores (Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter) configurável via Keyring + `config.yaml`.
+- [x] **Automação de Mídia (Spotify):** Criar suporte local para controle de mídia e integração do Spotify usando detecção de imagens por OpenCV e controle de janela.
 - [x] **Validação de Estado:** Substituir possíveis abordagens de Screenshot por *Process Monitoring*, *Window State tracking* e *Timeout Detection* para gerenciar travamentos de UI.
 - [x] **Histórico e Memória:** Criar um banco de dados local SQLite (`history.db`) para armazenar logs de comandos reconhecidos, data, horário e status de execução.
 - [x] **Cache de Respostas LLM:** Configurar um sistema de cache de similaridade semântica para retornar scripts instantâneos caso a mesma intenção de voz seja detectada novamente.
