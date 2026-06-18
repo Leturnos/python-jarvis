@@ -5,6 +5,7 @@ import yaml
 from dotenv import load_dotenv
 
 from core.infra.logger_config import logger
+from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
 
 load_dotenv()
 
@@ -41,13 +42,24 @@ def load_config() -> dict[str, Any]:
                 "push_to_talk": {"key": "ctrl+alt", "behavior": "hold"},
                 "wake_word": {"enabled": True, "keyword": "hey jarvis"},
                 "auto_suspend": {"fullscreen": True},
+                "thresholds": {
+                    "silence_rms": 15.0,
+                    "speech_rms": 20.0,
+                    "max_zero_rms_frames": 30,
+                },
+                "timeouts": {
+                    "silence_end_seconds": 1.5,
+                    "max_listening_seconds": 10.0,
+                },
             },
             "llm": {
-                "active_provider": "gemini",
+                "active_provider": DEFAULT_PROVIDER,
                 "providers": {
-                    "gemini": {"model": "gemini-2.5-flash"},
-                    "openai": {"model": "gpt-4.1-mini"},
-                    "anthropic": {"model": "claude-3-5-haiku-latest"},
+                    "gemini": {"model": DEFAULT_MODELS["gemini"]},
+                    "openai": {"model": DEFAULT_MODELS["openai"]},
+                    "anthropic": {"model": DEFAULT_MODELS["anthropic"]},
+                    "deepseek": {"model": DEFAULT_MODELS["deepseek"]},
+                    "openrouter": {"model": DEFAULT_MODELS["openrouter"]},
                 },
             },
             "tts": {"provider": "sapi5", "voice_keyword": "maria"},
@@ -61,6 +73,17 @@ def load_config() -> dict[str, Any]:
                 "llm": {
                     "max_requests_per_day": 100,
                     "max_tokens_per_day": 500000,
+                }
+            },
+            "ai": {
+                "nlp": {
+                    "fuzzy_match_threshold": 0.7,
+                }
+            },
+            "automation": {
+                "cv": {
+                    "template_confidence_high": 0.7,
+                    "template_confidence_low": 0.4,
                 }
             },
             "integrations": {"warp": {"path": os.environ.get("WARP_PATH", "")}},

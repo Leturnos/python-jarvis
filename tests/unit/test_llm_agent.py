@@ -99,3 +99,22 @@ def test_llm_agent_reinit_provider(mock_getenv, mock_get_secret):
         # Revert to gemini to avoid contaminating other tests
         config["llm"]["active_provider"] = original_provider
         agent.reinit_provider()
+
+
+@patch("core.llm.litellm_provider.KeyringManager.get_secret")
+@patch("os.getenv")
+def test_llm_agent_fallback_default_model(mock_getenv, mock_get_secret):
+    mock_get_secret.return_value = "dummy-key"
+    mock_getenv.return_value = None
+
+    from core.infra.config import config
+
+    original_llm = config.get("llm", {}).copy()
+
+    try:
+        config["llm"] = {}
+        agent = LLMAgent()
+        assert agent.provider.provider == "openrouter"
+        assert agent.provider.model == "openrouter/google/gemini-2.5-flash"
+    finally:
+        config["llm"] = original_llm

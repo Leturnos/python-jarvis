@@ -53,7 +53,16 @@ class CommandResolver:
     def get_available_intent_names(self) -> list[str]:
         return list(set(self.get_available_commands_map().values()))
 
-    def resolve(self, text: str, threshold: float = 0.7) -> ResolutionResult | None:
+    def resolve(
+        self, text: str, threshold: float | None = None
+    ) -> ResolutionResult | None:
+        if threshold is None:
+            from core.infra.config import config
+
+            threshold = (
+                config.get("ai", {}).get("nlp", {}).get("fuzzy_match_threshold", 0.7)
+            )
+
         available_commands_map = self.get_available_commands_map()
         available_commands = list(available_commands_map.keys())
         normalized = normalize_text(text)

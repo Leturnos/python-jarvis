@@ -9,6 +9,7 @@ from core.infra.logger_config import logger
 from core.llm import LiteLLMProvider, LLMError
 from core.plugins.plugin_manager import plugin_manager
 from core.runtime.rate_limiter import rate_limiter
+from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
 from core.shared.errors import TechnicalError
 from core.shared.utils import time_it
 
@@ -31,12 +32,17 @@ class LLMAgent:
 
     def _init_provider(self) -> None:
         llm_config = config.get("llm", {})
-        active_provider = llm_config.get("active_provider", "gemini")
-        model_name = (
-            llm_config.get("providers", {})
-            .get(active_provider, {})
-            .get("model", "gemini-2.0-flash")
-        )
+        active_provider = llm_config.get("active_provider", DEFAULT_PROVIDER)
+
+        provider_config = llm_config.get("providers", {}).get(active_provider, {})
+        model_name = provider_config.get("model")
+
+        if not model_name:
+            model_name = DEFAULT_MODELS.get(active_provider, "gemini-2.5-flash")
+            logger.warning(
+                f"Model configuration for active provider '{active_provider}' is missing. "
+                f"Falling back to default model: '{model_name}'"
+            )
 
         logger.info(
             f"Initializing LLMAgent with provider: {active_provider}, model: {model_name}"

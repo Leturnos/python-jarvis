@@ -12,6 +12,7 @@ from core.audio.stt_engine import stt_engine
 from core.execution.job_queue import Job, JobType
 from core.runtime.state import JarvisState, state_manager
 from core.shared.utils import normalize_text
+from core.shared.voice_responses import CONFIRMATION_APPROVALS, CONFIRMATION_REJECTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,13 @@ class JarvisController:
         self.volume_multiplier = config.get("jarvis", {}).get("volume_multiplier", 1.0)
         self.threshold = config.get("jarvis", {}).get("threshold", 0.4)
         self.cooldown_seconds = config.get("jarvis", {}).get("cooldown_seconds", 5)
-        self.MAX_ZERO_RMS_BEFORE_RESET = 30
+
+        # Audio reset threshold from config
+        self.MAX_ZERO_RMS_BEFORE_RESET = (
+            config.get("voice_activation", {})
+            .get("thresholds", {})
+            .get("max_zero_rms_frames", 30)
+        )
 
     def start(self) -> None:
         """Starts the main orchestration loop.
@@ -280,17 +287,12 @@ class JarvisController:
             try:
                 text = stt_engine.transcribe(audio_chunk)
                 norm = normalize_text(text)
-                if any(
-                    word in norm
-                    for word in ["sim", "confirma", "pode", "autorizo", "yes", "vai"]
-                ):
+                if any(word in norm for word in CONFIRMATION_APPROVALS):
                     logger.info("Voice confirmation: APPROVED")
                     if self.dispatcher.active_dialog:
                         self.dispatcher.active_dialog.approve()
                     self.ignore_audio_until = now + 0.3
-                elif any(
-                    word in norm for word in ["nao", "não", "cancela", "aborta", "no"]
-                ):
+                elif any(word in norm for word in CONFIRMATION_REJECTIONS):
                     logger.info("Voice confirmation: REJECTED")
                     if self.dispatcher.active_dialog:
                         self.dispatcher.active_dialog.reject()
@@ -311,15 +313,34 @@ class JarvisController:
         self.command_frames.append(pcm.tobytes())
 
         stop_recording = False
-        if rms < 15.0:
+        silence_rms_threshold = (
+            self.config.get("voice_activation", {})
+            .get("thresholds", {})
+            .get("silence_rms", 15.0)
+        )
+        silence_end_timeout = (
+            self.config.get("voice_activation", {})
+            .get("timeouts", {})
+            .get("silence_end_seconds", 1.5)
+        )
+        max_listening_timeout = (
+            self.config.get("voice_activation", {})
+            .get("timeouts", {})
+            .get("max_listening_seconds", 10.0)
+        )
+
+        if rms < silence_rms_threshold:
             if self.silence_start is None:
                 self.silence_start = now
-            elif now - self.silence_start > 1.5:
+            elif now - self.silence_start > silence_end_timeout:
                 stop_recording = True
         else:
             self.silence_start = None
 
-        if self.command_start_time is not None and now - self.command_start_time > 10.0:
+        if (
+            self.command_start_time is not None
+            and now - self.command_start_time > max_listening_timeout
+        ):
             logger.warning("Listening timeout reached.")
             stop_recording = True
 
@@ -349,8 +370,13 @@ class JarvisController:
 
         highest_score = 0.0
         detected_wakeword = None
+        speech_rms_threshold = (
+            self.config.get("voice_activation", {})
+            .get("thresholds", {})
+            .get("speech_rms", 20.0)
+        )
 
-        if rms > 20 and context.timestamp > self.cooldown:
+        if rms > speech_rms_threshold and context.timestamp > self.cooldown:
             prediction = self.model.predict(pcm)
             for model_key, score in prediction.items():
                 if score > highest_score:

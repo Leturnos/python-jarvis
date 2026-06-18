@@ -20,6 +20,15 @@ import win32gui
 import win32process
 
 from core.infra.logger_config import logger
+from core.shared.constants import (
+    DEFAULT_SAPI5_LANGS,
+    DEFAULT_SAPI5_VOICE,
+    DEFAULT_TTS_RATE,
+    DEFAULT_TTS_VOLUME,
+    AppRegistry,
+    SpotifyCV,
+    Timing,
+)
 from core.shared.utils import time_it
 
 
@@ -57,7 +66,9 @@ class WarpAutomator:
 
             # Find a Portuguese voice if available
             voice_keyword = (
-                self.config.get("tts", {}).get("voice_keyword", "maria").lower()
+                self.config.get("tts", {})
+                .get("voice_keyword", DEFAULT_SAPI5_VOICE)
+                .lower()
             )
             try:
                 available_voices = voice.GetVoices()
@@ -81,7 +92,10 @@ class WarpAutomator:
                     for i in range(available_voices.Count):
                         v = available_voices.Item(i)
                         desc = v.GetDescription().lower()
-                        if "portuguese" in desc or "brazil" in desc:
+                        if (
+                            DEFAULT_SAPI5_LANGS[0] in desc
+                            or DEFAULT_SAPI5_LANGS[1] in desc
+                        ):
                             voice.Voice = v
                             logger.info(
                                 f"Fallback SAPI Voice selected (Portuguese): {v.GetDescription()}"
@@ -95,13 +109,13 @@ class WarpAutomator:
                 logger.debug(f"Default voice will be used: {e}")
 
             # SAPI Rate is -10 to 10 (0 is normal)
-            voice.Rate = 2
-            voice.Volume = 100
+            voice.Rate = DEFAULT_TTS_RATE
+            voice.Volume = DEFAULT_TTS_VOLUME
 
             while not self._stop_tts.is_set():
                 try:
                     # Non-blocking check for items in queue
-                    text = self._speech_queue.get(timeout=0.5)
+                    text = self._speech_queue.get(timeout=Timing.UI_STABILIZATION_LONG)
                     self.is_speaking = True
                     logger.info(f"Jarvis is speaking: '{text}'")
 
@@ -277,7 +291,7 @@ class WarpAutomator:
                 logger.info(f"Window found: {matching_windows[0]}")
                 return matching_windows[0]
 
-            time.sleep(0.2)
+            time.sleep(Timing.WINDOW_SEARCH_SLEEP)
 
         logger.warning("wait_for_window timed out without finding a match.")
         return None
@@ -291,7 +305,7 @@ class WarpAutomator:
             else:
                 win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
 
-            time.sleep(0.5)
+            time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)
 
             try:
                 # ALT key trick to steal focus on Windows
@@ -301,7 +315,7 @@ class WarpAutomator:
             except Exception as e:
                 logger.warning(f"Focus error on SetForegroundWindow: {e}")
 
-            time.sleep(0.4)
+            time.sleep(Timing.WINDOW_RECOVERY_SLEEP)
             return True
         except Exception as e:
             logger.error(f"Error activating window by HWND: {e}")
@@ -342,17 +356,17 @@ class WarpAutomator:
             candidate_pids = current_pids - pids_before
             if candidate_pids:
                 break
-            time.sleep(0.1)
+            time.sleep(Timing.UI_STABILIZATION_SHORT)
 
         # Handle UWP/Indirect/Launcher processes or standard executables
         if not process_name and not is_url and target.lower().endswith(".exe"):
             process_name = os.path.basename(target)
 
         # Detect Spotify protocol targets to prevent window discovery timeouts
-        if not process_name and "spotify" in target.lower():
-            process_name = "spotify.exe"
+        if not process_name and AppRegistry.SPOTIFY_APP_NAME in target.lower():
+            process_name = AppRegistry.SPOTIFY_PROCESS
             if not window_title_pattern:
-                window_title_pattern = "spotify"
+                window_title_pattern = AppRegistry.SPOTIFY_APP_NAME
 
         logger.info(f"Candidate PIDs: {candidate_pids}, process_name: {process_name}")
 
@@ -392,7 +406,7 @@ class WarpAutomator:
                                 f"Clicking at ({center_x}, {center_y}) to establish input focus"
                             )
                             pyautogui.click(center_x, center_y)
-                            time.sleep(0.3)
+                            time.sleep(Timing.UI_STABILIZATION_MEDIUM)
                         except Exception as click_err:
                             logger.warning(
                                 f"Could not click window center: {click_err}"
@@ -405,7 +419,7 @@ class WarpAutomator:
                         "Active window is None (no foreground window). This might be a non-interactive session. Proceeding."
                     )
                     return window
-                time.sleep(0.1)
+                time.sleep(Timing.UI_STABILIZATION_SHORT)
 
         raise TimeoutError(
             f"Could not confirm foreground focus on window for '{target}'."
@@ -415,7 +429,10 @@ class WarpAutomator:
         """Checks if the Warp process is running."""
         try:
             for p in psutil.process_iter(["name"]):
-                if p.info["name"] and "warp" in p.info["name"].lower():
+                if (
+                    p.info["name"]
+                    and AppRegistry.WARP_APP_NAME in p.info["name"].lower()
+                ):
                     return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
@@ -427,7 +444,10 @@ class WarpAutomator:
             # 1. Get all PIDs for processes named "warp"
             warp_pids = set()
             for p in psutil.process_iter(["pid", "name"]):
-                if p.info["name"] and "warp" in p.info["name"].lower():
+                if (
+                    p.info["name"]
+                    and AppRegistry.WARP_APP_NAME in p.info["name"].lower()
+                ):
                     warp_pids.add(p.info["pid"])
 
             if not warp_pids:
@@ -447,7 +467,7 @@ class WarpAutomator:
             logger.error(f"Error searching for Warp window: {e}")
 
         # Fallback to title search
-        keywords = ("warp", "ready", "working", "mvp")
+        keywords = (AppRegistry.WARP_APP_NAME, *AppRegistry.WARP_WINDOW_FALLBACKS)
         for w in gw.getAllWindows():
             if w.title and any(kw in w.title.lower() for kw in keywords):
                 return w
@@ -465,7 +485,7 @@ class WarpAutomator:
             else:
                 win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
 
-            time.sleep(0.5)
+            time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)
 
             try:
                 # ALT key trick to steal focus on Windows
@@ -476,12 +496,12 @@ class WarpAutomator:
                 logger.warning(f"Focus error: {e}")
                 win.activate()
 
-            time.sleep(0.4)
+            time.sleep(Timing.WINDOW_RECOVERY_SLEEP)
             center_x = win.left + win.width // 2
             center_y = win.top + win.height // 2
             logger.info(f"Clicking at ({center_x}, {center_y})")
             pyautogui.click(center_x, center_y)
-            time.sleep(0.3)
+            time.sleep(Timing.UI_STABILIZATION_MEDIUM)
             return True
         except Exception as e:
             logger.error(f"Error activating window: {e}")
@@ -492,7 +512,7 @@ class WarpAutomator:
         try:
             pyperclip.copy(text)
             pyautogui.hotkey("ctrl", "v")
-            time.sleep(0.2)
+            time.sleep(Timing.WINDOW_SEARCH_SLEEP)
         except Exception as e:
             logger.error(f"Error typing text: {e}")
 
@@ -510,7 +530,7 @@ class WarpAutomator:
             for _ in range(20):
                 if self.is_open():
                     break
-                time.sleep(0.5)
+                time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)
 
         # 2. Wait for the window to become available
         win = None
@@ -518,7 +538,7 @@ class WarpAutomator:
             win = self.find_window()
             if win:
                 break
-            time.sleep(0.5)
+            time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)
 
         if not win:
             logger.warning("Warp window not found after waiting.")
@@ -529,7 +549,7 @@ class WarpAutomator:
         logger.info(f"Found Warp window: {win.title}. Activating...")
         if self.activate_window(win):
             # Give Windows a moment to stabilize focus
-            time.sleep(0.5)
+            time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)
 
             # Final validation: check if the active window is actually Warp
             active_hwnd = win32gui.GetForegroundWindow()
@@ -538,13 +558,9 @@ class WarpAutomator:
             # 1. Direct HWND comparison (most reliable)
             # 2. If HWND doesn't match, check if the title contains keywords
             keywords = (
-                "warp",
-                "ready",
-                "working",
-                "mvp",
-                "terminal",
-                "cmd",
-                "powershell",
+                AppRegistry.WARP_APP_NAME,
+                *AppRegistry.WARP_WINDOW_FALLBACKS,
+                *AppRegistry.ACTIVE_WINDOW_SAFETY_FALLBACKS,
             )
             is_valid = (active_hwnd == win._hWnd) or any(
                 kw in active_title for kw in keywords
@@ -563,14 +579,14 @@ class WarpAutomator:
             try:
                 logger.info("Opening new tab and executing commands...")
                 # Open new tab (Warp shortcut)
-                pyautogui.hotkey("ctrl", "shift", "t")
-                time.sleep(1.2)  # Wait for tab animation
+                pyautogui.hotkey(*AppRegistry.WARP_NEW_TAB_SHORTCUT)
+                time.sleep(Timing.WARP_TAB_CREATION)  # Wait for tab animation
 
                 for cmd in self.commands:
                     logger.info(f"Typing: {cmd}")
                     self.type_text(cmd)
                     pyautogui.press("enter")
-                    time.sleep(0.6)
+                    time.sleep(Timing.WARP_CMD_EXECUTION)
 
                 logger.info("Commands executed successfully.")
                 self.speak("Pronto!")
@@ -586,7 +602,10 @@ class WarpAutomator:
         try:
             spotify_pids = set()
             for p in psutil.process_iter(["pid", "name"]):
-                if p.info["name"] and "spotify" in p.info["name"].lower():
+                if (
+                    p.info["name"]
+                    and AppRegistry.SPOTIFY_APP_NAME in p.info["name"].lower()
+                ):
                     spotify_pids.add(p.info["pid"])
 
             if not spotify_pids:
@@ -619,7 +638,7 @@ class WarpAutomator:
             else:
                 win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
 
-            time.sleep(0.5)
+            time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)
 
             try:
                 win32gui.SetForegroundWindow(hwnd)
@@ -630,7 +649,7 @@ class WarpAutomator:
                 except Exception as ex:
                     logger.warning(f"Focus error on Spotify window: {ex}")
 
-            time.sleep(0.4)
+            time.sleep(Timing.WINDOW_RECOVERY_SLEEP)
             return True
         except Exception as e:
             logger.error(f"Error activating Spotify window: {e}")
@@ -642,7 +661,7 @@ class WarpAutomator:
         if not win or not win.title:
             return False
         title = win.title.lower().strip()
-        non_playing = {"spotify", "spotify premium", "spotify free"}
+        non_playing = AppRegistry.SPOTIFY_WINDOW_TITLES
         return title not in non_playing
 
     def find_spotify_green_button(
@@ -662,8 +681,8 @@ class WarpAutomator:
             # Spotify green in HSV is roughly H=141 (70 in OpenCV), S=84%, V=72%
             # OpenCV HSV ranges: H: 0-180, S: 0-255, V: 0-255
             # We use a broad threshold for safety to capture the green button variations
-            lower_green = np.array([55, 100, 100])
-            upper_green = np.array([85, 255, 255])
+            lower_green = np.array(SpotifyCV.GREEN_HSV_LOWER)
+            upper_green = np.array(SpotifyCV.GREEN_HSV_UPPER)
 
             mask = cv2.inRange(hsv, lower_green, upper_green)
 
@@ -679,13 +698,17 @@ class WarpAutomator:
             for cnt in contours:
                 area = cv2.contourArea(cnt)
                 # The play button should be a reasonable size in pixels (accounting for DPI scaling)
-                min_area = 80 * (scale_factor**2)
-                max_area = 8000 * (scale_factor**2)
+                min_area = SpotifyCV.PLAY_BUTTON_MIN_AREA_FACTOR * (scale_factor**2)
+                max_area = SpotifyCV.PLAY_BUTTON_MAX_AREA_FACTOR * (scale_factor**2)
                 if min_area <= area <= max_area:
                     # Get the bounding box to check aspect ratio (should be roughly square/circle)
                     x, y, w, h = cv2.boundingRect(cnt)
                     aspect_ratio = float(w) / h
-                    if 0.75 <= aspect_ratio <= 1.25:
+                    if (
+                        SpotifyCV.PLAY_BUTTON_ASPECT_RATIO_MIN
+                        <= aspect_ratio
+                        <= SpotifyCV.PLAY_BUTTON_ASPECT_RATIO_MAX
+                    ):
                         if area > best_area:
                             best_area = area
                             best_rect = (x, y, w, h)
@@ -827,7 +850,7 @@ class WarpAutomator:
             try:
                 if win.isMinimized:
                     win.restore()
-                    time.sleep(0.4)
+                    time.sleep(Timing.WINDOW_RECOVERY_SLEEP)
             except Exception as ex:
                 logger.warning(f"Failed to restore Spotify window: {ex}")
 
@@ -835,7 +858,7 @@ class WarpAutomator:
                 return False
 
             # Wait for window render/animation
-            time.sleep(0.5)
+            time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)
 
             # 2. Get precise per-monitor DPI scale factor via ctypes
             import ctypes
@@ -933,8 +956,13 @@ class WarpAutomator:
                         logger.info(
                             f"Searching for Spotify play button template: {play_button_path}"
                         )
+                        high_conf = (
+                            self.config.get("automation", {})
+                            .get("cv", {})
+                            .get("template_confidence_high", 0.7)
+                        )
                         pos = self.locate_template_multiscale(
-                            play_button_path, region=region, confidence=0.7
+                            play_button_path, region=region, confidence=high_conf
                         )
                         if pos:
                             left_pos = getattr(pos, "left", pos[0])
@@ -963,18 +991,18 @@ class WarpAutomator:
                 # Execute click for playlist
                 logger.info(f"Clicking Spotify playlist area at ({click_x}, {click_y})")
                 pyautogui.click(click_x, click_y)
-                time.sleep(0.4)
+                time.sleep(Timing.WINDOW_RECOVERY_SLEEP)
 
                 if not direct_play_clicked:
                     # Press Tab to focus the first play button / result item
                     logger.info("Sending Tab key to focus first result")
                     pyautogui.press("tab")
-                    time.sleep(0.3)
+                    time.sleep(Timing.UI_STABILIZATION_MEDIUM)
 
                     # Press Enter to start playback
                     logger.info("Sending Enter key to play")
                     pyautogui.press("enter")
-                    time.sleep(0.3)
+                    time.sleep(Timing.UI_STABILIZATION_MEDIUM)
 
                 return True
             else:
@@ -1010,17 +1038,22 @@ class WarpAutomator:
 
                     pos = None
                     # Try Portuguese template first
+                    low_conf = (
+                        self.config.get("automation", {})
+                        .get("cv", {})
+                        .get("template_confidence_low", 0.4)
+                    )
                     if os.path.exists(anchor_pt_path):
                         logger.info(f"Searching for PT search anchor: {anchor_pt_path}")
                         pos = self.locate_template_multiscale(
-                            anchor_pt_path, region=region, confidence=0.4
+                            anchor_pt_path, region=region, confidence=low_conf
                         )
 
                     # Try English template if PT fails
                     if not pos and os.path.exists(anchor_en_path):
                         logger.info(f"Searching for EN search anchor: {anchor_en_path}")
                         pos = self.locate_template_multiscale(
-                            anchor_en_path, region=region, confidence=0.4
+                            anchor_en_path, region=region, confidence=low_conf
                         )
 
                     if pos:
@@ -1073,7 +1106,7 @@ class WarpAutomator:
                 # 2. Move mouse to the hover position to reveal the play button
                 logger.info(f"Moving mouse to hover position: ({hover_x}, {hover_y})")
                 pyautogui.moveTo(hover_x, hover_y)
-                time.sleep(0.5)
+                time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)
 
                 # 3. Look for the green play button
                 play_button_path = str(get_resources_dir() / "spotify_play_button.png")
@@ -1131,8 +1164,13 @@ class WarpAutomator:
                         logger.info(
                             f"Searching for Spotify play button template after hover: {play_button_path}"
                         )
+                        high_conf = (
+                            self.config.get("automation", {})
+                            .get("cv", {})
+                            .get("template_confidence_high", 0.7)
+                        )
                         t_pos = self.locate_template_multiscale(
-                            play_button_path, region=region, confidence=0.7
+                            play_button_path, region=region, confidence=high_conf
                         )
                         if t_pos:
                             left_pos = getattr(t_pos, "left", t_pos[0])
@@ -1156,7 +1194,7 @@ class WarpAutomator:
                     pyautogui.click(click_x, click_y)
 
                     # Wait and check if playing
-                    time.sleep(1.8)
+                    time.sleep(Timing.AUTOPLAY_CLICK_DELAY)
                     if self.is_spotify_playing():
                         logger.info(
                             "Spotify is playing after clicking detected play button."
@@ -1171,7 +1209,7 @@ class WarpAutomator:
                     f"Clicking at parked mouse hover position ({hover_x}, {hover_y})"
                 )
                 pyautogui.click(hover_x, hover_y)
-                time.sleep(1.8)
+                time.sleep(Timing.AUTOPLAY_CLICK_DELAY)
 
                 logger.info("Calling playlist autoplay logic as fallback")
                 return self.spotify_click_play(click_type="playlist", uri=uri)

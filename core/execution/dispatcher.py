@@ -23,6 +23,7 @@ from core.persistence.history_db import history_manager
 from core.plugins.macro_manager import macro_manager
 from core.plugins.plugin_manager import plugin_manager
 from core.runtime.state import JarvisState, state_manager
+from core.shared.constants import AppRegistry, Timing
 from core.shared.errors import BusinessError
 from core.shared.utils import time_it
 from core.ui.security_ui import SecurityDialog
@@ -394,7 +395,7 @@ class ActionDispatcher:
                 return True
             elif step.type == StepType.FOCUS_WINDOW:
                 target = step.payload.get("target", "")
-                if target == "spotify":
+                if target == AppRegistry.SPOTIFY_APP_NAME:
                     return bool(self.automator.activate_spotify_window())
                 return True
             elif step.type == StepType.SPOTIFY_CLICK_PLAY:
@@ -540,21 +541,21 @@ class ActionDispatcher:
         steps.append(
             ExecutionStep(
                 type=StepType.WAIT,
-                payload={"duration": 2.0},
+                payload={"duration": Timing.WARP_STARTUP_DELAY},
                 description="Wait for Terminal to load",
             )
         )
         steps.append(
             ExecutionStep(
                 type=StepType.HOTKEY,
-                payload={"keys": ["ctrl", "shift", "t"]},
+                payload={"keys": AppRegistry.WARP_NEW_TAB_SHORTCUT},
                 description="Open new tab",
             )
         )
         steps.append(
             ExecutionStep(
                 type=StepType.WAIT,
-                payload={"duration": 1.2},
+                payload={"duration": Timing.WARP_TAB_CREATION},
                 description="Wait for tab animation",
             )
         )
@@ -570,7 +571,7 @@ class ActionDispatcher:
             steps.append(
                 ExecutionStep(
                     type=StepType.WAIT,
-                    payload={"duration": 0.5},
+                    payload={"duration": Timing.WARP_CMD_EXECUTION},
                     description="Wait for command",
                 )
             )

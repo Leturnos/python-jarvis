@@ -13,6 +13,13 @@ voice_activation:
     keyword: "hey_jarvis"
   auto_suspend:
     fullscreen: true
+  thresholds:
+    silence_rms: 15.0               # RMS below which is considered silence
+    speech_rms: 20.0                # RMS above which check wake word
+    max_zero_rms_frames: 30         # Consecutive zero RMS before resetting audio engine
+  timeouts:
+    silence_end_seconds: 1.5        # Silence duration to stop recording
+    max_listening_seconds: 10.0     # Max listener duration for commands
 
 llm:
   active_provider: "openrouter"
@@ -51,3 +58,13 @@ quotas:
   llm:
     max_requests_per_day: 100
     max_tokens_per_day: 500000
+
+ai:
+  nlp:
+    fuzzy_match_threshold: 0.7      # Similarity score cutoff for command resolver (0.0 to 1.0)
+
+automation:
+  cv:
+    template_confidence_high: 0.7   # Confidence threshold for high precision templates
+    template_confidence_low: 0.4    # Tolerance threshold for low confidence fallback
+
