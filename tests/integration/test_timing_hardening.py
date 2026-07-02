@@ -8,6 +8,51 @@ from core.execution.dispatcher import ActionDispatcher
 from core.execution.execution_plan import ExecutionPlan, ExecutionStep, StepType
 
 
+@pytest.fixture(scope="function", autouse=True)
+def mock_os_calls():
+    # Mock processes
+    mock_proc = MagicMock()
+    mock_proc.info = {"pid": 12345, "name": "notepad.exe"}
+    mock_proc.name.return_value = "notepad.exe"
+    mock_proc.pid = 12345
+
+    # Mock window
+    mock_win = MagicMock()
+    mock_win._hWnd = 999
+    mock_win.hwnd = 999
+    mock_win.title = "Untitled - Notepad"
+    mock_win.left = 100
+    mock_win.top = 100
+    mock_win.width = 800
+    mock_win.height = 600
+
+    def enum_windows_side_effect(callback, extra):
+        callback(999, extra)
+
+    with (
+        patch("subprocess.Popen"),
+        patch("os.startfile"),
+        patch("pyautogui.click"),
+        patch("pyautogui.hotkey"),
+        patch("pyautogui.press"),
+        patch("pyautogui.moveTo"),
+        patch("pyperclip.copy"),
+        patch("psutil.process_iter", return_value=[mock_proc]),
+        patch("psutil.Process", return_value=mock_proc),
+        patch("pygetwindow.getAllWindows", return_value=[mock_win]),
+        patch("win32gui.EnumWindows", side_effect=enum_windows_side_effect),
+        patch("win32gui.GetForegroundWindow", return_value=999),
+        patch("win32gui.GetWindowText", return_value="Untitled - Notepad"),
+        patch("win32gui.GetWindowRect", return_value=(100, 100, 900, 700)),
+        patch("win32gui.IsIconic", return_value=False),
+        patch("win32gui.ShowWindow"),
+        patch("win32gui.IsWindowVisible", return_value=True),
+        patch("win32process.GetWindowThreadProcessId", return_value=(0, 12345)),
+        patch("win32gui.SetForegroundWindow"),
+    ):
+        yield
+
+
 @pytest.fixture(scope="function")
 def real_dispatcher():
     config = {
