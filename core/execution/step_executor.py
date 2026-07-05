@@ -6,7 +6,7 @@ import pyautogui
 
 from core.audio.tts_engine import TTSEngine
 from core.execution.execution_plan import ExecutionStep, StepType
-from core.execution.window_manager import WindowManager
+from core.execution.window_manager import WindowInfo, WindowManager
 from core.infra.logger_config import logger
 from core.media.spotify_automator import SpotifyAutomator
 from core.shared.constants import AppRegistry
@@ -24,8 +24,8 @@ class StepExecutor:
         self.window_manager = window_manager
         self.spotify_automator = spotify_automator
         self.tts_engine = tts_engine
-        self._current_plan_window = None
-        self._current_plan_window_pattern = None
+        self._current_plan_window: WindowInfo | None = None
+        self._current_plan_window_pattern: str | None = None
 
     def clear_session_state(self) -> None:
         self._current_plan_window = None
@@ -78,8 +78,9 @@ class StepExecutor:
                 self._current_plan_window_pattern = window_title_pattern
                 return True
             elif step.type == StepType.WRITE:
-                text = step.payload.get("text")
-                self.window_manager.type_text(text)
+                text_val = step.payload.get("text")
+                text_str = str(text_val) if text_val is not None else ""
+                self.window_manager.type_text(text_str)
                 return True
             elif step.type == StepType.NAVIGATE:
                 target = str(step.payload.get("target", ""))
@@ -97,7 +98,9 @@ class StepExecutor:
                     pyautogui.hotkey(*keys)
                 return True
             elif step.type == StepType.TYPE_AND_ENTER:
-                self.window_manager.type_text(step.payload.get("text", ""))
+                text_val = step.payload.get("text")
+                text_str = str(text_val) if text_val is not None else ""
+                self.window_manager.type_text(text_str)
                 pyautogui.press("enter")
                 return True
             elif step.type == StepType.FOCUS_WINDOW:
