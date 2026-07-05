@@ -18,13 +18,18 @@ from core.audio.audio_engine import (
     get_audio_stream,
     load_wakeword_model,
 )
+from core.audio.tts_engine import TTSEngine
 from core.controller import JarvisController
-from core.execution.automator import WarpAutomator
 from core.execution.dispatcher import ActionDispatcher
+from core.execution.plan_builder import PlanBuilder
+from core.execution.step_executor import StepExecutor
+from core.execution.window_manager import WindowManager
 from core.execution.worker import command_worker
 from core.infra.config import config
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
+from core.media.cv_matcher import TemplateMatcher
+from core.media.spotify_automator import SpotifyAutomator
 from core.runtime.monitor import MemoryMonitor
 from core.ui.adapter import JarvisTrayAdapter, JarvisUIAdapter
 from core.ui.app_controller import QtAppController
@@ -88,9 +93,19 @@ def main() -> None:
     worker_busy = threading.Event()
     task_queue: queue.Queue[Any] = queue.Queue()
 
-    automator = WarpAutomator(config)
+    tts_engine = TTSEngine(config)
+    window_manager = WindowManager()
+    template_matcher = TemplateMatcher()
+    spotify_automator = SpotifyAutomator(
+        config, window_manager, tts_engine, template_matcher
+    )
+    step_executor = StepExecutor(config, window_manager, spotify_automator, tts_engine)
+    plan_builder = PlanBuilder(config)
+
     pa, stream = get_audio_stream()
-    dispatcher = ActionDispatcher(config, automator, stream)
+    dispatcher = ActionDispatcher(
+        config, step_executor, tts_engine, plan_builder, stream
+    )
     model, loaded_names = load_wakeword_model()
 
     if not model:
@@ -129,7 +144,7 @@ def main() -> None:
     # Orchestration layer
     controller = JarvisController(
         config=config,
-        automator=automator,
+        tts_engine=tts_engine,
         dispatcher=dispatcher,
         model=model,
         loaded_names=loaded_names,
@@ -157,6 +172,7 @@ def main() -> None:
 
     logger.info("Cleaning up bootstrap layer...")
     stop_event.set()
+    tts_engine.stop()
     if "memory_monitor" in locals():
         memory_monitor.stop()
     logger.info("Jarvis stopped.")

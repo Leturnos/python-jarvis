@@ -38,7 +38,7 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
         pcm = np.frombuffer(audio_bytes, dtype=np.int16)
         if len(pcm) == 0 or np.max(np.abs(pcm)) < 50:
             logger.warning("Áudio silencioso detectado.")
-            dispatcher.automator.speak("Desculpe, não ouvi nada.")
+            dispatcher.tts_engine.speak("Desculpe, não ouvi nada.")
             return True  # Final state for silence
 
         try:
@@ -47,7 +47,7 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
             raise  # Let worker handle retry for STT failure
 
         if not job.payload_text:
-            dispatcher.automator.speak("Desculpe, não entendi.")
+            dispatcher.tts_engine.speak("Desculpe, não entendi.")
             return True
 
         notifier.notify("Jarvis", f"Entendi: '{job.payload_text}'.")
@@ -132,7 +132,7 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
         resolved_plan = resolver_obj.resolve_intent(m_intent)
         if not resolved_plan:
             logger.warning("Failed to resolve media plan.")
-            dispatcher.automator.speak("Desculpe, não consegui preparar a mídia.")
+            dispatcher.tts_engine.speak("Desculpe, não consegui preparar a mídia.")
             return True
 
         plan = ExecutionPlan(
@@ -302,11 +302,11 @@ def command_worker(
                         job.error = str(te)
 
                         if is_auth_error:
-                            dispatcher.automator.speak(
+                            dispatcher.tts_engine.speak(
                                 "Chave de API inválida ou não configurada."
                             )
                         else:
-                            dispatcher.automator.speak(
+                            dispatcher.tts_engine.speak(
                                 "Desculpe, estou sem cota ou créditos no provedor de IA no momento."
                             )
                         break
@@ -327,11 +327,11 @@ def command_worker(
 
                         # Speak fallback on final failure
                         if is_rate_limit:
-                            dispatcher.automator.speak(
+                            dispatcher.tts_engine.speak(
                                 "Desculpe, estou sem cota ou créditos no provedor de IA no momento."
                             )
                         else:
-                            dispatcher.automator.speak(
+                            dispatcher.tts_engine.speak(
                                 "Desculpe, ocorreu um erro de conexão com o provedor de IA."
                             )
 
