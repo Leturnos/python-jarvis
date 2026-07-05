@@ -6,24 +6,16 @@ orchestrating the execution of both static (wakeword-based) and dynamic
 """
 
 import json
-import subprocess
-import time
 from typing import Any
 
-import pyautogui
-
-from core.execution.execution_plan import (
-    ExecutionPlan,
-    ExecutionStep,
-    RiskLevel,
-    StepType,
-)
+from core.audio.tts_engine import TTSEngine
+from core.execution.execution_plan import ExecutionPlan, RiskLevel
+from core.execution.plan_builder import PlanBuilder
+from core.execution.step_executor import StepExecutor
 from core.infra.logger_config import logger
 from core.persistence.history_db import history_manager
 from core.plugins.macro_manager import macro_manager
-from core.plugins.plugin_manager import plugin_manager
 from core.runtime.state import JarvisState, state_manager
-from core.shared.constants import AppRegistry, Timing
 from core.shared.errors import BusinessError
 from core.shared.utils import time_it
 from core.ui.security_ui import SecurityDialog
@@ -36,31 +28,29 @@ class ActionDispatcher:
     converts them into execution plans (if not already structured), validates them against
     security policies (PromptGuard), requests user authorization when necessary, and
     orchestrates the step-by-step execution.
-
-    Attributes:
-        config (dict): Global application configuration.
-        automator (WarpAutomator): Interface for UI automation and speech synthesis.
-        audio_stream: The current PyAudio input stream.
-        last_input_text (str): The last transcribed text or command name.
-        last_input_source (str): Source of the command ('voice', 'text', 'shortcut').
-        last_confidence (float): Confidence score of the last wake word detection.
-        waiting_for_auth (bool): Whether the dispatcher is currently blocked waiting for UI/voice approval.
-        active_dialog (Optional[SecurityDialog]): Reference to the currently visible security popup.
-        last_plan (Optional[ExecutionPlan]): The most recently executed or proposed plan.
     """
 
     def __init__(
-        self, config: dict[str, Any], automator: Any, audio_stream: Any = None
+        self,
+        config: dict[str, Any],
+        step_executor: StepExecutor,
+        tts_engine: TTSEngine,
+        plan_builder: PlanBuilder,
+        audio_stream: Any = None,
     ) -> None:
         """Initializes the ActionDispatcher with its dependencies.
 
         Args:
             config (dict): The configuration dictionary.
-            automator (WarpAutomator): The UI automation helper.
+            step_executor (StepExecutor): The step execution runner.
+            tts_engine (TTSEngine): The text-to-speech engine.
+            plan_builder (PlanBuilder): The execution plan builder.
             audio_stream (optional): The PyAudio stream for secondary recording tasks.
         """
         self.config = config
-        self.automator = automator
+        self.step_executor = step_executor
+        self.tts_engine = tts_engine
+        self.plan_builder = plan_builder
         self.audio_stream = audio_stream
         self.last_input_text = "N/A"
         self.last_input_source = "voice"
@@ -70,13 +60,11 @@ class ActionDispatcher:
             None  # Access for main.py voice confirmation
         )
         self.last_plan: ExecutionPlan | None = None
-        self._current_plan_window = None
-        self._current_plan_window_pattern = None
 
     def handle_plan(self, plan: ExecutionPlan) -> bool:
         """Processes an ExecutionPlan, including validation and user confirmation.
 
-        This is the main entry point for structured execution. it handles security
+        This is the main entry point for structured execution. It handles security
         sanitization via PromptGuard, determines if a dry-run confirmation is required
         based on the risk level and config, and finally delegates to execute_plan.
 
@@ -98,7 +86,7 @@ class ActionDispatcher:
         # Handle built-in system states
         if plan.intent in ("sleep", "dormir", "parar_de_ouvir", "stop_listening"):
             logger.info("System command: Entering SLEEPING state.")
-            self.automator.speak(
+            self.tts_engine.speak(
                 "Indo dormir. Use o atalho ou a bandeja para me acordar."
             )
             state_manager.set_state(JarvisState.SLEEPING)
@@ -106,7 +94,7 @@ class ActionDispatcher:
 
         if plan.intent in ("mute", "silenciar"):
             logger.info("System command: Entering MUTED state.")
-            self.automator.speak("Silenciado.")
+            self.tts_engine.speak("Silenciado.")
             state_manager.set_state(JarvisState.MUTED)
             return True
 
@@ -118,7 +106,7 @@ class ActionDispatcher:
 
         if plan.global_risk == RiskLevel.BLOCKED:
             logger.warning("Plan blocked by PromptGuard!")
-            self.automator.speak("Ação bloqueada por segurança.")
+            self.tts_engine.speak("Ação bloqueada por segurança.")
             return False
 
         # 2. Check if Dry-run is needed
@@ -145,7 +133,9 @@ class ActionDispatcher:
             JarvisState.CONFIRMING_DRY_RUN, context={"plan": plan.to_dict()}
         )
 
-        self.automator.speak(f"Planejo o seguinte: {plan.explanation}. Posso executar?")
+        self.tts_engine.speak(
+            f"Planejo o seguinte: {plan.explanation}. Posso executar?"
+        )
 
         action_desc = (
             f"{plan.intent.upper()}\n\n{plan.explanation}\n\nSteps:\n"
@@ -180,8 +170,7 @@ class ActionDispatcher:
         logger.info(f"Starting execution of plan: {plan.intent}")
         state_manager.set_state(JarvisState.EXECUTING, context={"intent": plan.intent})
         self.last_plan = plan
-        self._current_plan_window = None
-        self._current_plan_window_pattern = None
+        self.step_executor.clear_session_state()
 
         action_json = json.dumps(plan.to_dict())
 
@@ -191,7 +180,7 @@ class ActionDispatcher:
                     f"Step {i + 1}/{len(plan.steps)}: {step.type.value} - {step.description or ''}"
                 )
 
-                success = self._execute_step(step)
+                success = self.step_executor.execute_step(step)
                 if not success:
                     logger.error(f"Step {i + 1} failed. Aborting plan.")
                     state_manager.set_state(
@@ -207,6 +196,7 @@ class ActionDispatcher:
                         confidence=self.last_confidence,
                         error_msg=f"Failed at step {i + 1}",
                         action_json=action_json,
+                        # end step loop
                     )
                     return False
 
@@ -220,7 +210,7 @@ class ActionDispatcher:
                 confidence=self.last_confidence,
                 action_json=action_json,
             )
-            self.automator.speak("Pronto!")
+            self.tts_engine.speak("Pronto!")
             return True
         except Exception as e:
             logger.error(f"Critical error during plan execution: {e}")
@@ -244,7 +234,7 @@ class ActionDispatcher:
 
         if not last_json:
             logger.warning("No successful command found in history to replay.")
-            self.automator.speak("Não encontrei nenhuma ação recente para repetir.")
+            self.tts_engine.speak("Não encontrei nenhuma ação recente para repetir.")
             raise BusinessError("No successful command found in history to replay.")
 
         try:
@@ -256,7 +246,7 @@ class ActionDispatcher:
             return self.handle_plan(plan)
         except Exception as e:
             logger.error(f"Error during replay reconstruction: {e}")
-            self.automator.speak("Erro ao repetir a última ação.")
+            self.tts_engine.speak("Erro ao repetir a última ação.")
             return False
 
     def initiate_macro_creation(self, n: int = 3) -> bool:
@@ -279,7 +269,7 @@ class ActionDispatcher:
         recent_jsons = history_manager.get_recent_history_json(n)
 
         if not recent_jsons:
-            self.automator.speak(
+            self.tts_engine.speak(
                 "Não encontrei ações recentes suficientes para criar uma macro."
             )
             raise BusinessError(f"Insufficient history (requested {n} items).")
@@ -288,19 +278,18 @@ class ActionDispatcher:
         plan = macro_manager.create_macro_from_recent(recent_jsons)
 
         if not plan:
-            self.automator.speak("Erro ao gerar a macro inteligente.")
+            self.tts_engine.speak("Erro ao gerar a macro inteligente.")
             return False
 
         # 2. Use the existing dry-run confirmation logic
-        # This will show the UI, speak the explanation, and wait for Yes/No
         if self._confirm_dry_run(plan):
             # 3. If approved, save as plugin
             success = macro_manager.save_macro_as_plugin(plan)
             if success:
-                self.automator.speak(f"Macro '{plan.intent}' salva com sucesso!")
+                self.tts_engine.speak(f"Macro '{plan.intent}' salva com sucesso!")
                 return True
             else:
-                self.automator.speak("Erro ao salvar o arquivo da macro.")
+                self.tts_engine.speak("Erro ao salvar o arquivo da macro.")
                 return False
 
         return False
@@ -309,7 +298,7 @@ class ActionDispatcher:
         """Fetches the last successful action and asks LLM to explain it."""
         last_json = history_manager.get_last_successful_json()
         if not last_json:
-            self.automator.speak("Não encontrei nenhuma ação recente para explicar.")
+            self.tts_engine.speak("Não encontrei nenhuma ação recente para explicar.")
             return
 
         prompt = (
@@ -323,99 +312,19 @@ class ActionDispatcher:
             from core.ai.llm_agent import llm_agent
 
             explanation = llm_agent.generate_text(prompt)
-            self.automator.speak(explanation)
+            self.tts_engine.speak(explanation)
         except Exception as e:
             logger.error(f"Error generating explanation: {e}")
-            self.automator.speak("Tive um problema ao tentar gerar a explicação.")
+            self.tts_engine.speak("Tive um problema ao tentar gerar a explicação.")
 
-    def _execute_step(self, step: ExecutionStep) -> bool:
-        """Executes a single step based on its type with timing and focus safety."""
-        try:
-            # Focus safety check before typing or sending hotkeys
-            if step.type in (StepType.WRITE, StepType.TYPE_AND_ENTER, StepType.HOTKEY):
-                if self._current_plan_window:
-                    active_win = self.automator.get_foreground_window_info()
-                    if not self.automator.check_focus_match(
-                        active_win,
-                        self._current_plan_window,
-                        self._current_plan_window_pattern,
-                    ):
-                        if active_win is None:
-                            logger.warning(
-                                "Active window is None during typing step. Allowing execution as fallback (likely non-interactive session)."
-                            )
-                        else:
-                            logger.error(
-                                f"Safety Abort: Foreground focus lost. Expected: {self._current_plan_window.title} (HWND: {self._current_plan_window.hwnd}). Active: {active_win.title if active_win else 'None'}."
-                            )
-                            self.automator.speak(
-                                "Abortado por segurança. O aplicativo alvo perdeu o foco."
-                            )
-                            return False
-
-            if step.type == StepType.COMMAND:
-                cmd = str(step.payload.get("command", ""))
-                subprocess.run(["cmd", "/c", cmd], shell=False, check=True)
-                return True
-            elif step.type == StepType.OPEN_APP:
-                target = str(step.payload.get("target", ""))
-                window_title_pattern = step.payload.get("window_title_pattern")
-                process_name = step.payload.get("process_name")
-
-                window = self.automator.open_and_stabilize_app(
-                    target=target,
-                    window_title_pattern=window_title_pattern,
-                    process_name=process_name,
-                )
-                self._current_plan_window = window
-                self._current_plan_window_pattern = window_title_pattern
-                return True
-            elif step.type == StepType.WRITE:
-                text = step.payload.get("text")
-                self.automator.type_text(text)
-                return True
-            elif step.type == StepType.NAVIGATE:
-                target = str(step.payload.get("target", ""))
-                subprocess.run(
-                    ["cmd", "/c", f"cd /d {target}"], shell=False, check=True
-                )
-                return True
-            elif step.type == StepType.WAIT:
-                duration = step.payload.get("duration", 1.0)
-                time.sleep(float(duration))
-                return True
-            elif step.type == StepType.HOTKEY:
-                keys = step.payload.get("keys", [])
-                if keys:
-                    pyautogui.hotkey(*keys)
-                return True
-            elif step.type == StepType.TYPE_AND_ENTER:
-                self.automator.type_text(step.payload.get("text", ""))
-                pyautogui.press("enter")
-                return True
-            elif step.type == StepType.FOCUS_WINDOW:
-                target = step.payload.get("target", "")
-                if target == AppRegistry.SPOTIFY_APP_NAME:
-                    return bool(self.automator.activate_spotify_window())
-                return True
-            elif step.type == StepType.SPOTIFY_CLICK_PLAY:
-                click_type = step.payload.get("click_type", "search")
-                uri = step.payload.get("uri")
-                return bool(
-                    self.automator.spotify_click_play(click_type=click_type, uri=uri)
-                )
-            return False
-        except Exception as e:
-            logger.error(f"Step execution error ({step.type.value}): {e}")
-            return False
-
+    # check authorization for dangerous actions
     def _check_authorization(self, action_config: dict[str, Any]) -> bool:
         risk_level = action_config.get("risk_level", "safe")
         intent = action_config.get("intent", action_config.get("action", "unknown"))
 
         if risk_level == "blocked":
             logger.warning("Blocked action detected!")
-            self.automator.speak(
+            self.tts_engine.speak(
                 "Atenção: Ação catastrófica detectada. Comando bloqueado por segurança."
             )
             history_manager.log_execution(
@@ -435,7 +344,7 @@ class ActionDispatcher:
                 JarvisState.CONFIRMING_DRY_RUN, context={"intent": intent}
             )
 
-            self.automator.speak("Ação perigosa detectada. Deseja autorizar?")
+            self.tts_engine.speak("Ação perigosa detectada. Deseja autorizar?")
 
             action_desc = action_config.get(
                 "description",
@@ -466,13 +375,14 @@ class ActionDispatcher:
         return True
 
     def handle(self, wakeword_name: str, confidence: float = 1.0) -> None:
+        """Handles a static wakeword command by building its plan and executing."""
         logger.info(f"Dispatching action for: {wakeword_name}")
         self.last_confidence = confidence
         wakewords = self.config.get("wakewords", {})
 
         if wakeword_name not in wakewords:
             logger.error(f"No configuration found for wakeword: {wakeword_name}")
-            self.automator.speak("Comando não configurado.")
+            self.tts_engine.speak("Comando não configurado.")
             return
 
         action_config = wakewords[wakeword_name]
@@ -481,25 +391,30 @@ class ActionDispatcher:
             return
 
         action_type = action_config.get("action")
-
-        if action_type == "warp":
-            self._handle_warp(action_config)
-        elif action_type == "system":
-            self._handle_system(action_config)
-        elif action_type == "plugin":
-            self._handle_plugin(action_config)
-        else:
-            logger.error(f"Unknown action: {action_type}")
-            self.automator.speak("Tipo de ação desconhecida.")
+        try:
+            if action_type == "warp":
+                plan = self.plan_builder.build_warp_plan(action_config)
+                self.execute_plan(plan)
+            elif action_type == "system":
+                plan = self.plan_builder.build_system_plan(action_config)
+                self.execute_plan(plan)
+            elif action_type == "plugin":
+                plan = self.plan_builder.build_plugin_plan(action_config)
+                self.execute_plan(plan)
+            else:
+                logger.error(f"Unknown action: {action_type}")
+                self.tts_engine.speak("Tipo de ação desconhecida.")
+        except BusinessError as e:
+            logger.error(f"Failed to build plan for static action: {e}")
+            self.tts_engine.speak(str(e))
 
     def handle_dynamic(self, action_config: dict[str, Any]) -> None:
-        """Legacy handler for non-ExecutionPlan actions. Chat responses are NOT logged as executable actions."""
+        """Handles a dynamic action by building its plan and executing."""
         logger.info(f"Dispatching dynamic action: {action_config}")
 
         type_hint = action_config.get("type", "action")
         if type_hint == "chat":
-            self.automator.speak(action_config.get("message", "Sem resposta."))
-            # Chat is logged as context, but action_json (executable) is None
+            self.tts_engine.speak(action_config.get("message", "Sem resposta."))
             history_manager.log_execution(
                 self.last_input_text,
                 self.last_input_source,
@@ -514,159 +429,16 @@ class ActionDispatcher:
             return
 
         action_type = action_config.get("action")
-        if action_type == "warp":
-            self._handle_warp(action_config)
-        elif action_type == "system":
-            self._handle_system(action_config)
-        elif action_type == "plugin":
-            self._handle_plugin(action_config)
-
-    def _handle_warp(self, action_config: dict[str, Any]) -> None:
-        default_warp_path = (
-            self.config.get("integrations", {})
-            .get("warp", {})
-            .get("path", self.automator.warp_path)
-        )
-        warp_path = action_config.get("warp_path", default_warp_path)
-        commands = action_config.get("commands", [])
-
-        steps = []
-        steps.append(
-            ExecutionStep(
-                type=StepType.OPEN_APP,
-                payload={"target": warp_path},
-                description="Open Terminal",
-            )
-        )
-        steps.append(
-            ExecutionStep(
-                type=StepType.WAIT,
-                payload={"duration": Timing.WARP_STARTUP_DELAY},
-                description="Wait for Terminal to load",
-            )
-        )
-        steps.append(
-            ExecutionStep(
-                type=StepType.HOTKEY,
-                payload={"keys": AppRegistry.WARP_NEW_TAB_SHORTCUT},
-                description="Open new tab",
-            )
-        )
-        steps.append(
-            ExecutionStep(
-                type=StepType.WAIT,
-                payload={"duration": Timing.WARP_TAB_CREATION},
-                description="Wait for tab animation",
-            )
-        )
-
-        for cmd in commands:
-            steps.append(
-                ExecutionStep(
-                    type=StepType.TYPE_AND_ENTER,
-                    payload={"text": cmd},
-                    description=f"Run: {cmd}",
-                )
-            )
-            steps.append(
-                ExecutionStep(
-                    type=StepType.WAIT,
-                    payload={"duration": Timing.WARP_CMD_EXECUTION},
-                    description="Wait for command",
-                )
-            )
-
-        plan = ExecutionPlan(
-            intent=action_config.get("intent", "warp_workflow"),
-            explanation="Iniciando fluxo de trabalho no terminal",
-            steps=steps,
-            global_risk=RiskLevel.SAFE,
-            schema_version="1.1",
-        )
-        self.execute_plan(plan)
-
-    def _handle_system(self, action_config: dict[str, Any]) -> None:
-        commands = action_config.get("commands", [])
-        risk_level_str = action_config.get("risk_level", "safe")
         try:
-            risk_level = RiskLevel(risk_level_str)
-        except ValueError:
-            risk_level = RiskLevel.SAFE
-
-        steps = [
-            ExecutionStep(
-                type=StepType.COMMAND,
-                payload={"command": cmd},
-                description=f"Execute: {cmd}",
-            )
-            for cmd in commands
-        ]
-
-        plan = ExecutionPlan(
-            intent=action_config.get("intent", "system_cmd"),
-            explanation="Executando comando de sistema",
-            steps=steps,
-            global_risk=risk_level,
-            schema_version="1.1",
-        )
-        self.execute_plan(plan)
-
-    def _handle_plugin(self, action_config: dict[str, Any]) -> None:
-        intent_name = action_config.get("intent")
-        if not isinstance(intent_name, str):
-            return
-        actions = plugin_manager.get_actions_for_intent(intent_name)
-        if not actions:
-            return
-
-        steps = []
-        for action in actions:
-            a_type = action.get("type")
-            if a_type == "system_open":
-                steps.append(
-                    ExecutionStep(
-                        type=StepType.OPEN_APP, payload={"target": action.get("target")}
-                    )
-                )
-            elif a_type == "wait":
-                steps.append(
-                    ExecutionStep(
-                        type=StepType.WAIT,
-                        payload={"duration": action.get("duration", 1.0)},
-                    )
-                )
-            elif a_type == "keyboard_shortcut":
-                steps.append(
-                    ExecutionStep(
-                        type=StepType.HOTKEY, payload={"keys": action.get("keys", [])}
-                    )
-                )
-            elif a_type == "type_and_enter":
-                steps.append(
-                    ExecutionStep(
-                        type=StepType.TYPE_AND_ENTER,
-                        payload={"text": action.get("text", "")},
-                    )
-                )
-            elif a_type == "system_exec":
-                steps.append(
-                    ExecutionStep(
-                        type=StepType.COMMAND,
-                        payload={"command": action.get("command", "")},
-                    )
-                )
-
-        risk_level_str = action_config.get("risk_level", "safe")
-        try:
-            risk_level = RiskLevel(risk_level_str)
-        except ValueError:
-            risk_level = RiskLevel.SAFE
-
-        plan = ExecutionPlan(
-            intent=intent_name,
-            explanation=f"Executando plugin: {intent_name}",
-            steps=steps,
-            global_risk=risk_level,
-            schema_version="1.1",
-        )
-        self.execute_plan(plan)
+            if action_type == "warp":
+                plan = self.plan_builder.build_warp_plan(action_config)
+                self.execute_plan(plan)
+            elif action_type == "system":
+                plan = self.plan_builder.build_system_plan(action_config)
+                self.execute_plan(plan)
+            elif action_type == "plugin":
+                plan = self.plan_builder.build_plugin_plan(action_config)
+                self.execute_plan(plan)
+        except BusinessError as e:
+            logger.error(f"Failed to build plan for dynamic action: {e}")
+            self.tts_engine.speak(str(e))
