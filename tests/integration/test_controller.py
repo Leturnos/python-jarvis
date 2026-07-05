@@ -23,12 +23,12 @@ def mock_deps():
 
     config.get.side_effect = config_get_side_effect
 
-    automator = MagicMock()
-    automator.is_speaking = False
+    tts_engine = MagicMock()
+    tts_engine.is_speaking = False
 
     return {
         "config": config,
-        "automator": automator,
+        "tts_engine": tts_engine,
         "dispatcher": MagicMock(),
         "model": MagicMock(),
         "loaded_names": ["hey_jarvis"],
@@ -94,7 +94,7 @@ def test_wake_word_detection_idle_to_listening(mock_deps):
         controller.start()
 
     assert state_manager.get_state() == JarvisState.LISTENING
-    mock_deps["automator"].speak.assert_called_with("Sim?")
+    mock_deps["tts_engine"].speak.assert_called_with("Sim?")
 
 
 def test_self_healing_dead_silence(mock_deps):

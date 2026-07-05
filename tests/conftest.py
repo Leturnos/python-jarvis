@@ -41,9 +41,9 @@ def base_config() -> dict[str, Any]:
 
 @pytest.fixture
 def mock_dispatcher() -> MagicMock:
-    """Mock action dispatcher with an embedded automator mock."""
+    """Mock action dispatcher with an embedded tts_engine mock."""
     dispatcher = MagicMock()
-    dispatcher.automator = MagicMock()
+    dispatcher.tts_engine = MagicMock()
     return dispatcher
 
 
@@ -54,6 +54,6 @@ def mock_notifier() -> MagicMock:
 
 
 @pytest.fixture
-def mock_automator() -> MagicMock:
-    """Mock GUI/automation service (WarpAutomator/Automator)."""
+def mock_tts_engine() -> MagicMock:
+    """Mock TTS Engine."""
     return MagicMock()

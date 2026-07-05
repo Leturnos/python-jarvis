@@ -11,6 +11,7 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 ### 🎙️ Áudio (`core/audio/`)
 - **`audio_engine.py`**: Gerencia os streams do PyAudio e detecção de wake word offline. *Regra:* O processamento deve ser rápido e não bloqueante.
 - **`stt_engine.py`**: Wrapper para o modelo `faster-whisper` com suporte a lazy loading.
+- **`tts_engine.py`**: Engine de Text-to-Speech (SAPI5) com thread dedicada e fila de fala.
 
 ### 🤖 Inteligência Artificial (`core/ai/`)
 - **`llm_agent.py`**: Interface com o provedor de LLM. *Regra:* Prompts devem impor saída JSON estrita.
@@ -25,6 +26,8 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 ### 🎵 Mídia e Integrações (`core/media/`)
 - **`resolver.py`**: Resolução dinâmica de comandos de mídia para provedores como Spotify ou controle do SO.
 - **`nlp.py`**: Extração local de intenções de mídia usando palavras-chave (play, pause, skip, volume, etc.).
+- **`cv_matcher.py`**: Casamento de templates OpenCV multi-escala genérico.
+- **`spotify_automator.py`**: Automação física do Spotify (visão computacional + ativação de janela).
 - **`providers/spotify.py`**: Automação do Spotify baseada em busca visual por templates e controle de janela.
 - **`providers/os_controller.py`**: Controle de mídia nativo do Windows (teclas de mídia virtuais).
 
@@ -32,7 +35,9 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 - **`dispatcher.py`**: Roteia comandos e valida `risk_level` antes da execução.
 - **`execution_plan.py`**: Define o esquema estruturado de passos para automação.
 - **`worker.py`**: Thread worker que processa a fila de tarefas de forma assíncrona.
-- **`automator.py`**: Interação física com o Windows (janelas, digitação) e TTS (SAPI5).
+- **`step_executor.py`**: Roteia e executa cada passo (`ExecutionStep`) do plano de automação.
+- **`window_manager.py`**: Interação física genérica com o Windows (janelas, digitação, estabilização de janelas).
+- **`plan_builder.py`**: Traduz configurações e targets em planos de execução (`ExecutionPlan`).
 - **`job_queue.py`**: Gerenciamento e histórico de tarefas da sessão.
 
 ### 🔌 Extensibilidade (`core/plugins/`)
