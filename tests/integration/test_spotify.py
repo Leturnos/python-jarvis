@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock, patch
 
-from core.execution.automator import WarpAutomator
-from core.execution.dispatcher import ActionDispatcher
 from core.execution.execution_plan import ExecutionStep, StepType
+from core.execution.step_executor import StepExecutor
 from core.media.models import AutoplayStrategy, MediaAction, MediaIntent, QueryType
 from core.media.providers.spotify import SpotifyProvider
+from core.media.spotify_automator import SpotifyAutomator
 
 
 def test_execution_step_spotify_click_play():
@@ -54,24 +54,35 @@ def test_spotify_provider_resolve():
     assert has_focus
 
 
-def test_dispatcher_executes_click_play_with_payload():
+def test_step_executor_executes_click_play_with_payload():
     automator = MagicMock()
-    dispatcher = ActionDispatcher(config={}, automator=automator)
+    executor = StepExecutor(
+        config={},
+        window_manager=MagicMock(),
+        spotify_automator=automator,
+        tts_engine=MagicMock(),
+    )
 
     step = ExecutionStep(
         type=StepType.SPOTIFY_CLICK_PLAY, payload={"click_type": "playlist"}
     )
-    dispatcher._execute_step(step)
+    executor.execute_step(step)
 
     automator.spotify_click_play.assert_called_once_with(
         click_type="playlist", uri=None
     )
 
 
-@patch("core.execution.automator.pyautogui")
-@patch("core.execution.automator.gw")
-@patch("core.execution.automator.psutil")
-def test_automator_spotify_click_play_coordinates(mock_psutil, mock_gw, mock_pyautogui):
+@patch("core.media.spotify_automator.pyautogui")
+@patch("core.media.spotify_automator.gw")
+@patch("core.media.spotify_automator.WindowManager")
+def test_automator_spotify_click_play_coordinates(
+    mock_wm_class, mock_gw, mock_pyautogui
+):
+    # Mock WindowManager instance
+    mock_wm = MagicMock()
+    mock_wm_class.return_value = mock_wm
+
     # Mock window object
     mock_win = MagicMock()
     mock_win.left = 100
@@ -83,22 +94,26 @@ def test_automator_spotify_click_play_coordinates(mock_psutil, mock_gw, mock_pya
     # Mock gw and find_spotify_window
     mock_gw.getAllWindows.return_value = [mock_win]
 
-    # Mock psutil to find a process
-    mock_proc = MagicMock()
-    mock_proc.info = {"name": "spotify.exe", "pid": 1234}
-    mock_psutil.process_iter.return_value = [mock_proc]
+    # Mock wm behavior
+    mock_wm.find_processes.return_value = {1234}
 
     # Mock win32process to associate HWND with PID
     with patch(
-        "core.execution.automator.win32process.GetWindowThreadProcessId",
+        "core.media.spotify_automator.win32process.GetWindowThreadProcessId",
         return_value=(0, 1234),
     ):
         # Automator setup
         config = {"media": {"spotify": {"search_click_x": 900, "search_click_y": 450}}}
-        automator = WarpAutomator(config)
+        cv_matcher = MagicMock()
+        cv_matcher.locate_template_multiscale.return_value = None
+        automator = SpotifyAutomator(
+            config=config,
+            window_manager=mock_wm,
+            tts_engine=MagicMock(),
+            cv_matcher=cv_matcher,
+        )
         automator.activate_spotify_window = MagicMock(return_value=True)
         automator.is_spotify_playing = MagicMock(return_value=True)
-        automator.locate_template_multiscale = MagicMock(return_value=None)
 
         # Under test: playlist click (relative)
         res = automator.spotify_click_play(click_type="playlist")
@@ -125,12 +140,15 @@ def test_automator_spotify_click_play_coordinates(mock_psutil, mock_gw, mock_pya
         mock_pyautogui.click.assert_any_call(600, 520)
 
 
-@patch("core.execution.automator.pyautogui")
-@patch("core.execution.automator.gw")
-@patch("core.execution.automator.psutil")
+@patch("core.media.spotify_automator.pyautogui")
+@patch("core.media.spotify_automator.gw")
+@patch("core.media.spotify_automator.WindowManager")
 def test_automator_spotify_click_play_image_search(
-    mock_psutil, mock_gw, mock_pyautogui
+    mock_wm_class, mock_gw, mock_pyautogui
 ):
+    mock_wm = MagicMock()
+    mock_wm_class.return_value = mock_wm
+
     # Mock window object
     mock_win = MagicMock()
     mock_win.left = 100
@@ -140,12 +158,10 @@ def test_automator_spotify_click_play_image_search(
     mock_win.title = "Spotify Premium"
     mock_gw.getAllWindows.return_value = [mock_win]
 
-    mock_proc = MagicMock()
-    mock_proc.info = {"name": "spotify.exe", "pid": 1234}
-    mock_psutil.process_iter.return_value = [mock_proc]
+    mock_wm.find_processes.return_value = {1234}
 
     with patch(
-        "core.execution.automator.win32process.GetWindowThreadProcessId",
+        "core.media.spotify_automator.win32process.GetWindowThreadProcessId",
         return_value=(0, 1234),
     ):
         # Mock locateOnScreen to return different boxes for search anchor and play button
@@ -168,10 +184,17 @@ def test_automator_spotify_click_play_image_search(
                 return mock_play_box
             return None
 
-        automator = WarpAutomator({})
+        cv_matcher = MagicMock()
+        cv_matcher.locate_template_multiscale.side_effect = mock_locate
+
+        automator = SpotifyAutomator(
+            config={},
+            window_manager=mock_wm,
+            tts_engine=MagicMock(),
+            cv_matcher=cv_matcher,
+        )
         automator.activate_spotify_window = MagicMock(return_value=True)
         automator.is_spotify_playing = MagicMock(return_value=True)
-        automator.locate_template_multiscale = MagicMock(side_effect=mock_locate)
 
         res = automator.spotify_click_play(click_type="search")
         assert res
@@ -181,12 +204,15 @@ def test_automator_spotify_click_play_image_search(
         mock_pyautogui.click.assert_called_with(432, 382)
 
 
-@patch("core.execution.automator.pyautogui")
-@patch("core.execution.automator.gw")
-@patch("core.execution.automator.psutil")
+@patch("core.media.spotify_automator.pyautogui")
+@patch("core.media.spotify_automator.gw")
+@patch("core.media.spotify_automator.WindowManager")
 def test_automator_spotify_click_play_playlist_image_search(
-    mock_psutil, mock_gw, mock_pyautogui
+    mock_wm_class, mock_gw, mock_pyautogui
 ):
+    mock_wm = MagicMock()
+    mock_wm_class.return_value = mock_wm
+
     # Mock window object
     mock_win = MagicMock()
     mock_win.left = 100
@@ -196,12 +222,10 @@ def test_automator_spotify_click_play_playlist_image_search(
     mock_win.title = "Spotify Premium"
     mock_gw.getAllWindows.return_value = [mock_win]
 
-    mock_proc = MagicMock()
-    mock_proc.info = {"name": "spotify.exe", "pid": 1234}
-    mock_psutil.process_iter.return_value = [mock_proc]
+    mock_wm.find_processes.return_value = {1234}
 
     with patch(
-        "core.execution.automator.win32process.GetWindowThreadProcessId",
+        "core.media.spotify_automator.win32process.GetWindowThreadProcessId",
         return_value=(0, 1234),
     ):
         # Mock locateOnScreen to return a Box-like mock for the play button
@@ -211,9 +235,16 @@ def test_automator_spotify_click_play_playlist_image_search(
         mock_box.width = 64
         mock_box.height = 64
 
-        automator = WarpAutomator({})
+        cv_matcher = MagicMock()
+        cv_matcher.locate_template_multiscale.return_value = mock_box
+
+        automator = SpotifyAutomator(
+            config={},
+            window_manager=mock_wm,
+            tts_engine=MagicMock(),
+            cv_matcher=cv_matcher,
+        )
         automator.activate_spotify_window = MagicMock(return_value=True)
-        automator.locate_template_multiscale = MagicMock(return_value=mock_box)
 
         res = automator.spotify_click_play(click_type="playlist")
         assert res
@@ -226,12 +257,15 @@ def test_automator_spotify_click_play_playlist_image_search(
             assert call_args[0][0] not in ("tab", "enter")
 
 
-@patch("core.execution.automator.pyautogui")
-@patch("core.execution.automator.gw")
-@patch("core.execution.automator.psutil")
+@patch("core.media.spotify_automator.pyautogui")
+@patch("core.media.spotify_automator.gw")
+@patch("core.media.spotify_automator.WindowManager")
 def test_automator_spotify_click_play_search_chains_playlist(
-    mock_psutil, mock_gw, mock_pyautogui
+    mock_wm_class, mock_gw, mock_pyautogui
 ):
+    mock_wm = MagicMock()
+    mock_wm_class.return_value = mock_wm
+
     # Mock window object
     mock_win = MagicMock()
     mock_win.left = 100
@@ -241,12 +275,10 @@ def test_automator_spotify_click_play_search_chains_playlist(
     mock_win.title = "Spotify Premium"
     mock_gw.getAllWindows.return_value = [mock_win]
 
-    mock_proc = MagicMock()
-    mock_proc.info = {"name": "spotify.exe", "pid": 1234}
-    mock_psutil.process_iter.return_value = [mock_proc]
+    mock_wm.find_processes.return_value = {1234}
 
     with patch(
-        "core.execution.automator.win32process.GetWindowThreadProcessId",
+        "core.media.spotify_automator.win32process.GetWindowThreadProcessId",
         return_value=(0, 1234),
     ):
         # Mock locateOnScreen to return different boxes for search anchor and play button
@@ -269,11 +301,18 @@ def test_automator_spotify_click_play_search_chains_playlist(
                 return mock_play_box
             return None
 
-        automator = WarpAutomator({})
+        cv_matcher = MagicMock()
+        cv_matcher.locate_template_multiscale.side_effect = mock_locate
+
+        automator = SpotifyAutomator(
+            config={},
+            window_manager=mock_wm,
+            tts_engine=MagicMock(),
+            cv_matcher=cv_matcher,
+        )
         automator.activate_spotify_window = MagicMock(return_value=True)
         # Mock is_spotify_playing to return False so it chains
         automator.is_spotify_playing = MagicMock(return_value=False)
-        automator.locate_template_multiscale = MagicMock(side_effect=mock_locate)
 
         res = automator.spotify_click_play(click_type="search")
         assert res
@@ -288,12 +327,15 @@ def test_automator_spotify_click_play_search_chains_playlist(
         mock_pyautogui.click.assert_any_call(432, 382)
 
 
-@patch("core.execution.automator.pyautogui")
-@patch("core.execution.automator.gw")
-@patch("core.execution.automator.psutil")
+@patch("core.media.spotify_automator.pyautogui")
+@patch("core.media.spotify_automator.gw")
+@patch("core.media.spotify_automator.WindowManager")
 def test_automator_spotify_click_play_collection_coordinates(
-    mock_psutil, mock_gw, mock_pyautogui
+    mock_wm_class, mock_gw, mock_pyautogui
 ):
+    mock_wm = MagicMock()
+    mock_wm_class.return_value = mock_wm
+
     # Mock window object
     mock_win = MagicMock()
     mock_win.left = 100
@@ -303,17 +345,21 @@ def test_automator_spotify_click_play_collection_coordinates(
     mock_win.title = "Spotify Premium"
     mock_gw.getAllWindows.return_value = [mock_win]
 
-    mock_proc = MagicMock()
-    mock_proc.info = {"name": "spotify.exe", "pid": 1234}
-    mock_psutil.process_iter.return_value = [mock_proc]
+    mock_wm.find_processes.return_value = {1234}
 
     with patch(
-        "core.execution.automator.win32process.GetWindowThreadProcessId",
+        "core.media.spotify_automator.win32process.GetWindowThreadProcessId",
         return_value=(0, 1234),
     ):
-        automator = WarpAutomator({})
+        cv_matcher = MagicMock()
+        cv_matcher.locate_template_multiscale.return_value = None
+        automator = SpotifyAutomator(
+            config={},
+            window_manager=mock_wm,
+            tts_engine=MagicMock(),
+            cv_matcher=cv_matcher,
+        )
         automator.activate_spotify_window = MagicMock(return_value=True)
-        automator.locate_template_multiscale = MagicMock(return_value=None)
 
         res = automator.spotify_click_play(
             click_type="playlist", uri="spotify:user:spotify:collection"

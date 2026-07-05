@@ -27,8 +27,13 @@ def mock_dependencies():
 
 
 def test_explain_last_action_no_history(mock_dependencies):
-    automator = MagicMock()
-    dispatcher = ActionDispatcher(config={}, automator=automator)
+    tts_engine = MagicMock()
+    dispatcher = ActionDispatcher(
+        config={},
+        step_executor=MagicMock(),
+        tts_engine=tts_engine,
+        plan_builder=MagicMock(),
+    )
 
     mock_dependencies["history"].get_last_successful_json.return_value = None
 
@@ -43,14 +48,19 @@ def test_explain_last_action_no_history(mock_dependencies):
     result = dispatcher.handle_plan(plan)
 
     assert result is True
-    automator.speak.assert_called_with(
+    tts_engine.speak.assert_called_with(
         "Não encontrei nenhuma ação recente para explicar."
     )
 
 
 def test_explain_last_action_success(mock_dependencies):
-    automator = MagicMock()
-    dispatcher = ActionDispatcher(config={}, automator=automator)
+    tts_engine = MagicMock()
+    dispatcher = ActionDispatcher(
+        config={},
+        step_executor=MagicMock(),
+        tts_engine=tts_engine,
+        plan_builder=MagicMock(),
+    )
 
     mock_dependencies[
         "history"
@@ -72,12 +82,17 @@ def test_explain_last_action_success(mock_dependencies):
     result = dispatcher.handle_plan(plan)
 
     assert result is True
-    automator.speak.assert_called_with("Eu executei um comando do sistema.")
+    tts_engine.speak.assert_called_with("Eu executei um comando do sistema.")
 
 
 def test_explain_last_action_error(mock_dependencies):
-    automator = MagicMock()
-    dispatcher = ActionDispatcher(config={}, automator=automator)
+    tts_engine = MagicMock()
+    dispatcher = ActionDispatcher(
+        config={},
+        step_executor=MagicMock(),
+        tts_engine=tts_engine,
+        plan_builder=MagicMock(),
+    )
 
     mock_dependencies[
         "history"
@@ -97,4 +112,6 @@ def test_explain_last_action_error(mock_dependencies):
     result = dispatcher.handle_plan(plan)
 
     assert result is True
-    automator.speak.assert_called_with("Tive um problema ao tentar gerar a explicação.")
+    tts_engine.speak.assert_called_with(
+        "Tive um problema ao tentar gerar a explicação."
+    )

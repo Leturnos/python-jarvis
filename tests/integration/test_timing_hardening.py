@@ -3,9 +3,13 @@ from unittest.mock import MagicMock, patch
 import psutil
 import pytest
 
-from core.execution.automator import WarpAutomator, WindowInfo
 from core.execution.dispatcher import ActionDispatcher
 from core.execution.execution_plan import ExecutionPlan, ExecutionStep, StepType
+from core.execution.plan_builder import PlanBuilder
+from core.execution.step_executor import StepExecutor
+from core.execution.window_manager import WindowInfo, WindowManager
+from core.media.cv_matcher import TemplateMatcher
+from core.media.spotify_automator import SpotifyAutomator
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -72,10 +76,14 @@ def real_dispatcher():
             except Exception:
                 pass
 
-    automator = WarpAutomator(config)
-    # Mock speak to keep tests silent while verifying it is called
-    automator.speak = MagicMock()
-    dispatcher = ActionDispatcher(config, automator)
+    window_manager = WindowManager()
+    tts_engine = MagicMock()
+    cv_matcher = TemplateMatcher()
+    spotify_automator = SpotifyAutomator(config, window_manager, tts_engine, cv_matcher)
+    step_executor = StepExecutor(config, window_manager, spotify_automator, tts_engine)
+    plan_builder = PlanBuilder(config)
+
+    dispatcher = ActionDispatcher(config, step_executor, tts_engine, plan_builder)
 
     yield dispatcher
 
@@ -109,11 +117,14 @@ def test_integration_notepad_open_and_write(real_dispatcher):
     # Run the plan
     success = real_dispatcher.execute_plan(plan)
     assert success is True
-    assert real_dispatcher._current_plan_window is not None
-    assert real_dispatcher._current_plan_window.executable.lower() == "notepad.exe"
+    assert real_dispatcher.step_executor._current_plan_window is not None
+    assert (
+        real_dispatcher.step_executor._current_plan_window.executable.lower()
+        == "notepad.exe"
+    )
 
     # Verify the dispatcher successfully finished and announced it silently
-    real_dispatcher.automator.speak.assert_called_with("Pronto!")
+    real_dispatcher.tts_engine.speak.assert_called_with("Pronto!")
 
 
 def test_integration_notepad_focus_loss_prevention(real_dispatcher):
@@ -122,16 +133,16 @@ def test_integration_notepad_focus_loss_prevention(real_dispatcher):
         type=StepType.OPEN_APP,
         payload={"target": "notepad.exe", "process_name": "notepad.exe"},
     )
-    success = real_dispatcher._execute_step(step_open)
+    success = real_dispatcher.step_executor.execute_step(step_open)
     assert success is True
-    assert real_dispatcher._current_plan_window is not None
+    assert real_dispatcher.step_executor._current_plan_window is not None
 
     # 2. Simulate focus loss by mocking get_foreground_window_info to return a different active window
     different_win = WindowInfo(
         hwnd=999999, pid=999999, executable="chrome.exe", title="Chrome"
     )
     with patch.object(
-        real_dispatcher.automator,
+        real_dispatcher.step_executor.window_manager,
         "get_foreground_window_info",
         return_value=different_win,
     ):
@@ -139,10 +150,10 @@ def test_integration_notepad_focus_loss_prevention(real_dispatcher):
         step_write = ExecutionStep(
             type=StepType.WRITE, payload={"text": "This should not be written!"}
         )
-        success_write = real_dispatcher._execute_step(step_write)
+        success_write = real_dispatcher.step_executor.execute_step(step_write)
         assert success_write is False
 
         # Verify the safety check aborted and announced it silently
-        real_dispatcher.automator.speak.assert_called_with(
+        real_dispatcher.tts_engine.speak.assert_called_with(
             "Abortado por segurança. O aplicativo alvo perdeu o foco."
         )

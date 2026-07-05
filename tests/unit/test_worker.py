@@ -102,7 +102,7 @@ def test_handle_llm_silent_audio(
     job = Job(type=JobType.LLM_DYNAMIC, payload=silent_audio)
 
     assert _handle_llm(job, mock_dispatcher, mock_notifier) is True
-    mock_dispatcher.automator.speak.assert_called_with("Desculpe, não ouvi nada.")
+    mock_dispatcher.tts_engine.speak.assert_called_with("Desculpe, não ouvi nada.")
 
 
 @patch("core.execution.worker.stt_engine")
@@ -116,7 +116,7 @@ def test_handle_llm_stt_empty(
     mock_stt.transcribe.return_value = ""
 
     assert _handle_llm(job, mock_dispatcher, mock_notifier) is True
-    mock_dispatcher.automator.speak.assert_called_with("Desculpe, não entendi.")
+    mock_dispatcher.tts_engine.speak.assert_called_with("Desculpe, não entendi.")
 
 
 @patch("core.execution.worker.stt_engine")
@@ -345,7 +345,7 @@ def test_handle_llm_fallback_media_resolver_fails(
     mock_media_resolver.resolve_intent.return_value = None
 
     assert _handle_llm(job, mock_dispatcher, mock_notifier) is True
-    mock_dispatcher.automator.speak.assert_called_with(
+    mock_dispatcher.tts_engine.speak.assert_called_with(
         "Desculpe, não consegui preparar a mídia."
     )
 
@@ -622,7 +622,7 @@ def test_worker_thread_speaks_on_llm_auth_and_quota_errors(
 
     assert job_auth.status == JobStatus.FAILED
     assert job_auth.retries == 0
-    mock_dispatcher.automator.speak.assert_called_with(
+    mock_dispatcher.tts_engine.speak.assert_called_with(
         "Chave de API inválida ou não configurada."
     )
 
@@ -642,6 +642,6 @@ def test_worker_thread_speaks_on_llm_auth_and_quota_errors(
 
     assert job_quota.status == JobStatus.FAILED
     assert job_quota.retries == 0
-    mock_dispatcher.automator.speak.assert_called_with(
+    mock_dispatcher.tts_engine.speak.assert_called_with(
         "Desculpe, estou sem cota ou créditos no provedor de IA no momento."
     )
