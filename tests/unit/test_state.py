@@ -1,3 +1,4 @@
+import logging
 import threading
 from unittest.mock import MagicMock
 
@@ -101,15 +102,26 @@ def test_callback_exception_handling(caplog: pytest.LogCaptureFixture) -> None:
     manager.add_callback(bad_callback)
     manager.add_callback(good_callback)
 
-    # Trigger transition
-    manager.set_state(JarvisState.MUTED)
+    # Enable propagation temporarily for the test so caplog can intercept it
+    jarvis_logger = logging.getLogger("Jarvis")
+    original_propagate = jarvis_logger.propagate
+    jarvis_logger.propagate = True
+    caplog.set_level("ERROR", logger="Jarvis")
 
-    # Both should have been called
-    bad_callback.assert_called_once()
-    good_callback.assert_called_once()
+    try:
+        # Trigger transition
+        manager.set_state(JarvisState.MUTED)
 
-    # Warning/error should be logged
-    assert any("Error in state callback" in record.message for record in caplog.records)
+        # Both should have been called
+        bad_callback.assert_called_once()
+        good_callback.assert_called_once()
+
+        # Warning/error should be logged
+        assert any(
+            "Error in state callback" in record.message for record in caplog.records
+        )
+    finally:
+        jarvis_logger.propagate = original_propagate
 
 
 def test_state_thread_safety() -> None:

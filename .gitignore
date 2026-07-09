@@ -9,6 +9,7 @@ __pycache__/
 data/*
 !data/media/
 jarvis.log
+logs/
 Jarvis.lnk
 resources/launcher.vbs
 .ruff_cache/
