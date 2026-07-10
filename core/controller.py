@@ -7,7 +7,6 @@ from typing import Any
 import numpy as np
 
 from core.activation import ActivationActionType, ActivationContext, ActivationManager
-from core.audio.audio_engine import safe_reset_audio
 from core.audio.stt_engine import stt_engine
 from core.execution.job_queue import Job, JobType
 from core.runtime.state import JarvisState, state_manager
@@ -69,8 +68,18 @@ class JarvisController:
         self.tray = tray
         self.task_queue = task_queue
         self.stop_event = stop_event
-        self.pa = pa
-        self.stream = stream
+
+        # AudioLoopManager handles PyAudio lifecycle
+        from core.audio.audio_loop import AudioLoopManager
+
+        self.audio_manager = AudioLoopManager(
+            config=config,
+            dispatcher=dispatcher,
+            ui=ui,
+            pa=pa,
+            stream=stream,
+            stop_event=stop_event,
+        )
 
         # Activation Manager
         self.activation_manager = ActivationManager(config)
@@ -78,23 +87,14 @@ class JarvisController:
         # State Variables
         self.ignore_audio_until = 0.0
         self.cooldown = 0
-        self.consecutive_zero_rms = 0
         self.command_frames: list[bytes] = []
         self.confirmation_frames: list[bytes] = []
         self.silence_start: float | None = None
         self.command_start_time: float | None = None
 
         # Constants from config or defaults
-        self.volume_multiplier = config.get("jarvis", {}).get("volume_multiplier", 1.0)
         self.threshold = config.get("jarvis", {}).get("threshold", 0.4)
         self.cooldown_seconds = config.get("jarvis", {}).get("cooldown_seconds", 5)
-
-        # Audio reset threshold from config
-        self.MAX_ZERO_RMS_BEFORE_RESET = (
-            config.get("voice_activation", {})
-            .get("thresholds", {})
-            .get("max_zero_rms_frames", 30)
-        )
 
     def start(self) -> None:
         """Starts the main orchestration loop.
@@ -117,8 +117,8 @@ class JarvisController:
                         # is_muted() in Tray class handles auto-resuming to IDLE when timer expires
                         self.tray.is_muted()
 
-                    # 2. Audio Processing
-                    pcm, rms = self._read_audio()
+                    # 2. Audio Processing via isolated AudioManager
+                    pcm, rms = self.audio_manager.read_frame()
                     if pcm is None:
                         continue
 
@@ -129,8 +129,8 @@ class JarvisController:
                         self.ignore_audio_until = now + 0.4
                         self.model.reset()
 
-                    # Self-healing: Check for dead silence
-                    if self._check_dead_silence(rms):
+                    # Self-healing check using isolated AudioManager
+                    if self.audio_manager.check_dead_silence(rms, self.model):
                         continue
 
                     # 3. Activation Gate Evaluation
@@ -239,42 +239,6 @@ class JarvisController:
                 self.ignore_audio_until = time.time() + 0.4
             except Exception as e:
                 logger.error(f"Error during post-execution reset: {e}")
-
-    def _read_audio(self) -> tuple[np.ndarray | None, float]:
-        try:
-            audio_data = self.stream.read(1280, exception_on_overflow=False)
-            pcm = np.frombuffer(audio_data, dtype=np.int16)
-
-            if self.volume_multiplier != 1.0:
-                pcm = (
-                    (pcm * self.volume_multiplier).clip(-32768, 32767).astype(np.int16)
-                )
-
-            rms = np.sqrt(np.mean(pcm.astype(np.float32) ** 2))
-            return pcm, rms
-        except Exception as e:
-            if not self.stop_event.is_set():
-                logger.error(f"Microphone stream error: {e}. Resetting...")
-                self.pa, self.stream = safe_reset_audio(self.pa, self.stream)
-                self.dispatcher.audio_stream = self.stream
-                time.sleep(1)
-            return None, 0
-
-    def _check_dead_silence(self, rms: float) -> bool:
-        if rms < 0.1:
-            self.consecutive_zero_rms += 1
-        else:
-            self.consecutive_zero_rms = 0
-
-        if self.consecutive_zero_rms > self.MAX_ZERO_RMS_BEFORE_RESET:
-            logger.warning("Dead silence detected! Self-healing...")
-            self.ui.update(status="Self-Healing...")
-            self.pa, self.stream = safe_reset_audio(self.pa, self.stream)
-            self.dispatcher.audio_stream = self.stream
-            self.consecutive_zero_rms = 0
-            self.model.reset()
-            return True
-        return False
 
     def _handle_confirmation(self, pcm: np.ndarray, now: float) -> None:
         self.ui.update(status="Aguardando Confirmação...")
@@ -447,10 +411,4 @@ class JarvisController:
             self.cooldown = context.timestamp + self.cooldown_seconds
 
     def _cleanup(self) -> None:
-        logger.info("Cleaning up controller...")
-        try:
-            self.stream.stop_stream()
-            self.stream.close()
-            self.pa.terminate()
-        except Exception:
-            pass
+        self.audio_manager.cleanup()
