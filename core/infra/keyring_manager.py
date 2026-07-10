@@ -1,4 +1,7 @@
+import os
+
 import keyring
+from dotenv import load_dotenv
 
 from core.infra.logger_config import logger
 
@@ -37,14 +40,10 @@ class KeyringManager:
 
         Returns True if found, False otherwise with a friendly log message.
         """
-        from dotenv import load_dotenv
-
         load_dotenv()
 
         key_name = f"{provider_name.upper()}_API_KEY"
         keyring_key = KeyringManager.get_secret("python-jarvis", key_name)
-
-        import os
 
         env_key = os.getenv(key_name)
 

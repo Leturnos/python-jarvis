@@ -20,6 +20,7 @@ from core.execution.worker import (
     command_worker,
 )
 from core.llm import LLMAuthenticationError, LLMRateLimitError
+from core.media.models import AutoplayStrategy
 from core.runtime.state import JarvisState, state_manager
 from core.shared.errors import BusinessError, TechnicalError
 
@@ -250,7 +251,6 @@ def test_handle_llm_fallback_media_tab_enter(
             description="Play artist",
         )
     ]
-    from core.media.models import AutoplayStrategy
 
     mock_resolved_plan.strategy = AutoplayStrategy.TAB_ENTER
     mock_media_resolver.resolve_intent.return_value = mock_resolved_plan
@@ -303,7 +303,6 @@ def test_handle_llm_fallback_media_media_key(
             description="Play artist",
         )
     ]
-    from core.media.models import AutoplayStrategy
 
     mock_resolved_plan.strategy = AutoplayStrategy.MEDIA_KEY
     mock_media_resolver.resolve_intent.return_value = mock_resolved_plan
@@ -593,10 +592,6 @@ def test_worker_thread_speaks_on_llm_auth_and_quota_errors(
     clean_job_history: Any,
 ) -> None:
     """Verifies that command_worker speaks specific messages for auth and quota exhaustion and skips retries."""
-    import queue
-    import threading
-    from unittest.mock import MagicMock
-
     # 1. Test Auth Error
     task_queue = queue.Queue()
     stop_event = threading.Event()

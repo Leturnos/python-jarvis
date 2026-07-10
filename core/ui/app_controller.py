@@ -264,8 +264,6 @@ class QtAppController(QObject):
 
     def _show_minimized_message(self) -> None:
         if hasattr(self, "tray_icon") and not self._has_shown_tray_message:
-            from PySide6.QtWidgets import QSystemTrayIcon
-
             self.tray_icon.showMessage(
                 "Jarvis",
                 "O Jarvis continua rodando em segundo plano.",

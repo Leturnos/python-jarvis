@@ -1,4 +1,7 @@
+import os
+
 import litellm
+from dotenv import load_dotenv
 
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
@@ -31,10 +34,6 @@ class LiteLLMProvider(BaseLLMProvider):
         api_key = KeyringManager.get_secret("python-jarvis", key_name)
 
         if not api_key:
-            import os
-
-            from dotenv import load_dotenv
-
             load_dotenv()
 
             api_key = os.getenv(key_name)
@@ -48,8 +47,6 @@ class LiteLLMProvider(BaseLLMProvider):
 
         # LiteLLM can use environment variables or be passed directly
         # For simplicity and thread safety in some environments, we can set env var
-        import os
-
         os.environ[key_name] = api_key if api_key else ""
 
     def generate_content(

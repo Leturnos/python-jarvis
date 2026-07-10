@@ -1,4 +1,5 @@
 import ctypes
+import os
 import time
 from collections import namedtuple
 from typing import Any
@@ -271,8 +272,6 @@ class SpotifyAutomator:
                         .get("cv", {})
                         .get("template_confidence_low", 0.4)
                     )
-                    import os
-
                     if os.path.exists(anchor_pt_path):
                         pos = self.cv_matcher.locate_template_multiscale(
                             anchor_pt_path, region=region, confidence=low_conf

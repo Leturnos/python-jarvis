@@ -2,6 +2,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
+import numpy as np
 from PySide6.QtCore import QObject, Signal
 
 from core.infra.logger_config import logger
@@ -53,8 +54,6 @@ class JarvisUIAdapter(QObject):
             updated = True
 
         if volume is not None:
-            import numpy as np
-
             vol_int = int(np.abs(volume).mean() / 500 * 100)
             self._visual_state["volume"] = min(vol_int, 100)
             updated = True
