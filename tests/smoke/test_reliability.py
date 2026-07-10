@@ -40,7 +40,7 @@ def temp_env(tmp_path):
 # ==========================================
 
 
-@patch("core.controller.safe_reset_audio")
+@patch("core.audio.audio_loop.safe_reset_audio")
 def test_microphone_failure_and_healing(mock_reset):
     """Simulates microphone I/O failures in the audio loop and ensures self-healing triggers."""
     print("\n--- Test 1.1: Microphone Failure Recovery (Self-Healing) ---")
@@ -51,8 +51,8 @@ def test_microphone_failure_and_healing(mock_reset):
         "voice_activation": {"mode": "hybrid", "auto_suspend": {"fullscreen": False}},
     }
 
-    automator = MagicMock()
-    automator.is_speaking = False
+    tts_engine = MagicMock()
+    tts_engine.is_speaking = False
     dispatcher = MagicMock()
     model = MagicMock()
     ui = MagicMock()
@@ -74,7 +74,7 @@ def test_microphone_failure_and_healing(mock_reset):
 
     controller = JarvisController(
         config=config,
-        automator=automator,
+        tts_engine=tts_engine,
         dispatcher=dispatcher,
         model=model,
         loaded_names=["hey_jarvis"],

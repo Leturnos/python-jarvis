@@ -279,9 +279,10 @@ def command_worker(
                     is_rate_limit = isinstance(cause, LLMRateLimitError)
 
                     status_code = getattr(cause, "status_code", None)
-                    is_quota_exhausted = status_code == 429
+                    is_quota_exhausted = False
 
-                    if not is_quota_exhausted and is_rate_limit:
+                    # 429 is a rate limit status code by default, but could represent quota exhaustion
+                    if is_rate_limit or status_code == 429:
                         err_msg = str(cause).lower()
                         if any(
                             k in err_msg
@@ -290,7 +291,8 @@ def command_worker(
                                 "credit",
                                 "balance",
                                 "exhausted",
-                                "limit",
+                                "billing",
+                                "insufficient",
                             ]
                         ):
                             is_quota_exhausted = True

@@ -50,7 +50,7 @@ def test_controller_initialization(mock_deps):
 
 def test_controller_start_stop(mock_deps):
     controller = JarvisController(**mock_deps)
-    controller._read_audio = MagicMock(return_value=(None, 0))
+    controller.audio_manager.read_frame = MagicMock(return_value=(None, 0))
 
     thread = threading.Thread(target=controller.start)
     thread.start()
@@ -80,7 +80,7 @@ def test_wake_word_detection_idle_to_listening(mock_deps):
             mock_deps["stop_event"].set()
         return pcm, rms
 
-    controller._read_audio = MagicMock(side_effect=slow_read)
+    controller.audio_manager.read_frame = MagicMock(side_effect=slow_read)
     mock_deps["model"].predict.return_value = {"hey_jarvis": 0.9}
 
     with (
@@ -109,10 +109,10 @@ def test_self_healing_dead_silence(mock_deps):
         time.sleep(0.01)
         return pcm, rms
 
-    controller._read_audio = MagicMock(side_effect=slow_read)
+    controller.audio_manager.read_frame = MagicMock(side_effect=slow_read)
 
     with patch(
-        "core.controller.safe_reset_audio",
+        "core.audio.audio_loop.safe_reset_audio",
         return_value=(mock_deps["pa"], mock_deps["stream"]),
     ) as mock_reset:
 
@@ -147,7 +147,7 @@ def test_voice_confirmation_approval(mock_deps):
             mock_deps["stop_event"].set()
         return pcm, rms
 
-    controller._read_audio = MagicMock(side_effect=slow_read)
+    controller.audio_manager.read_frame = MagicMock(side_effect=slow_read)
 
     # Setup mock active dialog
     active_dialog = MagicMock()
