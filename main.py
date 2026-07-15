@@ -102,11 +102,11 @@ def main() -> None:
     step_executor = StepExecutor(config, window_manager, spotify_automator, tts_engine)
     plan_builder = PlanBuilder(config)
 
-    pa, stream = get_audio_stream()
+    pa, stream = get_audio_stream(config)
     dispatcher = ActionDispatcher(
         config, step_executor, tts_engine, plan_builder, stream
     )
-    model, loaded_names = load_wakeword_model()
+    model, loaded_names = load_wakeword_model(config)
 
     if not model:
         logger.error("Failed to load any wakeword models. Exiting.")
