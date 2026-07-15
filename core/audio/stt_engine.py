@@ -8,23 +8,38 @@ from core.shared.errors import TechnicalError
 
 
 class STTEngine:
-    def __init__(self, model_size: str = "tiny") -> None:
-        self.model_size = model_size
+    def __init__(
+        self, model_size: str | None = None, config_dict: dict | None = None
+    ) -> None:
+        if config_dict is None:
+            from core.infra.config import config
+
+            stt_conf = config.get("stt", {})
+        else:
+            stt_conf = config_dict.get("stt", {})
+
+        self.model_size = (
+            model_size if model_size is not None else stt_conf.get("model_size", "tiny")
+        )
+        if not self.model_size:
+            self.model_size = "tiny"
+
+        self.device = stt_conf.get("device", "cpu") or "cpu"
+        self.compute_type = stt_conf.get("compute_type", "int8") or "int8"
+        self.language = stt_conf.get("language", "pt") or "pt"
+
         self.model: WhisperModel | None = None
-        # Lazy loading: we don't load in __init__ anymore,
-        # or we could load once then allow unload.
-        # For now, let's load it immediately to preserve startup behavior,
-        # but through the new load() method.
         self.load()
 
     def load(self) -> None:
         """Loads the Whisper model into memory if not already loaded."""
         if self.model is None:
-            logger.info(f"Loading Faster Whisper model ({self.model_size}) on CPU...")
+            logger.info(
+                f"Loading Faster Whisper model ({self.model_size}) on {self.device}..."
+            )
             try:
-                # device="cpu", compute_type="int8" is the fastest configuration without GPU
                 self.model = WhisperModel(
-                    self.model_size, device="cpu", compute_type="int8"
+                    self.model_size, device=self.device, compute_type=self.compute_type
                 )
             except Exception as e:
                 logger.error(f"Failed to load STT model: {e}")
@@ -55,7 +70,9 @@ class STTEngine:
             )
 
             logger.info("Transcribing audio with faster-whisper...")
-            segments, info = self.model.transcribe(audio_np, beam_size=1, language="pt")
+            segments, info = self.model.transcribe(
+                audio_np, beam_size=1, language=self.language
+            )
 
             text = " ".join([segment.text for segment in segments]).strip()
             logger.info(f"Transcription: '{text}'")
@@ -65,4 +82,4 @@ class STTEngine:
             raise TechnicalError(f"STT processing failed: {e}") from e
 
 
-stt_engine = STTEngine("tiny")
+stt_engine = STTEngine()
