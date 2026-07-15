@@ -142,7 +142,12 @@ def main() -> None:
     )
     worker_thread.start()
 
-    memory_monitor = MemoryMonitor(interval_seconds=60, threshold_mb=800)
+    memory_config = config.get("runtime", {}).get("memory_monitor", {})
+    mem_interval = memory_config.get("interval_seconds", 60)
+    mem_threshold = memory_config.get("threshold_mb", 800.0)
+    memory_monitor = MemoryMonitor(
+        interval_seconds=mem_interval, threshold_mb=mem_threshold
+    )
     memory_monitor.start()
 
     # Orchestration layer
