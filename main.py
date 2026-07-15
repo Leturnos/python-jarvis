@@ -49,6 +49,10 @@ def main() -> None:
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
 
+    from core.shared.constants import Timing
+
+    Timing.load_from_config(config)
+
     # Transparent migration of the active LLM provider API key to Keyring on startup
     llm_config = config.get("llm", {})
     active_provider = llm_config.get("active_provider", "gemini")

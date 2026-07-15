@@ -59,8 +59,9 @@ class TTSEngine:
             except Exception as e:
                 logger.debug(f"Default voice will be used: {e}")
 
-            voice.Rate = DEFAULT_TTS_RATE
-            voice.Volume = DEFAULT_TTS_VOLUME
+            tts_conf = self.config.get("tts", {})
+            voice.Rate = tts_conf.get("rate", DEFAULT_TTS_RATE)
+            voice.Volume = tts_conf.get("volume", DEFAULT_TTS_VOLUME)
 
             while not self._stop_tts.is_set():
                 try:
@@ -84,7 +85,8 @@ class TTSEngine:
 
     def speak(self, text: str) -> None:
         now = time.time()
-        if text == self.last_spoken_text and (now - self.last_spoken_time) < 2.0:
+        cooldown = self.config.get("tts", {}).get("cooldown_seconds", 2.0)
+        if text == self.last_spoken_text and (now - self.last_spoken_time) < cooldown:
             logger.debug(f"Skipping duplicate speech: {text}")
             return
         self.last_spoken_text = text
