@@ -55,8 +55,8 @@ def load_wakeword_model(
     # Pre-trained paths
     pretrained_paths = openwakeword.get_pretrained_model_paths()
 
-    # Custom paths from models/
-    custom_paths = glob.glob(os.path.join("models", "*.onnx"))
+    models_dir = config.get("paths", {}).get("models_dir", "models")
+    custom_paths = glob.glob(os.path.join(models_dir, "*.onnx"))
 
     pretrained_paths + custom_paths
 

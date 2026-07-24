@@ -34,7 +34,12 @@ class SpotifyAutomator:
         self.window_manager = window_manager
         self.tts_engine = tts_engine
         self.cv_matcher = cv_matcher
-        self.spotify_conf = self.config.get("automation", {}).get("spotify", {})
+
+    @property
+    def spotify_conf(self) -> dict[str, Any]:
+        media_spotify = self.config.get("media", {}).get("spotify", {})
+        auto_spotify = self.config.get("automation", {}).get("spotify", {})
+        return {**media_spotify, **auto_spotify}
 
     def find_spotify_window(self) -> Any:
         try:
@@ -306,10 +311,8 @@ class SpotifyAutomator:
                     logger.warning(f"Failed search anchor match: {ex}")
 
                 if not anchor_matched:
-                    media_config = self.config.get("media", {})
-                    spotify_config = media_config.get("spotify", {})
-                    search_x = spotify_config.get("search_click_x")
-                    search_y = spotify_config.get("search_click_y")
+                    search_x = self.spotify_conf.get("search_click_x")
+                    search_y = self.spotify_conf.get("search_click_y")
                     if search_x is not None and search_y is not None:
                         hover_x, hover_y = int(search_x), int(search_y)
                     # fallback search click region
