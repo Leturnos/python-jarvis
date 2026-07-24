@@ -35,6 +35,12 @@ class SpotifyAutomator:
         self.tts_engine = tts_engine
         self.cv_matcher = cv_matcher
 
+    @property
+    def spotify_conf(self) -> dict[str, Any]:
+        media_spotify = self.config.get("media", {}).get("spotify", {})
+        auto_spotify = self.config.get("automation", {}).get("spotify", {})
+        return {**media_spotify, **auto_spotify}
+
     def find_spotify_window(self) -> Any:
         try:
             spotify_pids = self.window_manager.find_processes(
@@ -93,8 +99,14 @@ class SpotifyAutomator:
     ) -> Any:
         try:
             hsv = cv2.cvtColor(haystack, cv2.COLOR_BGR2HSV)
-            lower_green = np.array(SpotifyCV.GREEN_HSV_LOWER)
-            upper_green = np.array(SpotifyCV.GREEN_HSV_UPPER)
+            lower_green_val = self.spotify_conf.get(
+                "green_hsv_lower", SpotifyCV.GREEN_HSV_LOWER
+            )
+            upper_green_val = self.spotify_conf.get(
+                "green_hsv_upper", SpotifyCV.GREEN_HSV_UPPER
+            )
+            lower_green = np.array(lower_green_val)
+            upper_green = np.array(upper_green_val)
             mask = cv2.inRange(hsv, lower_green, upper_green)
             contours, _ = cv2.findContours(
                 mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -228,7 +240,10 @@ class SpotifyAutomator:
 
                 if not direct_play_clicked:
                     click_x = win.left + win.width // 2
-                    click_y = win.top + int(win.height * 0.4)
+                    playlist_play_y_ratio = self.spotify_conf.get(
+                        "playlist_play_y_ratio", 0.4
+                    )
+                    click_y = win.top + int(win.height * playlist_play_y_ratio)
 
                 pyautogui.click(click_x, click_y)
                 time.sleep(Timing.WINDOW_RECOVERY_SLEEP)
@@ -255,7 +270,8 @@ class SpotifyAutomator:
                     except Exception:
                         screen_w, screen_h = 1920, 1080
                     left = max(0, win.left)
-                    top = max(0, win.top + 120)
+                    header_offset = self.spotify_conf.get("header_offset", 120)
+                    top = max(0, win.top + header_offset)
                     width = min(screen_w - left, win.width)
                     height = min(screen_h - top, win.height)
 
@@ -282,26 +298,33 @@ class SpotifyAutomator:
                         )
                     if pos:
                         hover_x = int(pos.left + pos.width // 2)
+                        search_vertical_offset_ratio = self.spotify_conf.get(
+                            "search_vertical_offset_ratio", 0.1
+                        )
                         hover_y = int(
                             pos.top
                             + pos.height // 2
-                            + (win.height * scale_factor) * 0.1
+                            + (win.height * scale_factor) * search_vertical_offset_ratio
                         )
                         anchor_matched = True
                 except Exception as ex:
                     logger.warning(f"Failed search anchor match: {ex}")
 
                 if not anchor_matched:
-                    media_config = self.config.get("media", {})
-                    spotify_config = media_config.get("spotify", {})
-                    search_x = spotify_config.get("search_click_x")
-                    search_y = spotify_config.get("search_click_y")
+                    search_x = self.spotify_conf.get("search_click_x")
+                    search_y = self.spotify_conf.get("search_click_y")
                     if search_x is not None and search_y is not None:
                         hover_x, hover_y = int(search_x), int(search_y)
                     # fallback search click region
                     else:
-                        hover_x = int((win.left + int(win.width * 0.25)) * scale_factor)
-                        hover_y = int((win.top + int(win.height * 0.35)) * scale_factor)
+                        search_x_ratio = self.spotify_conf.get("search_x_ratio", 0.25)
+                        search_y_ratio = self.spotify_conf.get("search_y_ratio", 0.35)
+                        hover_x = int(
+                            (win.left + int(win.width * search_x_ratio)) * scale_factor
+                        )
+                        hover_y = int(
+                            (win.top + int(win.height * search_y_ratio)) * scale_factor
+                        )
 
                 pyautogui.moveTo(hover_x, hover_y)
                 time.sleep(Timing.POST_FOCUS_RENDER_SLEEP)

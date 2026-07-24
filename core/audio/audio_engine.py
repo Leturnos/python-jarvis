@@ -11,37 +11,63 @@ from openwakeword.model import Model
 from core.infra.logger_config import logger
 
 
-def get_audio_stream() -> tuple[pyaudio.PyAudio, pyaudio.Stream]:
+def get_audio_stream(
+    config: dict[str, Any] | None = None,
+) -> tuple[pyaudio.PyAudio, pyaudio.Stream]:
     """Initializes and returns the PyAudio stream."""
+    if config is None:
+        from core.infra.config import config as global_config
+
+        config = global_config
+
+    voice_act = config.get("voice_activation", {})
+    device_index = voice_act.get("device_index")
+    frames_per_buffer = voice_act.get("frames_per_buffer", 1280)
+
     pa = pyaudio.PyAudio()
-    stream = pa.open(
-        rate=16000,
-        channels=1,
-        format=pyaudio.paInt16,
-        input=True,
-        frames_per_buffer=1280,
-    )
+    stream_kwargs = {
+        "rate": 16000,
+        "channels": 1,
+        "format": pyaudio.paInt16,
+        "input": True,
+        "frames_per_buffer": frames_per_buffer,
+    }
+    if device_index is not None:
+        stream_kwargs["input_device_index"] = int(device_index)
+
+    stream = pa.open(**stream_kwargs)
     return pa, stream
 
 
-def load_wakeword_model() -> tuple[Model | None, list[str]]:
+def load_wakeword_model(
+    config: dict[str, Any] | None = None,
+) -> tuple[Model | None, list[str]]:
     """Loads openWakeWord models (defaults and custom from models/ folder)."""
+    if config is None:
+        from core.infra.config import config as global_config
+
+        config = global_config
+
+    voice_act = config.get("voice_activation", {})
+    wake_word_config = voice_act.get("wake_word", {})
+    keyword = wake_word_config.get("keyword", "hey_jarvis")
+
     # Pre-trained paths
     pretrained_paths = openwakeword.get_pretrained_model_paths()
 
-    # Custom paths from models/
-    custom_paths = glob.glob(os.path.join("models", "*.onnx"))
+    models_dir = config.get("paths", {}).get("models_dir", "models")
+    custom_paths = glob.glob(os.path.join(models_dir, "*.onnx"))
 
     pretrained_paths + custom_paths
 
     selected_paths = []
     loaded_names = []
 
-    # Always load 'hey_jarvis'
+    # Always load keyword
     for p in pretrained_paths:
-        if "hey_jarvis" in os.path.basename(p):
+        if keyword in os.path.basename(p):
             selected_paths.append(p)
-            loaded_names.append("hey_jarvis")
+            loaded_names.append(keyword)
             break
 
     # Load any user-provided models from 'models/' directory for offline shortcuts
@@ -60,7 +86,9 @@ def load_wakeword_model() -> tuple[Model | None, list[str]]:
 
 
 def safe_reset_audio(
-    pa: pyaudio.PyAudio | None, stream: pyaudio.Stream | None
+    pa: pyaudio.PyAudio | None,
+    stream: pyaudio.Stream | None,
+    config: dict[str, Any] | None = None,
 ) -> tuple[pyaudio.PyAudio, pyaudio.Stream]:
     """Deep cleanup and re-initialization of the PyAudio engine."""
     logger.info("Performing hard reset of the audio engine...")
@@ -74,7 +102,7 @@ def safe_reset_audio(
         logger.error(f"Error during audio cleanup: {e}")
 
     time.sleep(1.0)  # Grace period for OS to release resources
-    return get_audio_stream()
+    return get_audio_stream(config)
 
 
 def record_command_audio(

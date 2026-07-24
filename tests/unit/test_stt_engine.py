@@ -53,3 +53,43 @@ def test_stt_transcription_error(mock_whisper):
         engine.transcribe(b"some audio data")
 
     assert "STT processing failed" in str(excinfo.value)
+
+
+def test_stt_engine_initialization_with_config(mock_whisper):
+    config_dict = {
+        "stt": {
+            "model_size": "base",
+            "device": "cuda",
+            "compute_type": "float16",
+            "language": "en",
+        }
+    }
+    engine = STTEngine(config_dict=config_dict)
+    assert engine.model_size == "base"
+    assert engine.device == "cuda"
+    assert engine.compute_type == "float16"
+    assert engine.language == "en"
+
+
+def test_stt_engine_initialization_with_empty_config(mock_whisper):
+    config_dict = {
+        "stt": {"model_size": "", "device": "", "compute_type": "", "language": ""}
+    }
+    engine = STTEngine(config_dict=config_dict)
+    assert engine.model_size == "tiny"
+    assert engine.device == "cpu"
+    assert engine.compute_type == "int8"
+    assert engine.language == "pt"
+
+
+def test_stt_engine_initialization_priority(mock_whisper):
+    config_dict = {
+        "stt": {
+            "model_size": "large",
+            "device": "cpu",
+            "compute_type": "int8",
+            "language": "pt",
+        }
+    }
+    engine = STTEngine(model_size="medium", config_dict=config_dict)
+    assert engine.model_size == "medium"

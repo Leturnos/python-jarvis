@@ -1,28 +1,39 @@
-jarvis:
-  threshold: 0.5
-  cooldown_seconds: 2.5
-  volume_multiplier: 1.0
+paths:
+  data_dir: "data"                    # Directory for persistent databases (history, metrics)
+  models_dir: "models"                # Directory for custom openWakeWord models (.onnx)
 
 voice_activation:
-  mode: "hybrid" # always_listening, push_to_talk, hybrid, disabled
+  mode: "hybrid"                      # Operating mode: always_listening, push_to_talk, hybrid, or disabled
+  volume_multiplier: 1.0              # Audio input software gain multiplier (1.0 = default, >1.0 amplifies quiet mics)
+  cooldown_seconds: 2.5               # Grace period (seconds) after activation before listening again
+  response_phrase: "Sim?"             # Spoken TTS acknowledgement phrase upon activation
   push_to_talk:
-    key: "ctrl+alt"
-    behavior: "hold" # hold or toggle
+    key: "ctrl+alt"                   # Hotkey combination for push-to-talk activation
+    behavior: "hold"                  # Activation behavior: hold (active while pressed) or toggle
   wake_word:
-    enabled: true
-    keyword: "hey_jarvis"
+    enabled: true                     # Enable offline openWakeWord keyword detection
+    keyword: "hey_jarvis"             # Target wake word model identifier
+    threshold: 0.5                    # Detection confidence cutoff score (0.0 to 1.0)
   auto_suspend:
-    fullscreen: true
+    fullscreen: true                  # Automatically suspend listening when a fullscreen app/game is active
   thresholds:
-    silence_rms: 15.0               # RMS below which is considered silence
-    speech_rms: 20.0                # RMS above which check wake word
-    max_zero_rms_frames: 30         # Consecutive zero RMS before resetting audio engine
+    silence_rms: 15.0                 # Audio RMS energy level below which is considered silence
+    speech_rms: 20.0                  # Audio RMS energy level required to trigger wake word checks
+    max_zero_rms_frames: 30           # Consecutive dead-silence frames before triggering audio self-healing reset
   timeouts:
-    silence_end_seconds: 1.5        # Silence duration to stop recording
-    max_listening_seconds: 10.0     # Max listener duration for commands
+    silence_end_seconds: 1.5          # Duration (seconds) of silence required to end command recording
+    max_listening_seconds: 10.0       # Maximum duration (seconds) allowed for a single voice command
+  device_index: null                  # Audio input microphone index (null = Windows default device)
+  frames_per_buffer: 1280             # PyAudio buffer frame size (1280 frames = 80ms at 16kHz)
+
+stt:
+  model_size: "tiny"                  # Faster Whisper model size: tiny, base, small, medium, large-v3
+  language: "pt"                      # Transcription target language ISO code
+  device: "cpu"                       # Execution device: cpu or cuda
+  compute_type: "int8"                # Quantization type: int8, float16, float32
 
 llm:
-  active_provider: "openrouter"
+  active_provider: "openrouter"       # Active LLM provider: gemini, openai, anthropic, deepseek, openrouter
   providers:
     gemini:
       model: "gemini-2.5-flash"
@@ -36,35 +47,62 @@ llm:
       model: "google/gemini-2.5-flash"
 
 tts:
-  provider: "sapi5"
-  voice_keyword: "maria"
+  provider: "sapi5"                   # Text-to-Speech engine provider (sapi5 = Windows native SAPI5)
+  voice_keyword: "maria"              # Substring filter to select SAPI5 voice (e.g., maria, zira)
+  rate: 2                             # Speech rate adjustment (-10 to 10)
+  volume: 100                         # Speech volume level (0 to 100)
+  cooldown_seconds: 2.0               # Minimum delay (seconds) between identical spoken phrases
+
+timing:
+  ui_stabilization_short: 0.1         # Delay (s) for quick UI state updates
+  ui_stabilization_medium: 0.3        # Delay (s) for standard UI transitions
+  ui_stabilization_long: 0.5          # Delay (s) for heavy UI renders or focus changes
+  warp_startup_delay: 2.0             # Wait time (s) after launching Warp terminal process
+  warp_tab_creation: 1.2              # Wait time (s) after creating a new tab in Warp
+  warp_cmd_execution: 0.6             # Typing delay (s) between command characters/lines
+  window_search_sleep: 0.2            # Polling interval (s) while searching for application windows
+  window_recovery_sleep: 0.4          # Yield delay (s) after restoring/unminimizing a window
+  post_focus_render_sleep: 0.5        # Render delay (s) after gaining focus before screenshotting
+  autoplay_click_delay: 1.8           # Delay (s) after clicking play button to verify playback state
 
 dry_run:
-  enabled: true
-  bypass_for_safe_intents: true
-  timeout_seconds: 15
+  enabled: true                       # Require explicit user confirmation for potentially risky actions
+  bypass_for_safe_intents: true       # Auto-approve read-only and safe intents without asking
+  timeout_seconds: 15                 # Timeout (seconds) waiting for voice/UI dry-run confirmation
 
 timeouts:
-  process_start: 5.0     # Maximum time (s) to wait for new process PIDs to appear
-  window_appear: 10.0    # Maximum time (s) to wait for a visible window to be created
-  focus: 3.0             # Maximum time (s) to wait for a window to gain focus during a try
-  focus_retries: 3       # Number of activation/focus retries before aborting
+  process_start: 5.0                  # Maximum time (s) to wait for new process PIDs to appear
+  window_appear: 10.0                 # Maximum time (s) to wait for a visible window to be created
+  focus: 3.0                          # Maximum time (s) to wait for a window to gain focus during a try
+  focus_retries: 3                    # Number of activation/focus retries before aborting action
 
 integrations:
   warp:
-    path: "${WARP_PATH}"
+    path: "${WARP_PATH}"              # Environment variable or path to Warp terminal executable
 
 quotas:
   llm:
-    max_requests_per_day: 100
-    max_tokens_per_day: 500000
+    max_requests_per_day: 100         # Daily hard ceiling for LLM API requests
+    max_tokens_per_day: 500000        # Daily hard ceiling for LLM token usage
 
 ai:
   nlp:
-    fuzzy_match_threshold: 0.7      # Similarity score cutoff for command resolver (0.0 to 1.0)
+    fuzzy_match_threshold: 0.7        # Similarity cutoff (0.0 to 1.0) for local NLP intent matching
 
 automation:
   cv:
-    template_confidence_high: 0.7   # Confidence threshold for high precision templates
-    template_confidence_low: 0.4    # Tolerance threshold for low confidence fallback
+    template_confidence_high: 0.7     # Precision cutoff for OpenCV template matching
+    template_confidence_low: 0.4      # Fallback tolerance cutoff for OpenCV template matching
+  spotify:
+    green_hsv_lower: [55, 100, 100]   # Lower HSV bound for Spotify brand green UI elements
+    green_hsv_upper: [85, 255, 255]   # Upper HSV bound for Spotify brand green UI elements
+    header_offset: 120                # Y-pixel offset to bypass top navigation bar during screen capture
+    search_vertical_offset_ratio: 0.1 # Relative vertical offset ratio for search result hover
+    search_x_ratio: 0.25              # Relative X position ratio for fallback search click
+    search_y_ratio: 0.35              # Relative Y position ratio for fallback search click
+    playlist_play_y_ratio: 0.4        # Relative Y position ratio for playlist play button click
 
+runtime:
+  memory_monitor:
+    interval_seconds: 60              # Polling frequency (seconds) for RAM usage checks
+    threshold_mb: 800.0               # Memory ceiling (MB) above which garbage collection is forced

@@ -31,6 +31,7 @@ from core.infra.logger_config import logger
 from core.media.cv_matcher import TemplateMatcher
 from core.media.spotify_automator import SpotifyAutomator
 from core.runtime.monitor import MemoryMonitor
+from core.shared.constants import Timing
 from core.ui.adapter import JarvisTrayAdapter, JarvisUIAdapter
 from core.ui.app_controller import QtAppController
 from core.ui.command_palette import CommandPalette
@@ -48,6 +49,8 @@ sys.excepthook = qt_exception_hook
 def main() -> None:
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
+
+    Timing.load_from_config(config)
 
     # Transparent migration of the active LLM provider API key to Keyring on startup
     llm_config = config.get("llm", {})
@@ -102,11 +105,11 @@ def main() -> None:
     step_executor = StepExecutor(config, window_manager, spotify_automator, tts_engine)
     plan_builder = PlanBuilder(config)
 
-    pa, stream = get_audio_stream()
+    pa, stream = get_audio_stream(config)
     dispatcher = ActionDispatcher(
         config, step_executor, tts_engine, plan_builder, stream
     )
-    model, loaded_names = load_wakeword_model()
+    model, loaded_names = load_wakeword_model(config)
 
     if not model:
         logger.error("Failed to load any wakeword models. Exiting.")
@@ -138,7 +141,12 @@ def main() -> None:
     )
     worker_thread.start()
 
-    memory_monitor = MemoryMonitor(interval_seconds=60, threshold_mb=800)
+    memory_config = config.get("runtime", {}).get("memory_monitor", {})
+    mem_interval = memory_config.get("interval_seconds", 60)
+    mem_threshold = memory_config.get("threshold_mb", 800.0)
+    memory_monitor = MemoryMonitor(
+        interval_seconds=mem_interval, threshold_mb=mem_threshold
+    )
     memory_monitor.start()
 
     # Orchestration layer

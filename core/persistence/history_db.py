@@ -8,7 +8,13 @@ from core.shared.sqlite_base import SQLiteBase
 
 
 class HistoryManager(SQLiteBase):
-    def __init__(self, db_path: str = "data/history.db") -> None:
+    def __init__(self, db_path: str | None = None) -> None:
+        if db_path is None:
+            from core.infra.config import config
+
+            data_dir = config.get("paths", {}).get("data_dir", "data")
+            db_path = f"{data_dir}/history.db"
+
         SQLiteBase.__init__(self, db_path)
         self._init_db()
 

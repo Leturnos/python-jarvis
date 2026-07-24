@@ -33,8 +33,9 @@ class AudioLoopManager:
         self.stop_event = stop_event
         self.consecutive_zero_rms = 0
 
-        # Constants from config or defaults
-        self.frame_size = 1280
+        self.frame_size = config.get("voice_activation", {}).get(
+            "frames_per_buffer", 1280
+        )
         self.volume_multiplier = config.get("jarvis", {}).get("volume_multiplier", 1.0)
         self.max_zero_rms_before_reset = (
             config.get("voice_activation", {})

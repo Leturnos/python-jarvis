@@ -42,6 +42,33 @@ class Timing:
 
     MOUSE_DETECT_POLLING = 0.1  # Mouse position polling loop delay
 
+    _DEFAULTS = {
+        "UI_STABILIZATION_SHORT": 0.1,
+        "UI_STABILIZATION_MEDIUM": 0.3,
+        "UI_STABILIZATION_LONG": 0.5,
+        "WARP_STARTUP_DELAY": 2.0,
+        "WARP_TAB_CREATION": 1.2,
+        "WARP_CMD_EXECUTION": 0.6,
+        "WINDOW_SEARCH_SLEEP": 0.2,
+        "WINDOW_RECOVERY_SLEEP": 0.4,
+        "POST_FOCUS_RENDER_SLEEP": 0.5,
+        "AUTOPLAY_CLICK_DELAY": 1.8,
+        "MOUSE_DETECT_POLLING": 0.1,
+    }
+
+    @classmethod
+    def load_from_config(cls, config: dict) -> None:
+        timing_conf = config.get("timing", {})
+        for key, value in timing_conf.items():
+            attr_name = key.upper()
+            if hasattr(cls, attr_name):
+                setattr(cls, attr_name, float(value))
+
+    @classmethod
+    def reset_defaults(cls) -> None:
+        for attr_name, value in cls._DEFAULTS.items():
+            setattr(cls, attr_name, value)
+
 
 # Spotify Computer Vision Constants
 class SpotifyCV:

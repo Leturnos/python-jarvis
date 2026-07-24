@@ -51,6 +51,14 @@ def load_config() -> dict[str, Any]:
                     "silence_end_seconds": 1.5,
                     "max_listening_seconds": 10.0,
                 },
+                "device_index": None,
+                "frames_per_buffer": 1280,
+            },
+            "stt": {
+                "model_size": "tiny",
+                "language": "pt",
+                "device": "cpu",
+                "compute_type": "int8",
             },
             "llm": {
                 "active_provider": DEFAULT_PROVIDER,
@@ -62,7 +70,26 @@ def load_config() -> dict[str, Any]:
                     "openrouter": {"model": DEFAULT_MODELS["openrouter"]},
                 },
             },
-            "tts": {"provider": "sapi5", "voice_keyword": "maria"},
+            "tts": {
+                "provider": "sapi5",
+                "voice_keyword": "maria",
+                "rate": 2,
+                "volume": 100,
+                "cooldown_seconds": 2.0,
+            },
+            "timing": {
+                "ui_stabilization_short": 0.1,
+                "ui_stabilization_medium": 0.3,
+                "ui_stabilization_long": 0.5,
+                "warp_startup_delay": 2.0,
+                "warp_tab_creation": 1.2,
+                "warp_cmd_execution": 0.6,
+                "window_search_sleep": 0.2,
+                "window_recovery_sleep": 0.4,
+                "post_focus_render_sleep": 0.5,
+                "autoplay_click_delay": 1.8,
+                "mouse_detect_polling": 0.1,
+            },
             "timeouts": {
                 "process_start": 5.0,
                 "window_appear": 10.0,
@@ -84,13 +111,28 @@ def load_config() -> dict[str, Any]:
                 "cv": {
                     "template_confidence_high": 0.7,
                     "template_confidence_low": 0.4,
-                }
+                },
+                "spotify": {
+                    "green_hsv_lower": [55, 100, 100],
+                    "green_hsv_upper": [85, 255, 255],
+                    "header_offset": 120,
+                    "search_vertical_offset_ratio": 0.1,
+                    "search_x_ratio": 0.25,
+                    "search_y_ratio": 0.35,
+                    "playlist_play_y_ratio": 0.4,
+                },
             },
             "integrations": {"warp": {"path": os.environ.get("WARP_PATH", "")}},
             "wakewords": {
                 "hey_jarvis": {
                     "action": "warp",
                     "commands": [rf"cd {os.environ.get('PROJECT_PATH', '')}", "gemini"],
+                }
+            },
+            "runtime": {
+                "memory_monitor": {
+                    "interval_seconds": 60,
+                    "threshold_mb": 800.0,
                 }
             },
         }

@@ -93,8 +93,15 @@ class JarvisController:
         self.command_start_time: float | None = None
 
         # Constants from config or defaults
-        self.threshold = config.get("jarvis", {}).get("threshold", 0.4)
-        self.cooldown_seconds = config.get("jarvis", {}).get("cooldown_seconds", 5)
+        voice_act = config.get("voice_activation", {})
+        wake_word_conf = voice_act.get("wake_word", {})
+        self.threshold = wake_word_conf.get(
+            "threshold", config.get("jarvis", {}).get("threshold", 0.5)
+        )
+        self.cooldown_seconds = voice_act.get(
+            "cooldown_seconds", config.get("jarvis", {}).get("cooldown_seconds", 2.5)
+        )
+        self.response_phrase = voice_act.get("response_phrase", "Sim?")
 
     def start(self) -> None:
         """Starts the main orchestration loop.
@@ -165,7 +172,7 @@ class JarvisController:
                             logger.info("Waking up from Sleep via PTT!")
                             self.tray.mute_until = 0  # Clear timer if any
                             stt_engine.load()  # Preload model before listening
-                            self.tts_engine.speak("Sim?")
+                            self.tts_engine.speak(self.response_phrase)
                             state_manager.set_state(JarvisState.LISTENING)
                             self.command_frames = []
                             self.confirmation_frames = []
@@ -382,15 +389,20 @@ class JarvisController:
                     f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})"
                 )
 
-                if ww_name_clean == "hey_jarvis":
-                    self.tts_engine.speak("Sim?")
+                configured_keyword = (
+                    self.config.get("voice_activation", {})
+                    .get("wake_word", {})
+                    .get("keyword", "hey_jarvis")
+                )
+                if ww_name_clean == configured_keyword:
+                    self.tts_engine.speak(self.response_phrase)
                     state_manager.set_state(JarvisState.LISTENING)
                     self.command_frames = []
                     self.confirmation_frames = []
                     self.silence_start = None
                     self.command_start_time = context.timestamp
                 else:
-                    self.tts_engine.speak("Sim?")
+                    self.tts_engine.speak(self.response_phrase)
                     self.task_queue.put(
                         Job(
                             type=JobType.WAKEWORD,
@@ -401,7 +413,7 @@ class JarvisController:
 
             elif source == "PTT":
                 logger.info("PTT Activation triggered!")
-                self.tts_engine.speak("Sim?")
+                self.tts_engine.speak(self.response_phrase)
                 state_manager.set_state(JarvisState.LISTENING)
                 self.command_frames = []
                 self.confirmation_frames = []
