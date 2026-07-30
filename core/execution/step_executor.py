@@ -1,3 +1,4 @@
+import re
 import shlex
 import subprocess
 import time
@@ -40,8 +41,12 @@ class StepExecutor:
                 StepType.HOTKEY,
                 StepType.NAVIGATE,
             ):
+                active_win = self.window_manager.get_foreground_window_info()
+                if self._current_plan_window is None and active_win is not None:
+                    # Bind to the active window on first typing step if no OPEN_APP step set it
+                    self._current_plan_window = active_win
+
                 if self._current_plan_window:
-                    active_win = self.window_manager.get_foreground_window_info()
                     if not self.window_manager.check_focus_match(
                         active_win,
                         self._current_plan_window,
@@ -59,6 +64,7 @@ class StepExecutor:
                                 "Abortado por segurança. O aplicativo alvo perdeu o foco."
                             )
                             return False
+
 
             if step.type == StepType.COMMAND:
                 cmd = str(step.payload.get("command", "")).strip()
@@ -155,8 +161,8 @@ class StepExecutor:
                 return True
             elif step.type == StepType.NAVIGATE:
                 target = str(step.payload.get("target", ""))
-                # Safely navigate by typing the directory change in the active terminal window
-                self.window_manager.type_text(f"cd /d {target}")
+                clean_target = re.sub(r"[\r\n;&|]", "", target).strip()
+                self.window_manager.type_text(f"cd /d {clean_target}")
                 pyautogui.press("enter")
                 return True
             elif step.type == StepType.WAIT:
