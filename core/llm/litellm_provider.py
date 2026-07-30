@@ -20,8 +20,7 @@ class LiteLLMProvider(BaseLLMProvider):
     def __init__(self, provider: str, model: str) -> None:
         self.provider = provider
         self.model = model
-        # LiteLLM model format is often 'provider/model' (e.g., 'gemini/gemini-pro')
-        # But for some it might be different. Gemini with litellm is 'gemini/...'
+        self.api_key: str | None = None
         if provider == "openrouter" and not model.startswith("openrouter/"):
             self.full_model_name = f"openrouter/{model}"
         else:
@@ -29,7 +28,7 @@ class LiteLLMProvider(BaseLLMProvider):
         self._setup_auth()
 
     def _setup_auth(self) -> None:
-        """Sets up authentication for LiteLLM."""
+        """Sets up authentication for LiteLLM without polluting global process env."""
         key_name = f"{self.provider.upper()}_API_KEY"
         api_key = KeyringManager.get_secret("python-jarvis", key_name)
 
@@ -43,11 +42,8 @@ class LiteLLMProvider(BaseLLMProvider):
 
         if not api_key:
             logger.warning(f"API key for {self.provider} ({key_name}) is missing.")
-            # We don't raise here, but generate_content will fail if key is required
 
-        # LiteLLM can use environment variables or be passed directly
-        # For simplicity and thread safety in some environments, we can set env var
-        os.environ[key_name] = api_key if api_key else ""
+        self.api_key = api_key if api_key else None
 
     def generate_content(
         self, prompt: str, system_instruction: str | None = None
@@ -59,9 +55,14 @@ class LiteLLMProvider(BaseLLMProvider):
         messages.append({"role": "user", "content": prompt})
 
         try:
+            kwargs = {}
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+
             response = litellm.completion(
                 model=self.full_model_name,
                 messages=messages,
+                **kwargs,
             )
 
             content = response.choices[0].message.content
@@ -95,7 +96,6 @@ class LiteLLMProvider(BaseLLMProvider):
 
     def get_capabilities(self) -> dict:
         """Returns provider capabilities."""
-        # Simple implementation for now
         return {
             "supports_system_instructions": True,
             "provider": self.provider,
@@ -106,10 +106,15 @@ class LiteLLMProvider(BaseLLMProvider):
         """Verifies if the API key and provider connection are valid using a 1-token request."""
         messages = [{"role": "user", "content": "ping"}]
         try:
+            kwargs = {}
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+
             litellm.completion(
                 model=self.full_model_name,
                 messages=messages,
                 max_tokens=1,
+                **kwargs,
             )
             return True
         except Exception as e:
