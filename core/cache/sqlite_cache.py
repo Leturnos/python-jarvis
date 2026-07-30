@@ -29,6 +29,9 @@ class SQLiteLLMCache(SQLiteBase, LLMCacheBase):
                         created_at REAL
                     )
                 """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_cache_created ON cache(created_at)
+                """)
         except Exception as e:
             logger.error(f"Error initializing SQLite cache: {e}")
 

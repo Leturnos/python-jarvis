@@ -73,6 +73,16 @@ class HistoryManager(SQLiteBase):
                         tags TEXT
                     )
                 """)
+
+                # Performance Indexes
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_history_status_intent
+                    ON command_history(execution_status, intent, timestamp)
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_metrics_name_time
+                    ON metrics(metric_name, timestamp)
+                """)
         except Exception as e:
             logger.error(f"Failed to initialize history database: {e}")
 
@@ -120,21 +130,24 @@ class HistoryManager(SQLiteBase):
         try:
             with self.connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT action_json FROM command_history
                     WHERE execution_status = 'success'
-                    AND intent NOT IN ('replay', 'macro')
+                    AND intent NOT IN ('replay', 'create_macro', 'explain_last_action')
                     AND action_json IS NOT NULL
-                    ORDER BY timestamp DESC LIMIT 1
-                """)
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """
+                )
                 row = cursor.fetchone()
                 return row[0] if row else None
         except Exception as e:
-            logger.error(f"Error retrieving last successful json: {e}")
+            logger.error(f"Error retrieving last successful action_json: {e}")
             return None
 
-    def get_recent_history_json(self, n: int = 5) -> list[str]:
-        """Returns a list of action_json for the last N successful actions."""
+    def get_recent_history_json(self, limit: int = 5) -> list[str]:
+        """Returns the action_json of the last N successful actions."""
         try:
             with self.connection() as conn:
                 cursor = conn.cursor()
@@ -142,11 +155,12 @@ class HistoryManager(SQLiteBase):
                     """
                     SELECT action_json FROM command_history
                     WHERE execution_status = 'success'
-                    AND intent NOT IN ('replay', 'macro')
+                    AND intent NOT IN ('replay', 'create_macro', 'explain_last_action')
                     AND action_json IS NOT NULL
-                    ORDER BY timestamp DESC LIMIT ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
                 """,
-                    (n,),
+                    (limit,),
                 )
                 rows = cursor.fetchall()
                 return [row[0] for row in rows]
@@ -155,28 +169,41 @@ class HistoryManager(SQLiteBase):
             return []
 
     def _metrics_worker(self) -> None:
-        """Background thread that reads from metrics_queue and writes to SQLite."""
+        """Background thread that reads from metrics_queue and writes to SQLite in batches."""
         while True:
             metric = self.metrics_queue.get()
             if metric is None:  # Shutdown signal
                 break
 
-            timestamp, metric_name, metric_value, tags = metric
+            batch = [metric]
+            while len(batch) < 50:
+                try:
+                    item = self.metrics_queue.get_nowait()
+                    if item is None:
+                        self.metrics_queue.put(None)
+                        break
+                    batch.append(item)
+                except queue.Empty:
+                    break
+
             try:
-                # Open and close connection per metric write to prevent long database locks
                 with self.connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute(
+                    cursor.executemany(
                         """
                         INSERT INTO metrics (timestamp, metric_name, metric_value, tags)
                         VALUES (?, ?, ?, ?)
                     """,
-                        (timestamp, metric_name, float(metric_value), tags),
+                        [
+                            (ts, name, float(val), tags)
+                            for ts, name, val, tags in batch
+                        ],
                     )
             except Exception as e:
-                logger.error(f"Error writing metric to DB: {e}")
+                logger.error(f"Error writing metric batch to DB: {e}")
             finally:
-                self.metrics_queue.task_done()
+                for _ in batch:
+                    self.metrics_queue.task_done()
 
     def log_metric(
         self, metric_name: str, metric_value: float, tags: str | None = None
