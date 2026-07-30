@@ -1,127 +1,103 @@
-import tkinter as tk
 from threading import Event
+from typing import Optional
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+)
 
 from core.infra.logger_config import logger
 
 
-class SecurityDialog:
-    def __init__(self, action_desc: str) -> None:
+class SecurityDialog(QDialog):
+    """PySide6 Security Authorization Modal Dialog."""
+
+    def __init__(self, action_desc: str, parent: Optional[QDialog] = None) -> None:
+        if not QApplication.instance():
+            self._app = QApplication([])
+        else:
+            self._app = QApplication.instance()
+
+        super().__init__(parent)
         self.action_desc = action_desc
         self.result = False
         self.confirmed_event = Event()
-        self.root: tk.Tk | None = None
+        self._setup_ui()
 
     def _setup_ui(self) -> None:
-        self.root = tk.Tk()
-        self.root.title("Jarvis - Autorização de Segurança")
+        self.setWindowTitle("Jarvis - Autorização de Segurança")
+        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Dialog)
+        self.resize(520, 240)
 
-        # Stay on top
-        self.root.attributes("-topmost", True)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
 
-        # Window size and position (Dynamic based on content)
-        self.root.resizable(True, True)  # Allow manual resize if needed
-        self.root.configure(bg="#2c3e50")
+        label_text = f"Deseja executar a seguinte ação com risco elevado?\n\n{self.action_desc}"
+        label = QLabel(label_text, self)
+        label.setWordWrap(True)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
 
-        # Style
-        label_font = ("Arial", 12, "bold")
-        button_font = ("Arial", 10, "bold")
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(15)
 
-        # Container Frame to help with padding/centering
-        container = tk.Frame(self.root, bg="#2c3e50", padx=20, pady=20)
-        container.pack(expand=True, fill="both")
-
-        # Label
-        label = tk.Label(
-            container,
-            text=f"Deseja executar:\n\n{self.action_desc}?",
-            font=label_font,
-            bg="#2c3e50",
-            fg="white",
-            wraplength=500,  # Increased width limit
-            justify="center",
+        self.sim_btn = QPushButton("SIM", self)
+        self.sim_btn.setStyleSheet(
+            "background-color: #27ae60; color: white; font-weight: bold; padding: 8px 16px;"
         )
-        label.pack(pady=(0, 20))
+        self.sim_btn.clicked.connect(self._on_sim)
 
-        # Buttons Frame
-        btn_frame = tk.Frame(container, bg="#2c3e50")
-        btn_frame.pack()
-
-        def on_sim() -> None:
-            self.result = True
-            self.confirmed_event.set()
-            if self.root:
-                self.root.destroy()
-
-        def on_nao() -> None:
-            self.result = False
-            self.confirmed_event.set()
-            if self.root:
-                self.root.destroy()
-
-        sim_btn = tk.Button(
-            btn_frame,
-            text="SIM",
-            command=on_sim,
-            width=12,
-            bg="#27ae60",
-            fg="white",
-            font=button_font,
-            activebackground="#2ecc71",
+        self.nao_btn = QPushButton("NÃO", self)
+        self.nao_btn.setStyleSheet(
+            "background-color: #c0392b; color: white; font-weight: bold; padding: 8px 16px;"
         )
-        sim_btn.pack(side=tk.LEFT, padx=10)
+        self.nao_btn.clicked.connect(self._on_nao)
 
-        nao_btn = tk.Button(
-            btn_frame,
-            text="NÃO",
-            command=on_nao,
-            width=12,
-            bg="#c0392b",
-            fg="white",
-            font=button_font,
-            activebackground="#e74c3c",
-        )
-        nao_btn.pack(side=tk.LEFT, padx=10)
+        btn_layout.addWidget(self.sim_btn)
+        btn_layout.addWidget(self.nao_btn)
+        layout.addLayout(btn_layout)
 
-        # Center window on screen after layout is calculated
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        self.root.geometry(f"{width}x{height}+{x}+{y}")
+    def _on_sim(self) -> None:
+        self.result = True
+        self.confirmed_event.set()
+        self.accept()
 
-        # Handle window close button (X)
-        self.root.protocol("WM_DELETE_WINDOW", on_nao)
+    def _on_nao(self) -> None:
+        self.result = False
+        self.confirmed_event.set()
+        super().reject()
 
     def ask(self) -> bool:
         """Shows the dialog and blocks until the user responds."""
         try:
-            self._setup_ui()
-            logger.info(f"Showing security dialog for action: {self.action_desc}")
-            if self.root:
-                self.root.mainloop()
+            logger.info(f"Showing PySide6 security dialog for action: {self.action_desc}")
+            res = self.exec()
+            self.result = (res == QDialog.DialogCode.Accepted)
         except Exception as e:
             logger.error(f"Error in SecurityDialog: {e}")
             self.result = False
+        finally:
             self.confirmed_event.set()
-
         return self.result
 
     def approve(self) -> None:
         """Externally approves the dialog."""
         self.result = True
-        self.close()
+        self.confirmed_event.set()
+        QTimer.singleShot(0, self.accept)
 
     def reject(self) -> None:
         """Externally rejects the dialog."""
         self.result = False
-        self.close()
+        self.confirmed_event.set()
+        QTimer.singleShot(0, super().reject)
 
     def close(self) -> None:
         """Closes the dialog programmatically."""
-        if self.root:
-            try:
-                self.root.after(0, self.root.destroy)
-            except Exception:
-                pass
-            self.confirmed_event.set()
+        self._on_nao()
+
