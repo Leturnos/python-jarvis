@@ -91,6 +91,8 @@ class JarvisController:
         self.confirmation_frames: list[bytes] = []
         self.silence_start: float | None = None
         self.command_start_time: float | None = None
+        self.confirmation_silence_start: float | None = None
+        self.confirmation_start_time: float | None = None
 
         # Constants from config or defaults
         voice_act = config.get("voice_activation", {})
@@ -185,7 +187,7 @@ class JarvisController:
                         continue
 
                     if current_state == JarvisState.CONFIRMING_DRY_RUN:
-                        self._handle_confirmation(pcm, now)
+                        self._handle_confirmation(pcm, rms, now)
                         continue
 
                     if current_state in (
@@ -247,27 +249,62 @@ class JarvisController:
             except Exception as e:
                 logger.error(f"Error during post-execution reset: {e}")
 
-    def _handle_confirmation(self, pcm: np.ndarray, now: float) -> None:
+    def _handle_confirmation(
+        self, pcm: np.ndarray, rms: float, now: float
+    ) -> None:
         self.ui.update(status="Aguardando Confirmação...")
         self.confirmation_frames.append(pcm.tobytes())
 
-        if len(self.confirmation_frames) > 10:
+        if self.confirmation_start_time is None:
+            self.confirmation_start_time = now
+
+        silence_rms_threshold = (
+            self.config.get("voice_activation", {})
+            .get("thresholds", {})
+            .get("silence_rms", 15.0)
+        )
+        silence_duration = 0.5
+        max_confirmation_timeout = 4.0
+
+        if rms < silence_rms_threshold:
+            if self.confirmation_silence_start is None:
+                self.confirmation_silence_start = now
+        else:
+            self.confirmation_silence_start = None
+
+        should_transcribe = False
+        if (
+            self.confirmation_silence_start is not None
+            and now - self.confirmation_silence_start >= silence_duration
+            and len(self.confirmation_frames) > 5
+        ):
+            should_transcribe = True
+        elif now - self.confirmation_start_time >= max_confirmation_timeout:
+            should_transcribe = True
+
+        if should_transcribe and self.confirmation_frames:
             audio_chunk = b"".join(self.confirmation_frames)
             self.confirmation_frames = []
+            self.confirmation_silence_start = None
+            self.confirmation_start_time = None
 
             try:
                 text = stt_engine.transcribe(audio_chunk)
                 norm = normalize_text(text)
                 if any(word in norm for word in CONFIRMATION_APPROVALS):
-                    logger.info("Voice confirmation: APPROVED")
+                    logger.info(f"Voice confirmation: APPROVED ('{text}')")
                     if self.dispatcher.active_dialog:
                         self.dispatcher.active_dialog.approve()
                     self.ignore_audio_until = now + 0.3
                 elif any(word in norm for word in CONFIRMATION_REJECTIONS):
-                    logger.info("Voice confirmation: REJECTED")
+                    logger.info(f"Voice confirmation: REJECTED ('{text}')")
                     if self.dispatcher.active_dialog:
                         self.dispatcher.active_dialog.reject()
                     self.ignore_audio_until = now + 0.3
+                else:
+                    logger.debug(
+                        f"Voice confirmation unaligned: '{text}'. Still listening..."
+                    )
             except Exception as e:
                 logger.error(f"STT Error during confirmation: {e}")
 
