@@ -235,7 +235,11 @@ class LLMAgent:
                     "blocked",
                 ]
                 if json_data.get("global_risk") not in allowed_risks:
-                    json_data["global_risk"] = "safe"
+                    logger.warning(
+                        f"LLM response provided invalid/missing global_risk '{json_data.get('global_risk')}'. "
+                        "Failing closed to 'high' risk."
+                    )
+                    json_data["global_risk"] = "high"
 
             logger.info(f"LLM Response Parsed: {json_data}")
 
