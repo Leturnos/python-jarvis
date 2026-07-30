@@ -54,6 +54,40 @@ class LLMAgent:
         with self._lock:
             self._init_provider()
 
+    def _execute_with_fallback(self, prompt: str) -> Any:
+        """Executes LLM request with automatic multi-provider fallback on failure."""
+        llm_cfg = config.get("llm", {})
+        configured_providers = list(llm_cfg.get("providers", {}).keys())
+        default_order = ["gemini", "openai", "anthropic", "deepseek", "openrouter"]
+
+        candidates = [self.provider.provider]
+        for p in configured_providers + default_order:
+            if p not in candidates:
+                candidates.append(p)
+
+        last_err = None
+        for prov_name in candidates:
+            try:
+                if prov_name == self.provider.provider:
+                    prov_instance = self.provider
+                else:
+                    logger.info(f"Attempting fallback LLM Provider '{prov_name}'...")
+                    model_name = (
+                        llm_cfg.get("providers", {})
+                        .get(prov_name, {})
+                        .get("model")
+                        or DEFAULT_MODELS.get(prov_name, "gemini-2.5-flash")
+                    )
+                    prov_instance = LiteLLMProvider(provider=prov_name, model=model_name)
+
+                logger.info(f"Sending to LLM Provider ({prov_name})...")
+                return prov_instance.generate_content(prompt=prompt)
+            except Exception as e:
+                logger.warning(f"LLM Provider '{prov_name}' failed: {e}")
+                last_err = e
+
+        raise TechnicalError(f"All LLM providers failed. Last error: {last_err}")
+
     @time_it
     def process_instruction(
         self, text: str, context_commands: list[Any] | None = None
@@ -209,8 +243,7 @@ class LLMAgent:
 
         try:
             with self._lock:
-                logger.info(f"Sending to LLM Provider ({self.provider.provider})...")
-                response = self.provider.generate_content(prompt=prompt)
+                response = self._execute_with_fallback(prompt=prompt)
             result = response.content.strip()
 
             # Clean up markdown
