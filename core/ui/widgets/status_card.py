@@ -3,8 +3,41 @@ from typing import Any
 from PySide6.QtWidgets import QVBoxLayout
 from qfluentwidgets import BodyLabel, ProgressBar, SimpleCardWidget, TitleLabel
 
+from core.runtime.state import JarvisState
+
+
+def get_mode_badge_info(
+    activation_mode: str, current_state: JarvisState
+) -> tuple[str, str]:
+    """Returns badge text and tooltip description for active mode and state."""
+    if current_state == JarvisState.SLEEPING:
+        return (
+            "🌙 Sleeping",
+            "Jarvis está em modo de descanso para economizar recursos. Use a bandeja para acordar.",
+        )
+    if current_state == JarvisState.MUTED:
+        return ("🔇 Muted", "Jarvis está silenciado. Clique para reativar o microfone.")
+
+    mode_map = {
+        "push_to_talk": (
+            "🎙️ Push-to-Talk (Ctrl+Alt)",
+            "Pressione e segure Ctrl+Alt para falar.",
+        ),
+        "always_listening": (
+            "👂 Always Listening",
+            "Ouvindo continuamente a frase 'Hey Jarvis'.",
+        ),
+        "hybrid": (
+            "⚡ Hybrid (Voz + Tecla)",
+            "Ativo por palavra de ativação 'Hey Jarvis' ou atalho Ctrl+Alt.",
+        ),
+        "disabled": ("🚫 Disabled", "Ativação de voz desativada."),
+    }
+    return mode_map.get(activation_mode, ("🎙️ Ready", "Assistente pronto."))
+
 
 class StatusCardWidget(SimpleCardWidget):
+
     def __init__(self, wakeword_name: str, parent: Any = None) -> None:
         super().__init__(parent)
 
