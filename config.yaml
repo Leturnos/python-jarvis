@@ -114,3 +114,8 @@ security:
     - path: "C:\\Program Files\\Spotify\\Spotify.exe"
       allowed_actions: ["system_open"]
 
+audio_cues:
+  enabled: true                       # Enable subtle audio cues for status transitions
+  debounce_ms: 200                    # Minimum delay (ms) between audio cues
+
+
