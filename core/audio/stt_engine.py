@@ -56,8 +56,29 @@ class STTEngine:
             # Explicitly call garbage collector to free memory
             gc.collect()
 
-    def transcribe(self, audio_bytes: bytes, sample_rate: int = 16000) -> str:
+    def build_initial_prompt(
+        self, keywords: list[str], max_chars: int = 150
+    ) -> str:
+        """Builds a capped initial prompt string for Faster-Whisper."""
+        unique_keywords = list(dict.fromkeys(keywords))
+        prompt_items = []
+        current_length = 0
+        for kw in unique_keywords:
+            if current_length + len(kw) + 2 > max_chars:
+                break
+            prompt_items.append(kw)
+            current_length += len(kw) + 2
+        return ", ".join(prompt_items)
+
+    def transcribe(
+        self,
+        audio_bytes: bytes,
+        sample_rate: int = 16000,
+        initial_prompt: str | None = None,
+    ) -> str:
         try:
+            from core.shared.utils import post_process_stt_text
+
             # Ensure model is loaded (safety fallback)
             if self.model is None:
                 self.load()
@@ -70,12 +91,15 @@ class STTEngine:
             )
 
             logger.info("Transcribing audio with faster-whisper...")
-            segments, info = self.model.transcribe(
-                audio_np, beam_size=1, language=self.language
-            )
+            kwargs = {"beam_size": 1, "language": self.language}
+            if initial_prompt:
+                kwargs["initial_prompt"] = initial_prompt
 
-            text = " ".join([segment.text for segment in segments]).strip()
-            logger.info(f"Transcription: '{text}'")
+            segments, info = self.model.transcribe(audio_np, **kwargs)
+
+            raw_text = " ".join([segment.text for segment in segments]).strip()
+            text = post_process_stt_text(raw_text)
+            logger.info(f"Transcription: '{text}' (raw: '{raw_text}')")
             return text
         except Exception as e:
             logger.error(f"STT Error: {e}")
@@ -83,3 +107,4 @@ class STTEngine:
 
 
 stt_engine = STTEngine()
+

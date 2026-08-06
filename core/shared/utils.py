@@ -44,6 +44,23 @@ def normalize_text(text: str) -> str:
     return text.strip().replace(" ", "_")
 
 
+HOMOPHONE_REPLACEMENTS: list[tuple[str, str]] = [
+    (r"\bvies code\b", "VS Code"),
+    (r"\bespotifai\b", "Spotify"),
+    (r"\bwarpe\b", "Warp"),
+    (r"\bjarvis ir dormir\b", "Jarvis, ir dormir"),
+]
+
+
+def post_process_stt_text(text: str) -> str:
+    """Applies regex word-boundary corrections to raw STT output."""
+    processed = text
+    for pattern, replacement in HOMOPHONE_REPLACEMENTS:
+        processed = re.sub(pattern, replacement, processed, flags=re.IGNORECASE)
+    return processed
+
+
+
 def get_resources_dir() -> Path:
     """Returns and ensures the resources directory exists."""
     project_dir = Path(__file__).parent.parent.parent.absolute()
