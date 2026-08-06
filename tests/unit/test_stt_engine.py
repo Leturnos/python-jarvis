@@ -6,8 +6,25 @@ import pytest
 from core.audio.stt_engine import STTEngine
 
 
+def test_build_initial_prompt_caps_at_150_chars():
+    engine = STTEngine.__new__(STTEngine)
+    keywords = [
+        "VS Code",
+        "Warp",
+        "Spotify",
+        "Terminal",
+        "Docker",
+        "Python",
+        "VeryLongKeywordThatExceedsTheLimitExtremelyLongNames1234567890",
+    ] * 10
+    prompt = engine.build_initial_prompt(keywords, max_chars=150)
+    assert len(prompt) <= 150
+    assert "VS Code" in prompt
+
+
 @pytest.fixture
 def mock_whisper():
+
     with patch("core.audio.stt_engine.WhisperModel") as mock:
         yield mock
 

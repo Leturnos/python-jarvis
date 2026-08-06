@@ -22,6 +22,16 @@ def test_normalize_text():
     assert normalize_text("  Hey, Jarvis!  ") == "hey_jarvis"
 
 
+def test_post_process_stt_text_uses_regex_word_boundaries():
+    from core.shared.utils import post_process_stt_text
+
+    assert post_process_stt_text("abrir vies code agora") == "abrir VS Code agora"
+    assert post_process_stt_text("tocar no espotifai") == "tocar no Spotify"
+    assert post_process_stt_text("abrir warpe") == "abrir Warp"
+    assert post_process_stt_text("warper") == "warper"
+
+
+
 def test_time_it_success():
     mock_history = MagicMock()
 
