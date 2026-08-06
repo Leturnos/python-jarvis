@@ -32,10 +32,20 @@ class AudioCueManager:
         self.debounce_ms = self.config.get("debounce_ms", 200)
         self.last_cue_time = 0.0
 
+        freq_config = self.config.get("frequencies", {})
         self.cue_frequencies = {
-            CueType.WAKE: (800, 80),
-            CueType.COMMAND_RECOGNIZED: (1000, 60),
-            CueType.ACTION_COMPLETED: (1200, 100),
+            CueType.WAKE: (
+                freq_config.get("wake", [800, 80])[0],
+                freq_config.get("wake", [800, 80])[1],
+            ),
+            CueType.COMMAND_RECOGNIZED: (
+                freq_config.get("command_recognized", [1000, 60])[0],
+                freq_config.get("command_recognized", [1000, 60])[1],
+            ),
+            CueType.ACTION_COMPLETED: (
+                freq_config.get("action_completed", [1200, 100])[0],
+                freq_config.get("action_completed", [1200, 100])[1],
+            ),
         }
 
     def play_cue(self, cue_type: CueType) -> bool:

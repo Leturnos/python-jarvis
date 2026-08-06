@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 
 from core.infra.logger_config import logger
 
@@ -47,7 +47,8 @@ class SQLiteBase:
             if conn:
                 conn.close()
 
-    def get_connection(self) -> Generator[sqlite3.Connection]:
+    def get_connection(self) -> AbstractContextManager[sqlite3.Connection]:
         """Alias context manager for connection()."""
         return self.connection()
+
 

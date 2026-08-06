@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from core.execution.execution_plan import (
@@ -6,11 +7,9 @@ from core.execution.execution_plan import (
     RiskLevel,
     StepType,
 )
+from core.plugins.plugin_manager import plugin_manager
 from core.shared.constants import AppRegistry, Timing
 from core.shared.errors import BusinessError
-
-
-import os
 
 
 def is_action_trusted(step: ExecutionStep, config: dict[str, Any]) -> bool:
@@ -137,8 +136,6 @@ class PlanBuilder:
         )
 
     def build_plugin_plan(self, action_config: dict[str, Any]) -> ExecutionPlan:
-        from core.plugins.plugin_manager import plugin_manager
-
         intent_name = action_config.get("intent")
         if not isinstance(intent_name, str):
             raise BusinessError("Plugin intent must be a string.")

@@ -3,11 +3,12 @@ from typing import Any
 from PySide6.QtWidgets import QVBoxLayout
 from qfluentwidgets import BodyLabel, ProgressBar, SimpleCardWidget, TitleLabel
 
+from core.infra.config import config
 from core.runtime.state import JarvisState
 
 
 def get_mode_badge_info(
-    activation_mode: str, current_state: JarvisState
+    activation_mode: str, current_state: JarvisState, shortcut: str | None = None
 ) -> tuple[str, str]:
     """Returns badge text and tooltip description for active mode and state."""
     if current_state == JarvisState.SLEEPING:
@@ -18,10 +19,26 @@ def get_mode_badge_info(
     if current_state == JarvisState.MUTED:
         return ("🔇 Muted", "Jarvis está silenciado. Clique para reativar o microfone.")
 
+    if not shortcut:
+        try:
+            shortcut = (
+                config.get("voice_activation", {})
+                .get("push_to_talk", {})
+                .get("key", "ctrl+alt")
+            )
+        except Exception:
+            shortcut = "ctrl+alt"
+
+    formatted_shortcut = (
+        "+".join(p.strip().capitalize() for p in shortcut.split("+"))
+        if shortcut
+        else "Ctrl+Alt"
+    )
+
     mode_map = {
         "push_to_talk": (
-            "🎙️ Push-to-Talk (Ctrl+Alt)",
-            "Pressione e segure Ctrl+Alt para falar.",
+            f"🎙️ Push-to-Talk ({formatted_shortcut})",
+            f"Pressione e segure {formatted_shortcut} para falar.",
         ),
         "always_listening": (
             "👂 Always Listening",
@@ -29,7 +46,7 @@ def get_mode_badge_info(
         ),
         "hybrid": (
             "⚡ Hybrid (Voz + Tecla)",
-            "Ativo por palavra de ativação 'Hey Jarvis' ou atalho Ctrl+Alt.",
+            f"Ativo por palavra de ativação 'Hey Jarvis' ou atalho {formatted_shortcut}.",
         ),
         "disabled": ("🚫 Disabled", "Ativação de voz desativada."),
     }

@@ -10,6 +10,7 @@ import win32com.client
 from PIL import Image, ImageDraw
 
 from core.infra.logger_config import logger
+from core.persistence.history_db import history_manager
 
 
 def time_it[F: Callable[..., Any]](func: F) -> F:
@@ -28,8 +29,6 @@ def time_it[F: Callable[..., Any]](func: F) -> F:
 
             # Log to database asynchronously
             try:
-                from core.persistence.history_db import history_manager
-
                 history_manager.log_metric(f"latency_{func.__name__}", duration)
             except Exception as e:
                 logger.error(f"Failed to enqueue performance metric: {e}")

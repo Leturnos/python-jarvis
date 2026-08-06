@@ -31,9 +31,12 @@ stt:
   language: "pt"                      # Transcription target language ISO code
   device: "cpu"                       # Execution device: cpu or cuda
   compute_type: "int8"                # Quantization type: int8, float16, float32
+  max_prompt_chars: 150               # Maximum character limit for initial prompt context
 
 llm:
   active_provider: "openrouter"       # Active LLM provider: gemini, openai, anthropic, deepseek, openrouter
+  timeout_seconds: 5.0                # Request timeout in seconds
+  num_retries: 0                      # Number of automatic retry attempts
   providers:
     gemini:
       model: "gemini-2.5-flash"
@@ -117,5 +120,10 @@ security:
 audio_cues:
   enabled: true                       # Enable subtle audio cues for status transitions
   debounce_ms: 200                    # Minimum delay (ms) between audio cues
+  frequencies:
+    wake: [800, 80]                   # [frequency_hz, duration_ms]
+    command_recognized: [1000, 60]
+    action_completed: [1200, 100]
+
 
 

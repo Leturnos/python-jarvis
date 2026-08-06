@@ -8,6 +8,7 @@ from typing import Any
 import psutil
 import pyautogui
 import pyperclip
+import win32api
 import win32com.client
 import win32con
 import win32gui

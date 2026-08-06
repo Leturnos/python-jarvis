@@ -3,8 +3,10 @@ import gc
 import numpy as np
 from faster_whisper import WhisperModel
 
+from core.infra.config import config
 from core.infra.logger_config import logger
 from core.shared.errors import TechnicalError
+from core.shared.utils import post_process_stt_text
 
 
 class STTEngine:
@@ -12,12 +14,11 @@ class STTEngine:
         self, model_size: str | None = None, config_dict: dict | None = None
     ) -> None:
         if config_dict is None:
-            from core.infra.config import config
-
             stt_conf = config.get("stt", {})
         else:
             stt_conf = config_dict.get("stt", {})
 
+        self.stt_conf = stt_conf
         self.model_size = (
             model_size if model_size is not None else stt_conf.get("model_size", "tiny")
         )
@@ -57,9 +58,11 @@ class STTEngine:
             gc.collect()
 
     def build_initial_prompt(
-        self, keywords: list[str], max_chars: int = 150
+        self, keywords: list[str], max_chars: int | None = None
     ) -> str:
         """Builds a capped initial prompt string for Faster-Whisper."""
+        if max_chars is None:
+            max_chars = int(self.stt_conf.get("max_prompt_chars", 150))
         unique_keywords = list(dict.fromkeys(keywords))
         prompt_items = []
         current_length = 0
@@ -77,8 +80,6 @@ class STTEngine:
         initial_prompt: str | None = None,
     ) -> str:
         try:
-            from core.shared.utils import post_process_stt_text
-
             # Ensure model is loaded (safety fallback)
             if self.model is None:
                 self.load()
@@ -107,4 +108,5 @@ class STTEngine:
 
 
 stt_engine = STTEngine()
+
 

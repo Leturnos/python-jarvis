@@ -1,8 +1,10 @@
 import os
+from typing import Any
 
 import litellm
 from dotenv import load_dotenv
 
+from core.infra.config import config
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
 from core.infra.network import check_internet_connection_async
@@ -62,9 +64,11 @@ class LiteLLMProvider(BaseLLMProvider):
         messages.append({"role": "user", "content": prompt})
 
         try:
-            kwargs = {
-                "timeout": 5.0,
-                "num_retries": 0,
+            timeout_val = float(config.get("llm", {}).get("timeout_seconds", 5.0))
+            retries_val = int(config.get("llm", {}).get("num_retries", 0))
+            kwargs: dict[str, Any] = {
+                "timeout": timeout_val,
+                "num_retries": retries_val,
             }
             if self.api_key:
                 kwargs["api_key"] = self.api_key
@@ -121,9 +125,11 @@ class LiteLLMProvider(BaseLLMProvider):
         """Verifies if the API key and provider connection are valid using a 1-token request."""
         messages = [{"role": "user", "content": "ping"}]
         try:
-            kwargs = {
-                "timeout": 5.0,
-                "num_retries": 0,
+            timeout_val = float(config.get("llm", {}).get("timeout_seconds", 5.0))
+            retries_val = int(config.get("llm", {}).get("num_retries", 0))
+            kwargs: dict[str, Any] = {
+                "timeout": timeout_val,
+                "num_retries": retries_val,
             }
             if self.api_key:
                 kwargs["api_key"] = self.api_key

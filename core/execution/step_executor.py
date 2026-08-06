@@ -6,6 +6,16 @@ from typing import Any
 
 import pyautogui
 
+try:
+    import win32gui
+except ImportError:
+    win32gui = None
+
+try:
+    from plyer import notification
+except ImportError:
+    notification = None
+
 from core.audio.tts_engine import TTSEngine
 from core.execution.execution_plan import ExecutionStep, StepType
 from core.execution.window_manager import WindowInfo, WindowLayoutManager, WindowManager
@@ -16,12 +26,12 @@ from core.shared.constants import AppRegistry
 
 def find_window_handle(title_or_process: str) -> int:
     """Finds window handle by title or process name using Win32 API."""
+    if not win32gui:
+        return 0
     try:
-        import win32gui
-
         hwnd = win32gui.FindWindow(None, title_or_process)
         if hwnd:
-            return hwnd
+            return int(hwnd)
 
         matches: list[int] = []
 
@@ -33,7 +43,7 @@ def find_window_handle(title_or_process: str) -> int:
             return True
 
         win32gui.EnumWindows(enum_cb, matches)
-        return matches[0] if matches else 0
+        return int(matches[0]) if matches else 0
     except Exception:
         return 0
 
@@ -53,9 +63,9 @@ def poll_window_handle(
 
 def notify_partial_failure(app_name: str, reason: str) -> None:
     """Displays a Windows toast notification on partial execution failure."""
+    if not notification:
+        return
     try:
-        from plyer import notification
-
         notification.notify(
             title="Jarvis - Warning",
             message=f"Could not prepare '{app_name}': {reason}",
