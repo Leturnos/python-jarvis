@@ -10,6 +10,38 @@ from core.shared.constants import AppRegistry, Timing
 from core.shared.errors import BusinessError
 
 
+import os
+
+
+def is_action_trusted(step: ExecutionStep, config: dict[str, Any]) -> bool:
+    """Validates if an execution step targets a trusted application with scoped permissions."""
+    trusted_apps = config.get("security", {}).get("trusted_apps", [])
+    if not trusted_apps:
+        return False
+
+    target = step.payload.get("target") or step.payload.get("command") or ""
+    if not target:
+        return False
+
+    normalized_target = os.path.normpath(os.path.expandvars(target)).lower()
+
+    action_type_map = {
+        StepType.OPEN_APP: "system_open",
+        StepType.COMMAND: "system_exec",
+    }
+    action_type_str = action_type_map.get(step.type, "")
+
+    for entry in trusted_apps:
+        if isinstance(entry, dict):
+            entry_path = os.path.normpath(
+                os.path.expandvars(entry.get("path", ""))
+            ).lower()
+            allowed_actions = entry.get("allowed_actions", [])
+            if normalized_target == entry_path and action_type_str in allowed_actions:
+                return True
+    return False
+
+
 class PlanBuilder:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
@@ -93,6 +125,9 @@ class PlanBuilder:
             for cmd in commands
         ]
 
+        if steps and all(is_action_trusted(step, self.config) for step in steps):
+            risk_level = RiskLevel.SAFE
+
         return ExecutionPlan(
             intent=action_config.get("intent", "system_cmd"),
             explanation="Executando comando de sistema",
@@ -155,6 +190,9 @@ class PlanBuilder:
         except ValueError:
             risk_level = RiskLevel.SAFE
 
+        if steps and all(is_action_trusted(step, self.config) for step in steps):
+            risk_level = RiskLevel.SAFE
+
         return ExecutionPlan(
             intent=intent_name,
             explanation=f"Executando plugin: {intent_name}",
@@ -162,3 +200,4 @@ class PlanBuilder:
             global_risk=risk_level,
             schema_version="1.1",
         )
+

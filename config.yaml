@@ -106,3 +106,11 @@ runtime:
   memory_monitor:
     interval_seconds: 60              # Polling frequency (seconds) for RAM usage checks
     threshold_mb: 800.0               # Memory ceiling (MB) above which garbage collection is forced
+
+security:
+  trusted_apps:
+    - path: "${WARP_PATH}"
+      allowed_actions: ["system_open"]
+    - path: "C:\\Program Files\\Spotify\\Spotify.exe"
+      allowed_actions: ["system_open"]
+
