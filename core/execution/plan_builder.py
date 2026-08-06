@@ -150,9 +150,12 @@ class PlanBuilder:
         for action in actions:
             a_type = action.get("type")
             if a_type == "system_open":
+                payload = {"target": action.get("target")}
+                if "window_state" in action:
+                    payload["window_state"] = action.get("window_state")
                 steps.append(
                     ExecutionStep(
-                        type=StepType.OPEN_APP, payload={"target": action.get("target")}
+                        type=StepType.OPEN_APP, payload=payload
                     )
                 )
             elif a_type == "wait":
