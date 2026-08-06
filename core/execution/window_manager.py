@@ -25,6 +25,65 @@ class WindowInfo:
     title: str
 
 
+class WindowLayoutManager:
+    """Manages deterministic DPI-aware window positioning on Windows monitors."""
+
+    @staticmethod
+    def calculate_snap_bounds(
+        work_area: tuple[int, int, int, int], state: str
+    ) -> tuple[int, int, int, int]:
+        left, top, right, bottom = work_area
+        total_width = right - left
+        total_height = bottom - top
+        half_width = total_width // 2
+
+        if state == "snap_left":
+            return (left, top, half_width, total_height)
+        elif state == "snap_right":
+            return (left + half_width, top, half_width, total_height)
+        elif state == "maximize":
+            return (left, top, total_width, total_height)
+        return (left, top, total_width, total_height)
+
+    def apply_window_state(self, hwnd: int, state: str) -> bool:
+        """Applies DPI-aware window state (snap_left, snap_right, minimize, maximize) using Win32 API."""
+        if not hwnd or hwnd <= 0:
+            return False
+        try:
+            if state == "minimize":
+                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                return True
+            elif state == "maximize":
+                win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                return True
+
+            monitor = win32api.MonitorFromWindow(
+                hwnd, win32con.MONITOR_DEFAULTTONEAREST
+            )
+            monitor_info = win32api.GetMonitorInfo(monitor)
+            work_area = monitor_info.get("Work", (0, 0, 1920, 1080))
+
+            x, y, w, h = self.calculate_snap_bounds(work_area, state)
+
+            if win32gui.IsIconic(hwnd) or win32gui.IsZoomed(hwnd):
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+
+            win32gui.SetWindowPos(
+                hwnd,
+                0,
+                x,
+                y,
+                w,
+                h,
+                win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE,
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error applying window state '{state}' to hwnd {hwnd}: {e}")
+            return False
+
+
+
 class WindowManager:
     def find_processes(
         self, executable_path: str | None = None, executable_name: str | None = None
