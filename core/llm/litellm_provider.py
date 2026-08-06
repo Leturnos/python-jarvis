@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
+from core.infra.network import check_internet_connection_async
 from core.llm.base import BaseLLMProvider
 from core.llm.models import (
     LLMAuthenticationError,
@@ -49,13 +50,22 @@ class LiteLLMProvider(BaseLLMProvider):
         self, prompt: str, system_instruction: str | None = None
     ) -> LLMResponse:
         """Generates content using LiteLLM."""
+        if not check_internet_connection_async(timeout=0.5):
+            logger.warning("Internet offline detected before LLM request.")
+            raise LLMProviderError(
+                "Desculpe, estou sem acesso à internet no momento. Verifique sua conexão com a internet."
+            )
+
         messages = []
         if system_instruction:
             messages.append({"role": "system", "content": system_instruction})
         messages.append({"role": "user", "content": prompt})
 
         try:
-            kwargs = {}
+            kwargs = {
+                "timeout": 5.0,
+                "num_retries": 0,
+            }
             if self.api_key:
                 kwargs["api_key"] = self.api_key
 
@@ -67,9 +77,9 @@ class LiteLLMProvider(BaseLLMProvider):
 
             content = response.choices[0].message.content
             usage = {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens,
+                "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
+                "completion_tokens": getattr(response.usage, "completion_tokens", 0),
+                "total_tokens": getattr(response.usage, "total_tokens", 0),
             }
 
             return LLMResponse(
@@ -87,6 +97,11 @@ class LiteLLMProvider(BaseLLMProvider):
         except litellm.exceptions.RateLimitError as e:
             raise LLMRateLimitError(
                 f"Rate limit exceeded for {self.provider}: {e}"
+            ) from e
+        except (litellm.exceptions.Timeout, litellm.exceptions.APIConnectionError) as e:
+            logger.error(f"LiteLLM timeout or connection error: {e}")
+            raise LLMProviderError(
+                "Desculpe, não consegui conectar ao provedor de IA no momento. Verifique sua conexão com a internet."
             ) from e
         except Exception as e:
             logger.error(f"LiteLLM error: {e}")
@@ -106,7 +121,10 @@ class LiteLLMProvider(BaseLLMProvider):
         """Verifies if the API key and provider connection are valid using a 1-token request."""
         messages = [{"role": "user", "content": "ping"}]
         try:
-            kwargs = {}
+            kwargs = {
+                "timeout": 5.0,
+                "num_retries": 0,
+            }
             if self.api_key:
                 kwargs["api_key"] = self.api_key
 
@@ -120,3 +138,4 @@ class LiteLLMProvider(BaseLLMProvider):
         except Exception as e:
             logger.error(f"Active connection test failed for {self.provider}: {e}")
             return False
+
