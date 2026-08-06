@@ -213,6 +213,21 @@ class HistoryManager(SQLiteBase):
             (datetime.now().isoformat(), metric_name, metric_value, tags)
         )
 
+    def get_recent_commands(self, limit: int = 10) -> list[str]:
+        """Retrieves top unique recent execution command strings from SQLite history."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT input_text FROM command_history WHERE input_text IS NOT NULL AND input_text != '' ORDER BY id DESC LIMIT 50"
+                )
+                rows = cursor.fetchall()
+                unique_commands = list(dict.fromkeys(r[0] for r in rows if r[0]))
+                return unique_commands[:limit]
+        except Exception as e:
+            logger.error(f"Error fetching recent commands: {e}")
+            return []
+
     def close(self) -> None:
         """Stops the background worker thread."""
         self.metrics_queue.put(None)
@@ -222,3 +237,4 @@ class HistoryManager(SQLiteBase):
 
 # Singleton instance
 history_manager = HistoryManager()
+

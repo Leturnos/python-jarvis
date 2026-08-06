@@ -46,3 +46,8 @@ class SQLiteBase:
         finally:
             if conn:
                 conn.close()
+
+    def get_connection(self) -> Generator[sqlite3.Connection]:
+        """Alias context manager for connection()."""
+        return self.connection()
+
