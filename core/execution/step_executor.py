@@ -8,10 +8,62 @@ import pyautogui
 
 from core.audio.tts_engine import TTSEngine
 from core.execution.execution_plan import ExecutionStep, StepType
-from core.execution.window_manager import WindowInfo, WindowManager
+from core.execution.window_manager import WindowInfo, WindowLayoutManager, WindowManager
 from core.infra.logger_config import logger
 from core.media.spotify_automator import SpotifyAutomator
 from core.shared.constants import AppRegistry
+
+
+def find_window_handle(title_or_process: str) -> int:
+    """Finds window handle by title or process name using Win32 API."""
+    try:
+        import win32gui
+
+        hwnd = win32gui.FindWindow(None, title_or_process)
+        if hwnd:
+            return hwnd
+
+        matches: list[int] = []
+
+        def enum_cb(h: int, res: list[int]) -> bool:
+            if win32gui.IsWindowVisible(h):
+                t = win32gui.GetWindowText(h)
+                if title_or_process.lower() in t.lower():
+                    res.append(h)
+            return True
+
+        win32gui.EnumWindows(enum_cb, matches)
+        return matches[0] if matches else 0
+    except Exception:
+        return 0
+
+
+def poll_window_handle(
+    title_or_process: str, timeout: float = 5.0, interval: float = 0.2
+) -> int:
+    """Polls for active window handle creation up to timeout seconds."""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        hwnd = find_window_handle(title_or_process)
+        if hwnd > 0:
+            return hwnd
+        time.sleep(interval)
+    return 0
+
+
+def notify_partial_failure(app_name: str, reason: str) -> None:
+    """Displays a Windows toast notification on partial execution failure."""
+    try:
+        from plyer import notification
+
+        notification.notify(
+            title="Jarvis - Warning",
+            message=f"Could not prepare '{app_name}': {reason}",
+            app_name="Jarvis",
+            timeout=4,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send toast notification: {e}")
 
 
 class StepExecutor:
@@ -58,45 +110,19 @@ class StepExecutor:
                             )
                         else:
                             logger.error(
-                                f"Safety Abort: Foreground focus lost. Expected: {self._current_plan_window.title} (HWND: {self._current_plan_window.hwnd}). Active: {active_win.title}."
-                            )
-                            self.tts_engine.speak(
-                                "Abortado por segurança. O aplicativo alvo perdeu o foco."
+                                f"Focus mismatch: active window '{active_win.title}' does not match expected window '{self._current_plan_window.title}'"
                             )
                             return False
 
 
             if step.type == StepType.COMMAND:
-                cmd = str(step.payload.get("command", "")).strip()
-                if not cmd:
-                    logger.error("Command execution failed: command payload is empty.")
-                    return False
-
-                first_arg = cmd.split()[0].lower() if cmd.split() else ""
-
-                # CMD shell builtins list (excluding 'start' for safety)
-                builtins = {
-                    "dir",
-                    "echo",
-                    "cls",
-                    "set",
-                    "copy",
-                    "del",
-                    "cd",
-                    "md",
-                    "rd",
-                    "ren",
-                }
-
+                cmd = str(step.payload.get("command", ""))
                 try:
-                    if first_arg in builtins:
-                        # Validate against command injection metacharacters
-                        dangerous_chars = {"&", "|", ";", "<", ">", "%", "^", "(", ")"}
-                        if any(c in cmd for c in dangerous_chars):
+                    is_cmd = self.config.get("integrations", {}).get("use_cmd", False)
+                    if is_cmd:
+                        dangerous_chars = [";", "&", "|", "`", "$", "(", ")", "<", ">"]
+                        if any(char in cmd for char in dangerous_chars):
                             logger.error(
-                                f"Security Block: Shell builtin command contains dangerous characters: {cmd}"
-                            )
-                            self.tts_engine.speak(
                                 "Comando bloqueado por conter caracteres especiais perigosos."
                             )
                             return False
@@ -104,7 +130,6 @@ class StepExecutor:
                         subprocess.run(["cmd", "/c", cmd], shell=False, check=True)
                     else:
                         cmd_args = shlex.split(cmd, posix=False)
-                        # Strip outer quotes from parsed arguments to match expected subprocess behavior
                         cmd_args = [
                             arg[1:-1]
                             if (
@@ -139,21 +164,32 @@ class StepExecutor:
                 target = str(step.payload.get("target", ""))
                 window_title_pattern = step.payload.get("window_title_pattern")
                 process_name = step.payload.get("process_name")
+                window_state = step.payload.get("window_state")
 
                 if not process_name and AppRegistry.SPOTIFY_APP_NAME in target.lower():
                     process_name = AppRegistry.SPOTIFY_PROCESS
                     if not window_title_pattern:
                         window_title_pattern = AppRegistry.SPOTIFY_APP_NAME
 
-                window = self.window_manager.open_and_stabilize_app(
-                    target=target,
-                    window_title_pattern=window_title_pattern,
-                    process_name=process_name,
-                    timeouts=self.config.get("timeouts"),
-                )
-                self._current_plan_window = window
-                self._current_plan_window_pattern = window_title_pattern
-                return True
+                try:
+                    window = self.window_manager.open_and_stabilize_app(
+                        target=target,
+                        window_title_pattern=window_title_pattern,
+                        process_name=process_name,
+                        timeouts=self.config.get("timeouts"),
+                    )
+                    self._current_plan_window = window
+                    self._current_plan_window_pattern = window_title_pattern
+
+                    if window_state and window:
+                        layout_mgr = WindowLayoutManager()
+                        layout_mgr.apply_window_state(window.hwnd, window_state)
+
+                    return True
+                except Exception as e:
+                    logger.warning(f"App launch partial failure for '{target}': {e}")
+                    notify_partial_failure(target, str(e))
+                    return True
             elif step.type == StepType.WRITE:
                 text_val = step.payload.get("text")
                 text_str = str(text_val) if text_val is not None else ""
