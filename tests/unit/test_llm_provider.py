@@ -1,31 +1,32 @@
 import sys
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 # Mock litellm before importing provider to prevent C-extension DLL permission failure in sandbox
 mock_litellm = MagicMock()
 
 
-class MockTimeoutException(Exception):
+class MockTimeoutError(Exception):
     pass
 
 
-class MockAPIConnectionException(Exception):
+class MockAPIConnectionError(Exception):
     pass
 
 
-class MockAuthenticationException(Exception):
+class MockAuthenticationError(Exception):
     pass
 
 
-class MockRateLimitException(Exception):
+class MockRateLimitError(Exception):
     pass
 
 
-mock_litellm.exceptions.Timeout = MockTimeoutException
-mock_litellm.exceptions.APIConnectionError = MockAPIConnectionException
-mock_litellm.exceptions.AuthenticationError = MockAuthenticationException
-mock_litellm.exceptions.RateLimitError = MockRateLimitException
+mock_litellm.exceptions.Timeout = MockTimeoutError
+mock_litellm.exceptions.APIConnectionError = MockAPIConnectionError
+mock_litellm.exceptions.AuthenticationError = MockAuthenticationError
+mock_litellm.exceptions.RateLimitError = MockRateLimitError
 
 sys.modules["litellm"] = mock_litellm
 sys.modules["litellm.exceptions"] = mock_litellm.exceptions
@@ -43,7 +44,7 @@ def test_litellm_provider_configures_timeout_and_zero_retries():
         with patch.object(
             mock_litellm,
             "completion",
-            side_effect=MockTimeoutException("Connection timed out"),
+            side_effect=MockTimeoutError("Connection timed out"),
         ) as mock_completion:
             with pytest.raises(LLMProviderError) as exc_info:
                 provider.generate_content(prompt="Hello", system_instruction="Test")

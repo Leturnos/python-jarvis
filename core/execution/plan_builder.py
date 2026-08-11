@@ -150,11 +150,7 @@ class PlanBuilder:
                 payload = {"target": action.get("target")}
                 if "window_state" in action:
                     payload["window_state"] = action.get("window_state")
-                steps.append(
-                    ExecutionStep(
-                        type=StepType.OPEN_APP, payload=payload
-                    )
-                )
+                steps.append(ExecutionStep(type=StepType.OPEN_APP, payload=payload))
             elif a_type == "wait":
                 steps.append(
                     ExecutionStep(
@@ -200,4 +196,3 @@ class PlanBuilder:
             global_risk=risk_level,
             schema_version="1.1",
         )
-

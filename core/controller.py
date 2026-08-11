@@ -249,9 +249,7 @@ class JarvisController:
             except Exception as e:
                 logger.error(f"Error during post-execution reset: {e}")
 
-    def _handle_confirmation(
-        self, pcm: np.ndarray, rms: float, now: float
-    ) -> None:
+    def _handle_confirmation(self, pcm: np.ndarray, rms: float, now: float) -> None:
         self.ui.update(status="Aguardando Confirmação...")
         self.confirmation_frames.append(pcm.tobytes())
 

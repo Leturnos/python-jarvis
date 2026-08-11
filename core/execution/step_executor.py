@@ -124,7 +124,6 @@ class StepExecutor:
                             )
                             return False
 
-
             if step.type == StepType.COMMAND:
                 cmd = str(step.payload.get("command", ""))
                 try:

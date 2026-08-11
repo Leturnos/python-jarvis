@@ -193,10 +193,7 @@ class HistoryManager(SQLiteBase):
                         INSERT INTO metrics (timestamp, metric_name, metric_value, tags)
                         VALUES (?, ?, ?, ?)
                     """,
-                        [
-                            (ts, name, float(val), tags)
-                            for ts, name, val, tags in batch
-                        ],
+                        [(ts, name, float(val), tags) for ts, name, val, tags in batch],
                     )
             except Exception as e:
                 logger.error(f"Error writing metric batch to DB: {e}")
@@ -236,4 +233,3 @@ class HistoryManager(SQLiteBase):
 
 # Singleton instance
 history_manager = HistoryManager()
-

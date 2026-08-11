@@ -84,7 +84,6 @@ class WindowLayoutManager:
             return False
 
 
-
 class WindowManager:
     def find_processes(
         self, executable_path: str | None = None, executable_name: str | None = None

@@ -1,4 +1,5 @@
 import time
+
 from core.infra.network import check_internet_connection_async
 
 

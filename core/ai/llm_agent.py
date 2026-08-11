@@ -72,13 +72,12 @@ class LLMAgent:
                     prov_instance = self.provider
                 else:
                     logger.info(f"Attempting fallback LLM Provider '{prov_name}'...")
-                    model_name = (
-                        llm_cfg.get("providers", {})
-                        .get(prov_name, {})
-                        .get("model")
-                        or DEFAULT_MODELS.get(prov_name, "gemini-2.5-flash")
+                    model_name = llm_cfg.get("providers", {}).get(prov_name, {}).get(
+                        "model"
+                    ) or DEFAULT_MODELS.get(prov_name, "gemini-2.5-flash")
+                    prov_instance = LiteLLMProvider(
+                        provider=prov_name, model=model_name
                     )
-                    prov_instance = LiteLLMProvider(provider=prov_name, model=model_name)
 
                 logger.info(f"Sending to LLM Provider ({prov_name})...")
                 return prov_instance.generate_content(prompt=prompt)

@@ -11,7 +11,7 @@ def _check_socket(host: str, port: int, timeout: float) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
-    except (socket.timeout, socket.error, OSError):
+    except (TimeoutError, OSError):
         return False
 
 

@@ -144,4 +144,3 @@ class LiteLLMProvider(BaseLLMProvider):
         except Exception as e:
             logger.error(f"Active connection test failed for {self.provider}: {e}")
             return False
-

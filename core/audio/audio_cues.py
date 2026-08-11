@@ -2,12 +2,12 @@ import logging
 import time
 import winsound
 from concurrent.futures import ThreadPoolExecutor
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class CueType(str, Enum):
+class CueType(StrEnum):
     WAKE = "wake"
     COMMAND_RECOGNIZED = "command_recognized"
     ACTION_COMPLETED = "action_completed"

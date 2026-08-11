@@ -59,7 +59,6 @@ def post_process_stt_text(text: str) -> str:
     return processed
 
 
-
 def get_resources_dir() -> Path:
     """Returns and ensures the resources directory exists."""
     project_dir = Path(__file__).parent.parent.parent.absolute()

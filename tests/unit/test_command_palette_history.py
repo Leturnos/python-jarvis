@@ -1,11 +1,10 @@
 from unittest.mock import MagicMock, patch
+
 from core.persistence.history_db import HistoryManager
 
 
 def test_get_recent_commands_returns_unique_list():
-    with patch.object(HistoryManager, "_init_db"), patch(
-        "threading.Thread.start"
-    ):
+    with patch.object(HistoryManager, "_init_db"), patch("threading.Thread.start"):
         db_manager = HistoryManager(db_path=":memory:")
         db_manager.get_connection = MagicMock()
 
@@ -16,9 +15,7 @@ def test_get_recent_commands_returns_unique_list():
             ("abrir vscode",),
             ("abrir warp",),
         ]
-        db_manager.get_connection.return_value.__enter__.return_value.cursor.return_value = (
-            mock_cursor
-        )
+        db_manager.get_connection.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 
         recent = db_manager.get_recent_commands(limit=10)
         assert recent == ["abrir vscode", "tocar spotify", "abrir warp"]

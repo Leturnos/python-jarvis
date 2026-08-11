@@ -31,7 +31,6 @@ def test_post_process_stt_text_uses_regex_word_boundaries():
     assert post_process_stt_text("warper") == "warper"
 
 
-
 def test_time_it_success():
     mock_history = MagicMock()
 

@@ -50,5 +50,3 @@ class SQLiteBase:
     def get_connection(self) -> AbstractContextManager[sqlite3.Connection]:
         """Alias context manager for connection()."""
         return self.connection()
-
-
