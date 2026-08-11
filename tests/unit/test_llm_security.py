@@ -48,7 +48,7 @@ class TestLLMSecurity(unittest.TestCase):
         # llm_agent normalizes risk_level to global_risk
         self.assertEqual(result.get("global_risk"), "dangerous")
 
-    def test_risk_level_defaults_to_safe(self):
+    def test_risk_level_defaults_to_high_when_missing(self):
         # Mock response from LLM without risk_level
         mock_response = LLMResponse(
             content='{"type": "action", "action": "system", "commands": ["echo hi"]}',
@@ -58,9 +58,9 @@ class TestLLMSecurity(unittest.TestCase):
 
         result = llm_agent.process_instruction("fale oi")
 
-        self.assertEqual(result.get("global_risk"), "safe")
+        self.assertEqual(result.get("global_risk"), "high")
 
-    def test_risk_level_invalid_defaults_to_safe(self):
+    def test_risk_level_invalid_defaults_to_high(self):
         # Mock response from LLM with invalid risk_level
         mock_response = LLMResponse(
             content='{"type": "action", "action": "system", "commands": ["echo hi"], "risk_level": "unknown"}',
@@ -70,7 +70,7 @@ class TestLLMSecurity(unittest.TestCase):
 
         result = llm_agent.process_instruction("fale oi")
 
-        self.assertEqual(result.get("global_risk"), "safe")
+        self.assertEqual(result.get("global_risk"), "high")
 
     def test_prompt_contains_risk_tiers(self):
         # This tests if the prompt being sent contains the new information
