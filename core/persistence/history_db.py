@@ -224,6 +224,20 @@ class HistoryManager(SQLiteBase):
             logger.error(f"Error fetching recent commands: {e}")
             return []
 
+    def get_history(self, limit: int = 50) -> list[tuple[Any, ...]]:
+        """Retrieves recent history records (id, timestamp, input_text, execution_status)."""
+        try:
+            with self.connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT id, timestamp, input_text, execution_status FROM command_history ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                )
+                return cursor.fetchall()
+        except Exception as e:
+            logger.error(f"Error fetching history records: {e}")
+            return []
+
     def close(self) -> None:
         """Stops the background worker thread."""
         self.metrics_queue.put(None)
