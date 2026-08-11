@@ -27,8 +27,27 @@ class CommandPalette:
         self._is_visible = False
 
     def _fetch_commands(self) -> None:
-        """Loads available commands from plugins and configurations."""
+        """Loads available commands from plugins, configurations, and SQLite execution history."""
         self.all_commands = []
+
+        # Load recent SQLite history items first
+        try:
+            from core.persistence.history_db import history_manager
+
+            recent_cmds = history_manager.get_recent_commands(limit=10)
+            for cmd_str in recent_cmds:
+                self.all_commands.append(
+                    {
+                        "label": f"[Histórico] {cmd_str}",
+                        "action_type": "history",
+                        "command_text": cmd_str,
+                        "intent": "system_cmd",
+                        "risk_level": "safe",
+                    }
+                )
+        except Exception as e:
+            logger.warning(f"Failed to fetch recent commands for palette: {e}")
+
         # Load plugin intents
         intents = plugin_manager.get_intents()
         for i in intents:
@@ -41,8 +60,6 @@ class CommandPalette:
                 }
             )
 
-        # You could also load static wakewords/commands from config here if needed
-        # For now, we focus on the newly created DSL intents.
         self.filtered_commands = self.all_commands.copy()
 
     def _create_ui(self) -> None:
@@ -169,13 +186,17 @@ class CommandPalette:
 
         # Dispatch the command in a separate thread so we don't block the UI loop (if it was still alive)
         def run_action() -> None:
-            if selected_cmd["action_type"] == "plugin":
+            if selected_cmd["action_type"] == "history":
+                self.dispatcher.last_input_text = selected_cmd["command_text"]
+                self.dispatcher.last_input_source = "command_palette"
+                self.dispatcher.last_confidence = 1.0
+                self.dispatcher.dispatch(selected_cmd["command_text"])
+            elif selected_cmd["action_type"] == "plugin":
                 action_config = {
                     "action": "plugin",
                     "intent": selected_cmd["intent"],
                     "risk_level": selected_cmd["risk_level"],
                 }
-                # Directly call the handler to bypass wakeword logic
                 self.dispatcher.last_input_text = selected_cmd["label"]
                 self.dispatcher.last_input_source = "command_palette"
                 self.dispatcher.last_confidence = 1.0
