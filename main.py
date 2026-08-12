@@ -34,7 +34,6 @@ from core.runtime.monitor import MemoryMonitor
 from core.shared.constants import Timing
 from core.ui.adapter import JarvisTrayAdapter, JarvisUIAdapter
 from core.ui.app_controller import QtAppController
-from core.ui.command_palette import CommandPalette
 from core.ui.notifications import JarvisNotifier
 
 
@@ -130,9 +129,8 @@ def main() -> None:
     if not is_minimized:
         app_controller.show_window()
 
-    # Initialize Command Palette
-    palette = CommandPalette(dispatcher)
-    palette.start_background_loop()
+    # Initialize Qt Command Palette
+    app_controller.start_command_palette(dispatcher)
 
     worker_thread = threading.Thread(
         target=command_worker,

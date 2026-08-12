@@ -19,7 +19,9 @@ from core.shared.utils import (
     is_autostart_enabled_check,
     manage_autostart,
 )
+from core.ui.command_palette_qt import QtCommandPalette
 from core.ui.main_window import MainWindow
+from core.ui.voice_overlay import VoiceOverlayHUD
 
 
 def update_yaml_active_provider(provider_name: str) -> None:
@@ -66,6 +68,10 @@ class QtAppController(QObject):
         setTheme(Theme.DARK)
 
         self.main_window = MainWindow(ui_adapter)
+        self.voice_overlay = VoiceOverlayHUD()
+        self.command_palette: QtCommandPalette | None = None
+        ui_adapter.visual_state_updated.connect(self.voice_overlay.update_from_snapshot)
+
         self._has_shown_tray_message = False
         self.main_window.minimized_to_tray.connect(self._show_minimized_message)
 
@@ -77,6 +83,15 @@ class QtAppController(QObject):
                 self.main_window.setStyleSheet(f.read())
 
         self._setup_tray()
+
+    def start_command_palette(self, dispatcher: Any) -> QtCommandPalette:
+        self.command_palette = QtCommandPalette(dispatcher)
+        import keyboard
+
+        hotkey = "ctrl+alt+p"
+        keyboard.add_hotkey(hotkey, self.command_palette.show)
+        logger.info(f"Qt Command Palette initialized. Hotkey: {hotkey}")
+        return self.command_palette
 
     def _setup_tray(self) -> None:
         self.tray_icon = QSystemTrayIcon(self)
