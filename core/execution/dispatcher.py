@@ -442,3 +442,65 @@ class ActionDispatcher:
         except BusinessError as e:
             logger.error(f"Failed to build plan for dynamic action: {e}")
             self.tts_engine.speak(str(e))
+
+    def dispatch(self, text: str) -> bool:
+        """Processes a natural language text instruction through local resolver -> LLM pipeline."""
+        logger.info(f"Dispatching text instruction: '{text}'")
+        self.last_input_text = text
+        self.last_input_source = "command_palette"
+
+        from core.ai.command_resolver import CommandResolver
+        from core.ai.llm_agent import llm_agent
+        from core.plugins.plugin_manager import plugin_manager
+
+        resolver = CommandResolver()
+        result = resolver.resolve(text)
+
+        if result:
+            self.last_input_source = result.source
+            self.last_confidence = result.confidence
+
+            if result.is_system:
+                if result.intent_name == "replay":
+                    return self.replay_last_command()
+                elif result.intent_name == "create_macro":
+                    return self.initiate_macro_creation()
+
+            intents = plugin_manager.get_intents()
+            action_config = {
+                "action": "plugin",
+                "intent": result.intent_name,
+                "risk_level": next(
+                    (
+                        i["risk_level"]
+                        for i in intents
+                        if i["intent"] == result.intent_name
+                    ),
+                    "safe",
+                ),
+            }
+            self.handle_dynamic(action_config)
+            return True
+
+        # LLM Fallback
+        try:
+            state_manager.set_state(JarvisState.THINKING)
+            llm_res = llm_agent.process_instruction(text)
+            if llm_res:
+                if llm_res.get("type") in ("action", "media"):
+                    plan = ExecutionPlan.from_dict(llm_res)
+                    return self.handle_plan(plan)
+                elif llm_res.get("type") == "chat":
+                    self.handle_dynamic(llm_res)
+                    return True
+        except Exception as e:
+            logger.error(f"Error executing text instruction via LLM: {e}")
+            self.tts_engine.speak(
+                "Desculpe, ocorreu um erro ao processar sua instrução."
+            )
+            state_manager.set_state(JarvisState.ERROR, context={"error": str(e)})
+            return False
+        finally:
+            if state_manager.get_state() == JarvisState.THINKING:
+                state_manager.set_state(JarvisState.IDLE)
+        return False
