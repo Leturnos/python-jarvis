@@ -47,7 +47,7 @@ def test_history_db():
         "success",
         action_json='{"id": 2}',
     )
-    history = hm.get_recent_history_json(n=2)
+    history = hm.get_recent_history_json(limit=2)
     assert len(history) == 2, f"Expected 2 items, got {len(history)}"
     assert history[0] == '{"id": 2}', f"Expected '{{\"id\": 2}}', got {history[0]}"
     print("Test 4: Recent history retrieval passed.")

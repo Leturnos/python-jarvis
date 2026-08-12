@@ -134,7 +134,7 @@ def test_voice_confirmation_approval(mock_deps):
 
     controller = JarvisController(**mock_deps)
     pcm = np.zeros(1280, dtype=np.int16)
-    rms = 20.0
+    rms = 10.0
 
     call_count = 0
 
@@ -157,6 +157,7 @@ def test_voice_confirmation_approval(mock_deps):
 
     with patch("core.controller.stt_engine.transcribe", return_value="sim"):
         controller.confirmation_frames = [b"data"] * 11
+        controller.confirmation_silence_start = time.time() - 2.0
         controller.start()
 
         active_dialog.approve.assert_called()

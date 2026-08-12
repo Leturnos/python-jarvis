@@ -33,18 +33,35 @@ def mock_os_calls():
     def enum_windows_side_effect(callback, extra):
         callback(999, extra)
 
+    launched = False
+
+    def mock_popen(*args, **kwargs):
+        nonlocal launched
+        launched = True
+        return MagicMock()
+
+    def mock_startfile(*args, **kwargs):
+        nonlocal launched
+        launched = True
+
+    def process_iter_side_effect(*args, **kwargs):
+        if not launched:
+            return []
+        return [mock_proc]
+
     with (
-        patch("subprocess.Popen"),
-        patch("os.startfile"),
+        patch("subprocess.Popen", side_effect=mock_popen),
+        patch("os.startfile", side_effect=mock_startfile),
         patch("pyautogui.click"),
         patch("pyautogui.hotkey"),
         patch("pyautogui.press"),
         patch("pyautogui.moveTo"),
         patch("pyperclip.copy"),
-        patch("psutil.process_iter", return_value=[mock_proc]),
+        patch("psutil.process_iter", side_effect=process_iter_side_effect),
         patch("psutil.Process", return_value=mock_proc),
         patch("pygetwindow.getAllWindows", return_value=[mock_win]),
         patch("win32gui.EnumWindows", side_effect=enum_windows_side_effect),
+        patch("win32gui.FindWindow", return_value=999),
         patch("win32gui.GetForegroundWindow", return_value=999),
         patch("win32gui.GetWindowText", return_value="Untitled - Notepad"),
         patch("win32gui.GetWindowRect", return_value=(100, 100, 900, 700)),

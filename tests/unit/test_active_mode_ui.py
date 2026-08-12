@@ -1,18 +1,5 @@
-import sys
-from unittest.mock import MagicMock
-
-for mod in [
-    "PySide6",
-    "PySide6.QtCore",
-    "PySide6.QtWidgets",
-    "PySide6.QtGui",
-    "qfluentwidgets",
-    "qdarktheme",
-]:
-    sys.modules[mod] = MagicMock()
-
-from core.runtime.state import JarvisState  # noqa: E402
-from core.ui.widgets.status_card import get_mode_badge_info  # noqa: E402
+from core.runtime.state import JarvisState
+from core.ui.widgets.status_card import get_mode_badge_info
 
 
 def test_get_mode_badge_info_hybrid_mode():

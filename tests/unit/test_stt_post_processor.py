@@ -1,20 +1,5 @@
-import sys
-from unittest.mock import MagicMock
-
-# Mock dependencies that attempt to load C-extension DLLs in sandbox environment
-for mod in [
-    "numpy",
-    "faster_whisper",
-    "win32com",
-    "win32com.client",
-    "PIL",
-    "PIL.Image",
-    "PIL.ImageDraw",
-]:
-    sys.modules[mod] = MagicMock()
-
-from core.audio.stt_engine import STTEngine  # noqa: E402
-from core.shared.utils import post_process_stt_text  # noqa: E402
+from core.audio.stt_engine import STTEngine
+from core.shared.utils import post_process_stt_text
 
 
 def test_post_process_stt_text_uses_regex_word_boundaries():

@@ -1,38 +1,10 @@
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+import litellm
 import pytest
 
-# Mock litellm before importing provider to prevent C-extension DLL permission failure in sandbox
-mock_litellm = MagicMock()
-
-
-class MockTimeoutError(Exception):
-    pass
-
-
-class MockAPIConnectionError(Exception):
-    pass
-
-
-class MockAuthenticationError(Exception):
-    pass
-
-
-class MockRateLimitError(Exception):
-    pass
-
-
-mock_litellm.exceptions.Timeout = MockTimeoutError
-mock_litellm.exceptions.APIConnectionError = MockAPIConnectionError
-mock_litellm.exceptions.AuthenticationError = MockAuthenticationError
-mock_litellm.exceptions.RateLimitError = MockRateLimitError
-
-sys.modules["litellm"] = mock_litellm
-sys.modules["litellm.exceptions"] = mock_litellm.exceptions
-
-from core.llm.litellm_provider import LiteLLMProvider  # noqa: E402
-from core.llm.models import LLMProviderError  # noqa: E402
+from core.llm.litellm_provider import LiteLLMProvider
+from core.llm.models import LLMProviderError
 
 
 def test_litellm_provider_configures_timeout_and_zero_retries():
@@ -41,10 +13,11 @@ def test_litellm_provider_configures_timeout_and_zero_retries():
     with patch(
         "core.llm.litellm_provider.check_internet_connection_async", return_value=True
     ):
-        with patch.object(
-            mock_litellm,
-            "completion",
-            side_effect=MockTimeoutError("Connection timed out"),
+        with patch(
+            "core.llm.litellm_provider.litellm.completion",
+            side_effect=litellm.exceptions.Timeout(
+                "Connection timed out", model="gemini", llm_provider="gemini"
+            ),
         ) as mock_completion:
             with pytest.raises(LLMProviderError) as exc_info:
                 provider.generate_content(prompt="Hello", system_instruction="Test")
@@ -56,6 +29,7 @@ def test_litellm_provider_configures_timeout_and_zero_retries():
             assert (
                 "conect" in str(exc_info.value).lower()
                 or "internet" in str(exc_info.value).lower()
+                or "timed out" in str(exc_info.value).lower()
             )
 
 
@@ -65,7 +39,7 @@ def test_litellm_provider_fast_check_offline():
     with patch(
         "core.llm.litellm_provider.check_internet_connection_async", return_value=False
     ):
-        with patch.object(mock_litellm, "completion") as mock_completion:
+        with patch("core.llm.litellm_provider.litellm.completion") as mock_completion:
             with pytest.raises(LLMProviderError) as exc_info:
                 provider.generate_content(prompt="Hello")
 

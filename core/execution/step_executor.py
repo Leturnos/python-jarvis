@@ -122,6 +122,9 @@ class StepExecutor:
                             logger.error(
                                 f"Focus mismatch: active window '{active_win.title}' does not match expected window '{self._current_plan_window.title}'"
                             )
+                            self.tts_engine.speak(
+                                "Abortado por segurança. O aplicativo alvo perdeu o foco."
+                            )
                             return False
 
             if step.type == StepType.COMMAND:

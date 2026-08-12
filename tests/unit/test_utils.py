@@ -34,10 +34,7 @@ def test_post_process_stt_text_uses_regex_word_boundaries():
 def test_time_it_success():
     mock_history = MagicMock()
 
-    # NOTE: The import of history_manager is done locally and dynamically inside time_it()
-    # (from core.persistence.history_db import history_manager). Consequently,
-    # we must patch it directly at core.persistence.history_db.history_manager.
-    with patch("core.persistence.history_db.history_manager", mock_history):
+    with patch("core.shared.utils.history_manager", mock_history):
 
         @time_it
         def dummy_function(x, y):
@@ -55,10 +52,8 @@ def test_time_it_exception_handled():
     mock_history = MagicMock()
     mock_history.log_metric.side_effect = Exception("DB Error")
 
-    # NOTE: The import of history_manager is done locally, so the patch is applied where
-    # the object is originally defined/imported (core.persistence.history_db.history_manager).
     with (
-        patch("core.persistence.history_db.history_manager", mock_history),
+        patch("core.shared.utils.history_manager", mock_history),
         patch("core.shared.utils.logger") as mock_logger,
     ):
 

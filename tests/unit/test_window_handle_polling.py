@@ -1,30 +1,6 @@
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-for mod in [
-    "numpy",
-    "psutil",
-    "pyautogui",
-    "pyperclip",
-    "win32gui",
-    "win32con",
-    "win32process",
-    "win32api",
-    "win32com",
-    "win32com.client",
-    "pythoncom",
-    "pywintypes",
-    "pyttsx3",
-    "cv2",
-    "PIL",
-    "PIL.Image",
-    "PIL.ImageDraw",
-    "plyer",
-    "qdarktheme",
-]:
-    sys.modules[mod] = MagicMock()
-
-from core.execution.step_executor import poll_window_handle  # noqa: E402
+from core.execution.step_executor import poll_window_handle
 
 
 def test_poll_window_handle_returns_hwnd_when_found():

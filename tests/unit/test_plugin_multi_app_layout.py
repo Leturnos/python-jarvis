@@ -1,29 +1,6 @@
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-for mod in [
-    "psutil",
-    "pyautogui",
-    "pyperclip",
-    "win32gui",
-    "win32con",
-    "win32process",
-    "win32api",
-    "win32com",
-    "win32com.client",
-    "pythoncom",
-    "pywintypes",
-    "pyttsx3",
-    "cv2",
-    "PIL",
-    "PIL.Image",
-    "PIL.ImageDraw",
-    "plyer",
-    "qdarktheme",
-]:
-    sys.modules[mod] = MagicMock()
-
-from core.execution.plan_builder import PlanBuilder  # noqa: E402
+from core.execution.plan_builder import PlanBuilder
 
 
 def test_build_plugin_plan_parses_window_state():

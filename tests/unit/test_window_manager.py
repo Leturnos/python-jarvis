@@ -10,7 +10,7 @@ def wm():
     return WindowManager()
 
 
-@patch("psutil.process_iter")
+@patch("core.execution.window_manager.psutil.process_iter")
 def test_find_processes(mock_process_iter, wm):
     mock_p = MagicMock()
     mock_p.info = {"pid": 123, "name": "notepad.exe", "exe": "C:\\Windows\\notepad.exe"}

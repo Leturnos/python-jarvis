@@ -10,7 +10,7 @@ from core.execution.execution_plan import ExecutionPlan, RiskLevel
 def mock_dependencies():
     with (
         patch("core.execution.dispatcher.history_manager") as mock_history,
-        patch("core.ai.llm_agent.llm_agent") as mock_llm_agent,
+        patch("core.execution.dispatcher.llm_agent") as mock_llm_agent,
         patch(
             "core.execution.dispatcher.PromptGuard", create=True
         ) as mock_prompt_guard,

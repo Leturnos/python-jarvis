@@ -1,10 +1,6 @@
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-for mod in ["winsound"]:
-    sys.modules[mod] = MagicMock()
-
-from core.audio.audio_cues import AudioCueManager, CueType  # noqa: E402
+from core.audio.audio_cues import AudioCueManager, CueType
 
 
 def test_play_cue_debounces_rapid_triggers():
