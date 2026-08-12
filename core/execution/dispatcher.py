@@ -8,6 +8,9 @@ orchestrating the execution of both static (wakeword-based) and dynamic
 import json
 from typing import Any
 
+from core.ai.command_resolver import CommandResolver
+from core.ai.llm_agent import llm_agent
+from core.ai.prompt_guard import PromptGuard
 from core.audio.tts_engine import TTSEngine
 from core.execution.execution_plan import ExecutionPlan, RiskLevel
 from core.execution.plan_builder import PlanBuilder
@@ -15,6 +18,7 @@ from core.execution.step_executor import StepExecutor
 from core.infra.logger_config import logger
 from core.persistence.history_db import history_manager
 from core.plugins.macro_manager import macro_manager
+from core.plugins.plugin_manager import plugin_manager
 from core.runtime.state import JarvisState, state_manager
 from core.shared.errors import BusinessError
 from core.shared.utils import time_it
@@ -99,8 +103,6 @@ class ActionDispatcher:
             return True
 
         # 1. Prompt Guard Validation
-        from core.ai.prompt_guard import PromptGuard
-
         sanitized_dict = PromptGuard.sanitize_output(plan.to_dict())
         plan = ExecutionPlan.from_dict(sanitized_dict)
 
@@ -309,8 +311,6 @@ class ActionDispatcher:
         )
 
         try:
-            from core.ai.llm_agent import llm_agent
-
             explanation = llm_agent.generate_text(prompt)
             self.tts_engine.speak(explanation)
         except Exception as e:
@@ -448,10 +448,6 @@ class ActionDispatcher:
         logger.info(f"Dispatching text instruction: '{text}'")
         self.last_input_text = text
         self.last_input_source = "command_palette"
-
-        from core.ai.command_resolver import CommandResolver
-        from core.ai.llm_agent import llm_agent
-        from core.plugins.plugin_manager import plugin_manager
 
         resolver = CommandResolver()
         result = resolver.resolve(text)

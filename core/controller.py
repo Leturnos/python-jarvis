@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from core.activation import ActivationActionType, ActivationContext, ActivationManager
+from core.audio.audio_loop import AudioLoopManager
 from core.audio.stt_engine import stt_engine
 from core.execution.job_queue import Job, JobType
 from core.runtime.state import JarvisState, state_manager
@@ -70,8 +71,6 @@ class JarvisController:
         self.stop_event = stop_event
 
         # AudioLoopManager handles PyAudio lifecycle
-        from core.audio.audio_loop import AudioLoopManager
-
         self.audio_manager = AudioLoopManager(
             config=config,
             dispatcher=dispatcher,

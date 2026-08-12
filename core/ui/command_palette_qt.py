@@ -3,6 +3,7 @@ from typing import Any
 
 import pythoncom
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import LineEdit
 
 from core.infra.logger_config import logger
+from core.persistence.history_db import history_manager
 from core.plugins.plugin_manager import plugin_manager
 
 
@@ -94,7 +96,7 @@ class QtCommandPaletteDialog(QDialog):
         self.installEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
-        if event.type() == QEvent.Type.KeyPress:
+        if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
             if event.key() == Qt.Key.Key_Escape:
                 self.hide()
                 return True
@@ -246,9 +248,7 @@ class QtCommandPalette(QObject):
             )
 
         try:
-            from core.persistence.history_db import history_manager
-
-            recent_cmds = history_manager.get_recent_commands(limit=15)
+            recent_cmds = history_manager.get_recent_commands(limit=5)
             for cmd_str in recent_cmds:
                 self.all_commands.append(
                     {

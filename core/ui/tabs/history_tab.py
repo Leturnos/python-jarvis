@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.infra.logger_config import logger
+from core.persistence.history_db import history_manager
 
 
 class HistoryTab(QWidget):
@@ -35,8 +36,6 @@ class HistoryTab(QWidget):
     def load_history(self) -> None:
         self.table.setRowCount(0)
         try:
-            from core.persistence.history_db import history_manager
-
             rows = history_manager.get_history(limit=50)
             self.table.setRowCount(len(rows))
             for i, r in enumerate(rows):

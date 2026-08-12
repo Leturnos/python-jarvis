@@ -7,6 +7,7 @@ from core.cache import llm_cache
 from core.infra.config import config
 from core.infra.logger_config import logger
 from core.llm import LiteLLMProvider, LLMError
+from core.persistence.history_db import history_manager
 from core.plugins.plugin_manager import plugin_manager
 from core.runtime.rate_limiter import rate_limiter
 from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
@@ -123,12 +124,8 @@ class LLMAgent:
         cached_response = llm_cache.get(text)
         if cached_response:
             logger.info(f"Using cached LLM response for: '{text}'")
-            from core.persistence.history_db import history_manager
-
             history_manager.log_metric("llm_cache_hit", 1.0)
             return PromptGuard.sanitize_output(cached_response)
-
-        from core.persistence.history_db import history_manager
 
         history_manager.log_metric("llm_cache_hit", 0.0)
 

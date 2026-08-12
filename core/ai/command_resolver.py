@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
+from core.infra.config import config
 from core.infra.logger_config import logger
 from core.plugins.plugin_manager import plugin_manager
 from core.shared.utils import normalize_text
@@ -57,8 +58,6 @@ class CommandResolver:
         self, text: str, threshold: float | None = None
     ) -> ResolutionResult | None:
         if threshold is None:
-            from core.infra.config import config
-
             threshold = (
                 config.get("ai", {}).get("nlp", {}).get("fuzzy_match_threshold", 0.7)
             )

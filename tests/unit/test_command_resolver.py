@@ -116,7 +116,7 @@ def test_resolver_custom_threshold(resolver, input_text, threshold, should_match
 def test_resolver_default_threshold_from_config(resolver):
     # If threshold is None, it should import config and read from it
     mock_config_data = {"ai": {"nlp": {"fuzzy_match_threshold": 0.99}}}
-    with patch("core.infra.config.config", new=mock_config_data):
+    with patch("core.ai.command_resolver.config", new=mock_config_data):
         # At 0.99 threshold, "abrir bloco de nota" (ratio ~ 0.97) should not match.
         result = resolver.resolve("abrir bloco de nota")
         assert result is None
