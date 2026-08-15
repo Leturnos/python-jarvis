@@ -265,3 +265,10 @@ def test_is_autostart_enabled_check_false(mock_winreg):
 def test_is_autostart_enabled_check_exception(mock_winreg):
     mock_winreg.OpenKey.side_effect = Exception("Registry error")
     assert is_autostart_enabled_check() is False
+
+
+def test_trim_working_set():
+    from core.shared.utils import trim_working_set
+
+    result = trim_working_set()
+    assert isinstance(result, bool)

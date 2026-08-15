@@ -19,7 +19,7 @@ voice_activation:
   thresholds:
     silence_rms: 15.0                 # Audio RMS energy level below which is considered silence
     speech_rms: 20.0                  # Audio RMS energy level required to trigger wake word checks
-    max_zero_rms_frames: 30           # Consecutive dead-silence frames before triggering audio self-healing reset
+    max_zero_rms_frames: 500          # Consecutive dead-silence frames (0.0 RMS) before triggering audio self-healing reset
   timeouts:
     silence_end_seconds: 1.5          # Duration (seconds) of silence required to end command recording
     max_listening_seconds: 10.0       # Maximum duration (seconds) allowed for a single voice command
@@ -32,6 +32,8 @@ stt:
   device: "cpu"                       # Execution device: cpu or cuda
   compute_type: "int8"                # Quantization type: int8, float16, float32
   max_prompt_chars: 150               # Maximum character limit for initial prompt context
+  lazy_load: true                     # Defer Faster Whisper model load until first voice command
+  auto_unload_seconds: 180            # Inactivity TTL (seconds) to unload Whisper from RAM (0 = disabled)
 
 llm:
   active_provider: "openrouter"       # Active LLM provider: gemini, openai, anthropic, deepseek, openrouter
@@ -109,6 +111,10 @@ runtime:
   memory_monitor:
     interval_seconds: 60              # Polling frequency (seconds) for RAM usage checks
     threshold_mb: 800.0               # Memory ceiling (MB) above which garbage collection is forced
+    enable_working_set_trim: true     # Force Windows Working Set page trimming on GC
+  memory_optimization:
+    lazy_load_secondary_modules: true # Defer TemplateMatcher/SpotifyAutomator instantiation
+    unload_wakeword_on_suspend: true  # Release ONNX wakeword model references on Fullscreen suspend
 
 security:
   trusted_apps:

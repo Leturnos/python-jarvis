@@ -1,4 +1,6 @@
+import ctypes
 import functools
+import os
 import re
 import time
 import winreg
@@ -11,6 +13,19 @@ from PIL import Image, ImageDraw
 
 from core.infra.logger_config import logger
 from core.persistence.history_db import history_manager
+
+
+def trim_working_set() -> bool:
+    """Trims the process working set on Windows, returning unmapped physical RAM pages to the OS."""
+    if os.name != "nt":
+        return False
+    try:
+        # EmptyWorkingSet(-1) flushes the working set of the current process (pseudo-handle -1)
+        result = ctypes.windll.psapi.EmptyWorkingSet(-1)
+        return bool(result)
+    except Exception as e:
+        logger.debug(f"Failed to trim working set: {e}")
+        return False
 
 
 def time_it[F: Callable[..., Any]](func: F) -> F:

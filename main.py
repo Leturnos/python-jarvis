@@ -97,11 +97,20 @@ def main() -> None:
 
     tts_engine = TTSEngine(config)
     window_manager = WindowManager()
-    template_matcher = TemplateMatcher()
-    spotify_automator = SpotifyAutomator(
-        config, window_manager, tts_engine, template_matcher
-    )
+
+    mem_opt = config.get("runtime", {}).get("memory_optimization", {})
+    lazy_secondary = mem_opt.get("lazy_load_secondary_modules", True)
+
+    if lazy_secondary:
+        spotify_automator = None
+    else:
+        template_matcher = TemplateMatcher()
+        spotify_automator = SpotifyAutomator(
+            config, window_manager, tts_engine, template_matcher
+        )
+
     step_executor = StepExecutor(config, window_manager, spotify_automator, tts_engine)
+
     plan_builder = PlanBuilder(config)
 
     pa, stream = get_audio_stream(config)

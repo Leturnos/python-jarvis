@@ -110,3 +110,54 @@ def test_stt_engine_initialization_priority(mock_whisper):
     }
     engine = STTEngine(model_size="medium", config_dict=config_dict)
     assert engine.model_size == "medium"
+
+
+def test_stt_engine_lazy_loading(mock_whisper):
+    config_dict = {
+        "stt": {
+            "model_size": "tiny",
+            "device": "cpu",
+            "compute_type": "int8",
+            "lazy_load": True,
+            "auto_unload_seconds": 180,
+        }
+    }
+    engine = STTEngine(config_dict=config_dict)
+    assert engine.model is None
+    mock_whisper.assert_not_called()
+
+
+def test_stt_engine_auto_unload_timer(mock_whisper):
+    import time
+
+    config_dict = {
+        "stt": {
+            "model_size": "tiny",
+            "lazy_load": True,
+            "auto_unload_seconds": 1,
+        }
+    }
+    engine = STTEngine(config_dict=config_dict)
+    engine.load()
+    assert engine.model is not None
+    engine._reset_unload_timer()
+    time.sleep(1.2)
+    assert engine.model is None
+
+
+def test_stt_engine_auto_unload_disabled_when_zero(mock_whisper):
+    import time
+
+    config_dict = {
+        "stt": {
+            "model_size": "tiny",
+            "lazy_load": True,
+            "auto_unload_seconds": 0,
+        }
+    }
+    engine = STTEngine(config_dict=config_dict)
+    engine.load()
+    engine._reset_unload_timer()
+    time.sleep(0.3)
+    assert engine._unload_timer is None
+    assert engine.model is not None

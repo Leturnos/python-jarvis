@@ -63,3 +63,7 @@ Sempre revise os arquivos `AGENTS.md` específicos em subdiretórios para obter 
 | Falha no Match de frases com espaço | Texto do STT normalizado vs Frases YAML não normalizadas. | **Normalização Simétrica:** Aplicar o mesmo transformador no carregamento e input. |
 | Crash `No wakewords found` | Dependência de chaves fixas no YAML. | Implementar Descoberta Dinâmica de arquivos na pasta `models/`. |
 | Falha em teste de Wake Word | Detecção de tela cheia interferindo no ambiente de CI/Mock. | Mockar o `ActivationManager` em testes unitários do controller. |
+| AttributeError no `ActivationManager` no Boot | Propriedade `@property` de otimização inserida por engano no corpo do `__init__`, fazendo o construtor encerrar prematuramente e a UI fechar. | Manter decoradores `@property` fora do corpo do `__init__`. |
+| Congelamento do PC com Warp | `check_dead_silence()` reiniciando o PyAudio a cada 2.4s de silêncio (`rms < 0.1`) e `is_fullscreen()` detectando janelas maximizadas como jogos. | Validar `rms == 0.0` e checar o estilo Win32 `WS_CAPTION` no detector de tela cheia. |
+
+

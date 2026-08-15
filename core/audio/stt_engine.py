@@ -1,4 +1,5 @@
 import gc
+import threading
 
 import numpy as np
 from faster_whisper import WhisperModel
@@ -28,34 +29,68 @@ class STTEngine:
         self.device = stt_conf.get("device", "cpu") or "cpu"
         self.compute_type = stt_conf.get("compute_type", "int8") or "int8"
         self.language = stt_conf.get("language", "pt") or "pt"
+        self.lazy_load = bool(stt_conf.get("lazy_load", True))
+        self.auto_unload_seconds = int(stt_conf.get("auto_unload_seconds", 180))
 
+        self._lock = threading.RLock()
+        self._unload_timer: threading.Timer | None = None
         self.model: WhisperModel | None = None
-        self.load()
+
+        if not self.lazy_load:
+            self.load()
 
     def load(self) -> None:
         """Loads the Whisper model into memory if not already loaded."""
-        if self.model is None:
-            logger.info(
-                f"Loading Faster Whisper model ({self.model_size}) on {self.device}..."
-            )
-            try:
-                self.model = WhisperModel(
-                    self.model_size, device=self.device, compute_type=self.compute_type
+        with self._lock:
+            if self.model is None:
+                logger.info(
+                    f"Loading Faster Whisper model ({self.model_size}) on {self.device}..."
                 )
-            except Exception as e:
-                logger.error(f"Failed to load STT model: {e}")
+                try:
+                    self.model = WhisperModel(
+                        self.model_size,
+                        device=self.device,
+                        compute_type=self.compute_type,
+                    )
+                    self._reset_unload_timer()
+                except Exception as e:
+                    logger.error(f"Failed to load STT model: {e}")
 
     def unload(self) -> None:
         """Unloads the model and clears memory references."""
-        if self.model is not None:
-            logger.info(
-                f"Unloading Faster Whisper model ({self.model_size}) to save resources..."
-            )
-            # Remove reference and backend objects
-            self.model = None
+        with self._lock:
+            if self._unload_timer is not None:
+                self._unload_timer.cancel()
+                self._unload_timer = None
 
-            # Explicitly call garbage collector to free memory
-            gc.collect()
+            if self.model is not None:
+                logger.info(
+                    f"Unloading Faster Whisper model ({self.model_size}) to save resources..."
+                )
+                # Remove reference and backend objects
+                self.model = None
+
+                # Explicitly call garbage collector to free memory
+                gc.collect()
+
+                # Trim process working set on Windows to return freed C++ heap pages to OS
+                from core.shared.utils import trim_working_set
+
+                trim_working_set()
+
+    def _reset_unload_timer(self) -> None:
+        """Resets or cancels the auto-unload timer based on configured TTL."""
+        with self._lock:
+            if self._unload_timer is not None:
+                self._unload_timer.cancel()
+                self._unload_timer = None
+
+            if self.auto_unload_seconds > 0:
+                self._unload_timer = threading.Timer(
+                    self.auto_unload_seconds, self.unload
+                )
+                self._unload_timer.daemon = True
+                self._unload_timer.start()
 
     def build_initial_prompt(
         self, keywords: list[str], max_chars: int | None = None
@@ -101,6 +136,9 @@ class STTEngine:
             raw_text = " ".join([segment.text for segment in segments]).strip()
             text = post_process_stt_text(raw_text)
             logger.info(f"Transcription: '{text}' (raw: '{raw_text}')")
+
+            # Reset auto-unload TTL timer after successful transcription
+            self._reset_unload_timer()
             return text
         except Exception as e:
             logger.error(f"STT Error: {e}")

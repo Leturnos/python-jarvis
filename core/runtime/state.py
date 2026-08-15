@@ -102,7 +102,7 @@ class StateManager:
                 JarvisState.SUSPENDED,
             ],
             JarvisState.MUTED: [JarvisState.IDLE, JarvisState.SLEEPING],
-            JarvisState.SLEEPING: [JarvisState.IDLE],
+            JarvisState.SLEEPING: [JarvisState.IDLE, JarvisState.LISTENING],
             JarvisState.SUSPENDED: [
                 JarvisState.IDLE,
                 JarvisState.MUTED,

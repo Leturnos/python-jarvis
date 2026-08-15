@@ -69,6 +69,11 @@ class ActivationManager:
             "fullscreen_suspend_count": 0,
         }
 
+    @property
+    def should_unload_wakeword(self) -> bool:
+        mem_opt = self.full_config.get("runtime", {}).get("memory_optimization", {})
+        return bool(mem_opt.get("unload_wakeword_on_suspend", True))
+
     def evaluate(self, context: ActivationContext) -> ActivationAction:
         """Evaluates the current environment context and decides on an activation action."""
 
@@ -130,7 +135,7 @@ class ActivationManager:
         logger.info(f"Metric Update: {name}={self.metrics[name]}")
 
     def is_fullscreen(self) -> bool:
-        """Detects if the foreground window is in fullscreen mode."""
+        """Detects if the foreground window is in true borderless/fullscreen mode (skipping standard maximized windows)."""
         try:
             hwnd = win32gui.GetForegroundWindow()
             if not hwnd:
@@ -138,6 +143,11 @@ class ActivationManager:
 
             # Skip desktop/taskbar
             if win32gui.GetClassName(hwnd) in ("Progman", "WorkerW", "Shell_TrayWnd"):
+                return False
+
+            # Standard windows (like Warp, Chrome, VS Code) have WS_CAPTION even when maximized
+            style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+            if (style & win32con.WS_CAPTION) == win32con.WS_CAPTION:
                 return False
 
             rect = win32gui.GetWindowRect(hwnd)

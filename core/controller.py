@@ -225,12 +225,26 @@ class JarvisController:
         context: dict[str, Any] | None,
     ) -> None:
         # 1. Resource Management (Memory Optimization)
-        if new_state == JarvisState.MUTED:
-            # Unload heavy models when entering muted state
+        if new_state in (
+            JarvisState.MUTED,
+            JarvisState.SUSPENDED,
+            JarvisState.SLEEPING,
+        ):
+            # Unload heavy models when entering muted, suspended, or sleeping state
             stt_engine.unload()
-        elif old_state == JarvisState.MUTED and new_state == JarvisState.IDLE:
-            # Proactively reload models when coming back from muted state
-            stt_engine.load()
+            if self.model and hasattr(self.model, "reset"):
+                try:
+                    self.model.reset()
+                except Exception as e:
+                    logger.debug(f"Resetting wakeword model during suspend: {e}")
+        elif (
+            old_state in (JarvisState.MUTED, JarvisState.SUSPENDED)
+            and new_state == JarvisState.IDLE
+        ):
+            # Proactively reload models when coming back to IDLE state if lazy loading disabled
+            stt_conf = self.config.get("stt", {})
+            if not stt_conf.get("lazy_load", True):
+                stt_engine.load()
 
         # 2. State-specific Logic
         if new_state == JarvisState.CONFIRMING_DRY_RUN:

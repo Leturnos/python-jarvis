@@ -5,44 +5,56 @@ import threading
 import psutil
 
 from core.infra.logger_config import logger
+from core.shared.utils import trim_working_set
 
 
 class MemoryMonitor:
-    def __init__(self, interval_seconds: int = 60, threshold_mb: float = 800.0) -> None:
+    def __init__(
+        self,
+        interval_seconds: int = 60,
+        threshold_mb: float = 800.0,
+        enable_trim: bool = True,
+    ) -> None:
         self.interval_seconds = interval_seconds
         self.threshold_mb = threshold_mb
+        self.enable_trim = enable_trim
         self.stop_event = threading.Event()
         self.monitor_thread: threading.Thread | None = None
         self.process = psutil.Process(os.getpid())
 
+    def _check_memory(self, force: bool = False) -> None:
+        mem_info = self.process.memory_info()
+        rss_mb = mem_info.rss / (1024 * 1024)
+
+        if force or rss_mb > self.threshold_mb:
+            logger.warning(
+                f"High memory usage detected: {rss_mb:.2f}MB (Threshold: {self.threshold_mb}MB). Forcing garbage collection..."
+            )
+
+            # Force garbage collection
+            collected = gc.collect()
+
+            # Trim working set if enabled
+            if self.enable_trim:
+                trim_working_set()
+
+            # Check memory again after GC & Trim
+            mem_info_after = self.process.memory_info()
+            rss_mb_after = mem_info_after.rss / (1024 * 1024)
+
+            logger.info(
+                f"GC & Trim completed. Reclaimed {collected} objects. Memory is now {rss_mb_after:.2f}MB."
+            )
+        else:
+            logger.debug(f"Current memory usage: {rss_mb:.2f}MB")
+
     def _monitor_loop(self) -> None:
         logger.info(
-            f"Memory monitor started (Threshold: {self.threshold_mb}MB, Interval: {self.interval_seconds}s)"
+            f"Memory monitor started (Threshold: {self.threshold_mb}MB, Interval: {self.interval_seconds}s, Trim: {self.enable_trim})"
         )
         while not self.stop_event.is_set():
             try:
-                # Memory info in bytes -> convert to MB
-                mem_info = self.process.memory_info()
-                rss_mb = mem_info.rss / (1024 * 1024)
-
-                if rss_mb > self.threshold_mb:
-                    logger.warning(
-                        f"High memory usage detected: {rss_mb:.2f}MB (Threshold: {self.threshold_mb}MB). Forcing garbage collection..."
-                    )
-
-                    # Force garbage collection
-                    collected = gc.collect()
-
-                    # Check memory again after GC
-                    mem_info_after = self.process.memory_info()
-                    rss_mb_after = mem_info_after.rss / (1024 * 1024)
-
-                    logger.info(
-                        f"GC completed. Reclaimed {collected} objects. Memory is now {rss_mb_after:.2f}MB."
-                    )
-                else:
-                    logger.debug(f"Current memory usage: {rss_mb:.2f}MB")
-
+                self._check_memory()
             except Exception as e:
                 logger.error(f"Error in memory monitor: {e}")
 

@@ -45,7 +45,7 @@ def load_config() -> dict[str, Any]:
                 "thresholds": {
                     "silence_rms": 15.0,
                     "speech_rms": 20.0,
-                    "max_zero_rms_frames": 30,
+                    "max_zero_rms_frames": 500,
                 },
                 "timeouts": {
                     "silence_end_seconds": 1.5,
@@ -59,6 +59,8 @@ def load_config() -> dict[str, Any]:
                 "language": "pt",
                 "device": "cpu",
                 "compute_type": "int8",
+                "lazy_load": True,
+                "auto_unload_seconds": 180,
             },
             "llm": {
                 "active_provider": DEFAULT_PROVIDER,
@@ -133,7 +135,12 @@ def load_config() -> dict[str, Any]:
                 "memory_monitor": {
                     "interval_seconds": 60,
                     "threshold_mb": 800.0,
-                }
+                    "enable_working_set_trim": True,
+                },
+                "memory_optimization": {
+                    "lazy_load_secondary_modules": True,
+                    "unload_wakeword_on_suspend": True,
+                },
             },
         }
 

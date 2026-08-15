@@ -16,11 +16,9 @@ try:
 except ImportError:
     notification = None
 
-from core.audio.tts_engine import TTSEngine
 from core.execution.execution_plan import ExecutionStep, StepType
 from core.execution.window_manager import WindowInfo, WindowLayoutManager, WindowManager
 from core.infra.logger_config import logger
-from core.media.spotify_automator import SpotifyAutomator
 from core.shared.constants import AppRegistry
 
 
@@ -81,15 +79,34 @@ class StepExecutor:
         self,
         config: dict[str, Any],
         window_manager: WindowManager,
-        spotify_automator: SpotifyAutomator,
-        tts_engine: TTSEngine,
+        spotify_automator: Any = None,
+        tts_engine: Any = None,
     ) -> None:
         self.config = config
         self.window_manager = window_manager
-        self.spotify_automator = spotify_automator
+        self._spotify_automator = spotify_automator
         self.tts_engine = tts_engine
         self._current_plan_window: WindowInfo | None = None
         self._current_plan_window_pattern: str | None = None
+
+    @property
+    def spotify_automator(self) -> Any:
+        if self._spotify_automator is None:
+            logger.info(
+                "Lazy-loading SpotifyAutomator and TemplateMatcher dependencies..."
+            )
+            from core.media.cv_matcher import TemplateMatcher
+            from core.media.spotify_automator import SpotifyAutomator
+
+            template_matcher = TemplateMatcher()
+            self._spotify_automator = SpotifyAutomator(
+                self.config, self.window_manager, self.tts_engine, template_matcher
+            )
+        return self._spotify_automator
+
+    @spotify_automator.setter
+    def spotify_automator(self, value: Any) -> None:
+        self._spotify_automator = value
 
     def clear_session_state(self) -> None:
         self._current_plan_window = None

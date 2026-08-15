@@ -70,24 +70,30 @@ class AudioLoopManager:
             return None, 0.0
 
     def check_dead_silence(self, rms: float, model: Any) -> bool:
-        """Verifies if the stream is dead silent and performs self-healing.
+        """Verifies if the stream is dead silent (absolute 0.0 RMS) and performs self-healing.
 
         Args:
             rms (float): The current audio frame volume.
             model (Any): The wake word model to reset on self-heal.
         """
-        if rms < 0.1:
+        if rms == 0.0:
             self.consecutive_zero_rms += 1
         else:
             self.consecutive_zero_rms = 0
 
         if self.consecutive_zero_rms > self.max_zero_rms_before_reset:
-            logger.warning("Dead silence detected! Self-healing...")
+            logger.warning(
+                "Dead silence (0.0 RMS) detected! Self-healing audio stream..."
+            )
             self.ui.update(status="Self-Healing...")
             self.pa, self.stream = safe_reset_audio(self.pa, self.stream)
             self.dispatcher.audio_stream = self.stream
             self.consecutive_zero_rms = 0
-            model.reset()
+            if model and hasattr(model, "reset"):
+                try:
+                    model.reset()
+                except Exception as e:
+                    logger.debug(f"Resetting model during audio self-healing: {e}")
             return True
         return False
 
