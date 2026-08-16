@@ -133,7 +133,9 @@ def main() -> None:
     # Initialize dark theme as early as possible to avoid flash of white or bugged colors
     qdarktheme.setup_theme()
 
-    app_controller = QtAppController(app, ui_adapter, tray_adapter)
+    app_controller = QtAppController(
+        app, ui_adapter, tray_adapter, stop_event=stop_event
+    )
 
     if not is_minimized:
         app_controller.show_window()
@@ -191,7 +193,7 @@ def main() -> None:
     if "memory_monitor" in locals():
         memory_monitor.stop()
     logger.info("Jarvis stopped.")
-    sys.exit(exit_code)
+    os._exit(exit_code)
 
 
 if __name__ == "__main__":

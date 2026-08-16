@@ -58,12 +58,19 @@ def update_yaml_active_provider(provider_name: str) -> None:
 class QtAppController(QObject):
     provider_switch_done = Signal(bool, str)
 
-    def __init__(self, app: QApplication, ui_adapter: Any, tray_adapter: Any) -> None:
+    def __init__(
+        self,
+        app: QApplication,
+        ui_adapter: Any,
+        tray_adapter: Any,
+        stop_event: threading.Event | None = None,
+    ) -> None:
         super().__init__()
         self.provider_switch_done.connect(self._on_provider_switch_done)
         self.app = app
         self.app.setQuitOnLastWindowClosed(False)
         self.tray_adapter = tray_adapter
+        self.stop_event = stop_event
 
         setTheme(Theme.DARK)
 
@@ -295,7 +302,50 @@ class QtAppController(QObject):
                 self.show_window()
 
     def quit_app(self) -> None:
-        if hasattr(self, "tray_icon"):
-            self.tray_icon.hide()
-            self.tray_icon.deleteLater()
-        self.app.quit()
+        logger.info("Quitting Jarvis application from tray menu...")
+        try:
+            if self.stop_event:
+                self.stop_event.set()
+        except Exception:
+            pass
+
+        try:
+            import keyboard
+
+            keyboard.unhook_all()
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, "voice_overlay") and self.voice_overlay:
+                self.voice_overlay.hide()
+                self.voice_overlay.close()
+        except Exception:
+            pass
+
+        try:
+            if (
+                hasattr(self, "command_palette")
+                and self.command_palette
+                and self.command_palette.dialog
+            ):
+                self.command_palette.dialog.hide()
+                self.command_palette.dialog.close()
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, "main_window") and self.main_window:
+                self.main_window.hide()
+                self.main_window.close()
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, "tray_icon") and self.tray_icon:
+                self.tray_icon.hide()
+        except Exception:
+            pass
+
+        # Unconditionally force process termination
+        os._exit(0)
