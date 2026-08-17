@@ -75,6 +75,9 @@ class QtAppController(QObject):
         setTheme(Theme.DARK)
 
         self.main_window = MainWindow(ui_adapter)
+        self.main_window.settings_tab.restart_requested.connect(
+            self.restart_application
+        )
         self.voice_overlay = VoiceOverlayHUD()
         self.command_palette: QtCommandPalette | None = None
         ui_adapter.visual_state_updated.connect(self.voice_overlay.update_from_snapshot)
@@ -349,3 +352,29 @@ class QtAppController(QObject):
 
         # Unconditionally force process termination
         os._exit(0)
+
+    def restart_application(self) -> None:
+        """Safely restarts the current Jarvis application process."""
+        import sys
+
+        logger.info("Restarting Jarvis application process...")
+        try:
+            if self.stop_event:
+                self.stop_event.set()
+        except Exception:
+            pass
+
+        try:
+            import keyboard
+
+            keyboard.unhook_all()
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, "tray_icon") and self.tray_icon:
+                self.tray_icon.hide()
+        except Exception:
+            pass
+
+        os.execv(sys.executable, [sys.executable] + sys.argv)

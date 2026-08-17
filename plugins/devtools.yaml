@@ -47,7 +47,7 @@ commands:
       - type: "wait"
         duration: 0.5
       - type: "type_and_enter"
-        text: "gemini"
+        text: "agy"
 
   - intent: "fechar_tudo"
     phrases:
