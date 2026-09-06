@@ -20,3 +20,9 @@ class BusinessError(JarvisError):
     """
 
     pass
+
+
+class SecurityError(BusinessError):
+    """Exception raised when an operation violates security policy or boundary constraints."""
+
+    pass
