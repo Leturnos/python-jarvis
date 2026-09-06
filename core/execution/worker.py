@@ -102,6 +102,32 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
 
     if action_json.get("type") == "chat":
         dispatcher.handle_dynamic(action_json)
+    elif action_json.get("type") == "tool_call":
+        from core.tools.tool_registry import tool_registry
+
+        tool_name = str(action_json.get("tool_name", ""))
+        params = action_json.get("parameters", {})
+        if not isinstance(params, dict):
+            params = {}
+
+        explanation = action_json.get("explanation", "Consultando ferramenta...")
+        notifier.notify("Jarvis", explanation)
+
+        tool_result = tool_registry.execute_tool(tool_name, **params)
+        synthesized = llm_agent.synthesize_tool_response(
+            original_query=job.payload_text,
+            tool_name=tool_name,
+            tool_result=tool_result,
+        )
+
+        if synthesized.get("type") == "chat":
+            dispatcher.handle_dynamic(synthesized)
+        elif synthesized.get("type") == "action":
+            plan = ExecutionPlan.from_dict(synthesized)
+            dispatcher.handle_plan(plan)
+        else:
+            dispatcher.handle_dynamic(synthesized)
+        return True
     elif action_json.get("type") == "media":
         from core.media.models import (
             AutoplayStrategy,

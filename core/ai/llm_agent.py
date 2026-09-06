@@ -13,6 +13,7 @@ from core.runtime.rate_limiter import rate_limiter
 from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
 from core.shared.errors import TechnicalError
 from core.shared.utils import time_it
+from core.tools.tool_registry import tool_registry
 
 
 class LLMAgent:
@@ -149,6 +150,8 @@ class LLMAgent:
         else:
             intents_str = "        Nenhum comando de plugin carregado."
 
+        tools_desc = tool_registry.get_tools_prompt_description()
+
         prompt = f"""
         Você é o Jarvis, um assistente de terminal no Windows.
         Seu objetivo é ajudar o usuário com automações seguras.
@@ -168,7 +171,10 @@ class LLMAgent:
         - Intent: 'create_macro' | Descrição: Cria uma macro a partir das últimas ações.
         - Intent: 'explain_last_action' | Descrição: Explica o que você acabou de fazer.
 
-        Sua tarefa é decidir se o usuário quer executar uma ação técnica ou conversar.
+        Ferramentas com Escopo Seguro Disponíveis (Tool Calling):
+{tools_desc}
+
+        Sua tarefa é decidir se o usuário quer executar uma ação técnica, chamar uma ferramenta ou conversar.
         Retorne um JSON estrito seguindo um destes formatos:
 
         1. Se for uma AÇÃO (Plugin, Sistema, Terminal, Apps):
@@ -191,7 +197,7 @@ class LLMAgent:
             ]
         }}
 
-        2. Se for um CHAT (conversa, pergunta, saudação):
+        2. Se for um CHAT (conversa, pergunta genérica, saudação):
         {{
             "type": "chat",
             "message": "Sua resposta curta e natural aqui."
@@ -211,8 +217,20 @@ class LLMAgent:
         - "mood": Humores, atividades, intenções abstratas (ex: "música alegre", "para estudar").
         - "mixed": Uma mistura dos dois (ex: "rock animado", "lofi triste").
 
+        4. Se for uma CHAMADA DE FERRAMENTA (pesquisa na web, status/diff git, inspeção de projeto):
+        {{
+            "type": "tool_call",
+            "tool_name": "web_search", "git" ou "project_inspect",
+            "parameters": {{
+                "parametro": "valor"
+            }},
+            "explanation": "Uma frase explicando o que você vai consultar na ferramenta.",
+            "risk_level": "safe"
+        }}
+        Use 'tool_call' sempre que o usuário pedir pesquisas na web, status/diff do git, ou inspeção de arquivos do projeto.
+
         Tiers de Risco:
-        - "safe": Consultas, abrir pastas, git status. (Default)
+        - "safe": Consultas, abrir pastas, git status, web search. (Default)
         - "low": Abrir apps, navegar em pastas.
         - "medium": Criar pastas/arquivos, rodar testes, git commit.
         - "high": Deletar arquivos específicos, alterar configurações.
@@ -220,7 +238,7 @@ class LLMAgent:
         - "blocked": Formatar discos, deletar pastas do sistema, apagar disco C:.
 
         Regras:
-        - SEMPRE retorne um "explanation" humano para ações.
+        - SEMPRE retorne um "explanation" humano para ações e tool_calls.
         - Se a ação corresponder a um comando de plugin, use type "command" ou o
           tipo mais adequado dentro dos steps.
         - Retorne APENAS o JSON, sem markdown.
@@ -290,6 +308,73 @@ class LLMAgent:
         except Exception as e:
             logger.error(f"LLM Error: {e}")
             raise TechnicalError(f"LLM processing failed: {e}") from e
+
+    def synthesize_tool_response(
+        self, original_query: str, tool_name: str, tool_result: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Synthesizes a human-readable response or next action based on tool execution results."""
+        prompt = f"""
+        Você é o Jarvis, um assistente inteligente no Windows.
+        O usuário pediu: "{original_query}"
+        A ferramenta '{tool_name}' foi executada e retornou o seguinte resultado estruturado:
+        {json.dumps(tool_result, ensure_ascii=False, indent=2)}
+
+        Sua tarefa:
+        1. Se os dados da ferramenta respondem à dúvida do usuário (ex: pesquisa web, git status, listagem de arquivos),
+           retorne um JSON com type "chat":
+           {{
+               "type": "chat",
+               "message": "Sua resposta clara, concisa e natural em Português para ser falada via TTS e exibida na tela."
+           }}
+        2. Se o usuário pediu para gerar um commit ou ação subsequente e a ferramenta retornou diff/dados suficientes:
+           retorne um JSON com type "action", schema_version "1.0", intent "git_commit", global_risk "medium",
+           explanation "Uma explicação da ação proposta.",
+           e steps contendo:
+           [
+               {{
+                   "type": "tool",
+                   "step_risk": "medium",
+                   "description": "Commitar alterações no Git",
+                   "tool_name": "git",
+                   "parameters": {{
+                       "action": "commit",
+                       "workspace": ".",
+                       "message": "mensagem do commit seguindo Conventional Commits"
+                   }}
+               }}
+           ]
+
+        Retorne APENAS o JSON estrito, sem formatação markdown (```json).
+        """
+        try:
+            with self._lock:
+                response = self._execute_with_fallback(prompt=prompt)
+            result = response.content.strip()
+            if result.startswith("```json"):
+                result = result[7:-3].strip()
+            elif result.startswith("```"):
+                result = result[3:-3].strip()
+
+            json_data = json.loads(result)
+            return PromptGuard.sanitize_output(json_data)
+        except Exception as e:
+            logger.error(f"Error synthesizing tool response: {e}")
+            if tool_result.get("success"):
+                output_val = (
+                    tool_result.get("output")
+                    or tool_result.get("tree")
+                    or "Operação concluída com sucesso."
+                )
+                if isinstance(output_val, str) and len(output_val) > 300:
+                    output_val = output_val[:300] + "..."
+                return {
+                    "type": "chat",
+                    "message": f"Aqui está o resultado: {output_val}",
+                }
+            return {
+                "type": "chat",
+                "message": f"Houve um problema ao executar a ferramenta: {tool_result.get('error', 'desconhecido')}",
+            }
 
     @time_it
     def generate_text(self, prompt: str) -> str:

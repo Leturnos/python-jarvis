@@ -66,3 +66,26 @@ security:
       allowed_actions: ["system_open"]
     - path: "C:\\Program Files\\Spotify\\Spotify.exe"
       allowed_actions: ["system_open"]
+
+# ==============================================================================
+# FERRAMENTAS E INTEGRAÇÕES SEGURAS (LEAST PRIVILEGE)
+# ==============================================================================
+tools:
+  web_search:
+    enabled: true
+    provider: "duckduckgo"          # duckduckgo ou tavily
+    max_results: 3
+    timeout_seconds: 5.0
+
+  developer:
+    enabled: true
+    # Apenas os diretórios abaixo podem ser inspecionados ou manipulados:
+    allowed_workspaces:
+      - "."
+      - "C:\\Programacao\\python-jarvis"
+    git:
+      allow_commit: true            # Permite commitar após autorização na tela
+      max_diff_lines: 300           # Proteção contra diffs massivos
+    project:
+      max_file_size_kb: 50          # Limite de leitura por arquivo
+
