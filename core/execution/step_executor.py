@@ -258,6 +258,15 @@ class StepExecutor:
                         click_type=click_type, uri=uri
                     )
                 )
+            elif step.type == StepType.TOOL:
+                from core.tools.tool_registry import tool_registry
+
+                tool_name = str(step.payload.get("tool_name", ""))
+                params = step.payload.get("parameters", {})
+                if not isinstance(params, dict):
+                    params = {}
+                res = tool_registry.execute_tool(tool_name, **params)
+                return bool(res.get("success", False))
             return False
         except Exception as e:
             logger.error(f"Step execution error ({step.type.value}): {e}")

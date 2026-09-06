@@ -142,3 +142,51 @@ def test_step_executor_navigate_aborts_when_focus_lost():
     success = executor.execute_step(step)
     assert success is False
     wm.type_text.assert_not_called()
+
+
+@patch("core.tools.tool_registry.tool_registry.execute_tool")
+def test_step_executor_tool_step(mock_execute_tool):
+    mock_execute_tool.return_value = {"success": True, "output": "ok"}
+
+    wm = MagicMock()
+    spotify = MagicMock()
+    tts = MagicMock()
+    executor = StepExecutor({}, wm, spotify, tts)
+
+    step = ExecutionStep(
+        type=StepType.TOOL,
+        payload={"tool_name": "dummy_tool", "parameters": {"arg": 123}},
+    )
+
+    success = executor.execute_step(step)
+    assert success is True
+    mock_execute_tool.assert_called_once_with("dummy_tool", arg=123)
+
+
+@patch("core.tools.tool_registry.tool_registry.execute_tool")
+def test_step_executor_tool_step_from_dict(mock_execute_tool):
+    mock_execute_tool.return_value = {"success": True, "result": "done"}
+
+    wm = MagicMock()
+    spotify = MagicMock()
+    tts = MagicMock()
+    executor = StepExecutor({}, wm, spotify, tts)
+
+    # Test deserialization from LLM / plan dict format
+    raw_step = {
+        "type": "tool",
+        "step_risk": "medium",
+        "description": "Execute git commit",
+        "tool_name": "git",
+        "parameters": {"action": "commit", "message": "feat: test"},
+    }
+    step = ExecutionStep.from_dict(raw_step)
+    assert step.type == StepType.TOOL
+    assert step.payload["tool_name"] == "git"
+    assert step.payload["parameters"]["action"] == "commit"
+
+    success = executor.execute_step(step)
+    assert success is True
+    mock_execute_tool.assert_called_once_with(
+        "git", action="commit", message="feat: test"
+    )

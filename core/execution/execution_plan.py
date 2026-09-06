@@ -15,6 +15,7 @@ class StepType(Enum):
     TYPE_AND_ENTER = "type_and_enter"
     FOCUS_WINDOW = "focus_window"
     SPOTIFY_CLICK_PLAY = "spotify_click_play"
+    TOOL = "tool"
 
 
 class RiskLevel(Enum):
@@ -81,6 +82,15 @@ class ExecutionStep:
             payload["click_type"] = str(data.get("click_type", "search"))
             if "uri" in data:
                 payload["uri"] = str(data.get("uri"))
+        elif step_type == StepType.TOOL:
+            payload_data = data.get("payload")
+            raw_payload: dict[str, Any] = (
+                payload_data if isinstance(payload_data, dict) else {}
+            )
+            tool_name = data.get("tool_name") or raw_payload.get("tool_name", "")
+            params = data.get("parameters") or raw_payload.get("parameters", {})
+            payload["tool_name"] = str(tool_name or "")
+            payload["parameters"] = params if isinstance(params, dict) else {}
 
         return cls(
             type=step_type,
