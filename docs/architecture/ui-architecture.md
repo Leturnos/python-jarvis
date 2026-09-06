@@ -1,71 +1,81 @@
-# UI Architecture: PySide6 & Fluent Design
+# 💻 Arquitetura de Interface Gráfica: PySide6 & Fluent Design
 
-This document describes the modular UI architecture of Jarvis, focusing on the migration from terminal-based output to a modern graphical interface using **PySide6** and **PyQt-Fluent-Widgets**.
-
-## Why this architecture?
-
-1.  **Backend Integrity**: The core AI and audio logic (`JarvisController`) remains strictly decoupled from the UI. It doesn't know it's running inside a Qt application.
-2.  **Thread Safety**: Real-time audio processing cannot be blocked by UI rendering. By isolating them in different threads and using **Qt Signals**, we ensure smooth performance for both.
-3.  **Stability & Modernity**: Combining `qdarktheme` (for a robust, consistent dark base) with `PyQt-Fluent-Widgets` (for modern Win11-style components) provides a high-end feel with minimal custom CSS maintenance.
-4.  **Resilience**: Using explicit adapters and lifecycle controllers prevents "ghost processes" and ensures the app can survive backend crashes.
-
-## Component Stack
-
-We use a layered styling approach:
--   **qdarktheme**: Provides the global CSS foundation (colors, base widget styles).
--   **PyQt-Fluent-Widgets**: Provides the high-level functional components (Cards, ProgressBars, Titles) with Fluent Design.
--   **Custom QSS**: Very specific overrides (via ObjectNames) for fine-tuning Jarvis-specific visuals without breaking the layers above.
-
-## Core Layers
-
-### 1. The Adapters (`core/ui/adapter.py`)
--   **JarvisUIAdapter**: Acts as a bridge. It implements the interface expected by the `JarvisController` (methods like `update()` and `get_live()`) but translates these calls into **Qt Signals** (`visual_state_updated`).
--   **JarvisTrayAdapter**: Handles mute logic and state transitions originally managed by the tray icon.
-
-### 2. The App Controller (`core/ui/app_controller.py`)
--   Centralizes the GUI lifecycle (`QApplication` management).
--   Manages the **System Tray Icon** (`QSystemTrayIcon`) and its dynamic menu.
--   Orchestrates window visibility and theme application.
-
-### 3. The UI View (`core/ui/main_window.py` & `core/ui/widgets/`)
--   **MainWindow**: Hosts modular widgets and intercepts `closeEvent` to hide to tray.
--   **StatusCardWidget**: A modular component using `qfluentwidgets` that reacts to Signal snapshots.
+Este documento descreve a arquitetura modular da interface gráfica (UI) do Jarvis, detalhando a transição das saídas legadas de terminal para uma interface visual moderna utilizando **PySide6** e **PyQt-Fluent-Widgets**.
 
 ---
 
-## Visual Flow
+## 🎯 Por que esta Arquitetura?
+
+1. **Integridade do Backend**: O núcleo de IA e áudio (`JarvisController`) permanece estritamente desacoplado da interface gráfica. Ele não possui conhecimento direto de que está rodando dentro de uma aplicação Qt.
+2. **Thread Safety**: O processamento de áudio em tempo real não pode ser bloqueado pela renderização da interface. Ao isolá-los em threads distintas e utilizar **Qt Signals**, garantimos alto desempenho e fluidez para ambos.
+3. **Estabilidade e Modernidade**: A combinação do `qdarktheme` (para uma base escura robusta e consistente) com o `PyQt-Fluent-Widgets` (para componentes modernos no estilo Windows 11) oferece um acabamento refinado com manutenção mínima de CSS customizado.
+4. **Resiliência e Ciclo de Vida**: O uso de adaptadores explícitos e controladores de ciclo de vida evita processos órfãos (*ghost processes*) e assegura que a aplicação finalize seus recursos de forma limpa.
+
+---
+
+## 🛠️ Camadas de Componentes Visuais
+
+Utilizamos uma abordagem de estilização em camadas:
+- **`qdarktheme`**: Fornece a base global de folhas de estilo (cores fundamentais, tipografia e estilos base de widgets).
+- **`PyQt-Fluent-Widgets`**: Fornece componentes funcionais de alto nível (Cards, ProgressBars, Navigation, Titles) seguindo o Fluent Design.
+- **QSS Customizado**: Sobrescritas pontuais e cirúrgicas (via `setObjectName`) para ajustes visuais específicos do Jarvis, preservando a estabilidade das camadas subjacentes.
+
+---
+
+## 🏛️ Camadas Centrais da UI
+
+### 1. Os Adaptadores (`core/ui/adapter.py`)
+- **`JarvisUIAdapter`**: Atua como uma ponte (*bridge*). Ele implementa a interface esperada pelo `JarvisController` (métodos como `update()` e `get_live()`), mas traduz essas invocações em **Qt Signals** seguros (`visual_state_updated`).
+- **`JarvisTrayAdapter`**: Gerencia a lógica de silenciamento temporário (*mute*) e transições de estado originadas pelo menu da bandeja do sistema.
+
+### 2. O Controlador da Aplicação (`core/ui/app_controller.py`)
+- Centraliza o ciclo de vida da interface gráfica (`QApplication`).
+- Gerencia o ícone na **Bandeja do Sistema** (`QSystemTrayIcon`) e seus menus contextuais dinâmicos.
+- Orquestra a visibilidade da janela principal, aplicação de temas e o encerramento gracioso do processo.
+
+### 3. As Views da Interface (`core/ui/main_window.py` & `core/ui/widgets/`)
+- **`MainWindow`**: Janela principal que hospeda os widgets modulares e intercepta o evento de fechamento (`closeEvent`) para minimizar silenciosamente para a bandeja do sistema.
+- **`StatusCardWidget`**: Componente modular que consome os snapshots emitidos via sinais Qt para renderizar níveis de áudio, scores de detecção e status da máquina de estados.
+- **`CommandPalette`**: Interface rápida estilo Spotlight (`Ctrl+Alt+P`) para comandos manuais por teclado.
+- **`SecurityDialog`**: Modal de autorização de segurança para comandos classificados com nível de risco elevado (`dangerous`).
+
+---
+
+## 🔄 Fluxo de Comunicação e Sinais
 
 ```mermaid
 graph TD
-    subgraph "Background Thread (Backend)"
-        JC[JarvisController] -- "ui.update(volume, score)" --> AD[JarvisUIAdapter]
-        JC -- "tray.is_muted()" --> TA[JarvisTrayAdapter]
+    subgraph "Thread em Segundo Plano (Backend Core)"
+        JC["<code>JarvisController</code>"] -- "ui.update(volume, score)" --> AD["<code>JarvisUIAdapter</code>"]
+        JC -- "tray.is_muted()" --> TA["<code>JarvisTrayAdapter</code>"]
     end
 
-    subgraph "Bridge (Signals)"
-        AD -- "Emit Signal(dict)" --> SIG((Qt Signal Slot))
+    subgraph "Ponte Thread-Safe (Qt Signals)"
+        AD -- "Emit Signal(dict)" --> SIG(("📡 Qt Signal / Slot"))
     end
 
-    subgraph "Main Thread (Frontend)"
-        SIG --> SC[StatusCardWidget]
-        SC -- "Update Labels/Bars" --> GUI[Window Rendering]
-        APP[QtAppController] -- "Manage" --> TRAY[System Tray Icon]
-        TRAY -- "Toggle" --> GUI
+    subgraph "Thread Principal (GUI Qt Event Loop)"
+        SIG --> SC["<code>StatusCardWidget</code>"]
+        SC -- "Atualiza Labels/Bars" --> GUI["Renderização da Janela"]
+        APP["<code>QtAppController</code>"] -- "Gerencia" --> TRAY["Ícone na Bandeja (Tray)"]
+        TRAY -- "Toggle / Menu" --> GUI
     end
 ```
 
 ---
 
-## Threading & Communication
+## 🧵 Threading & Comunicação Entre Processos
 
-### Main Thread (GUI Thread)
--   Runs `app.exec()`.
--   **Communication**: Receives data from the backend via thread-safe **Qt Signals** emitted by the `JarvisUIAdapter`.
+### Thread Principal (GUI / Event Loop)
+- Executa o loop de eventos `app.exec()`.
+- **Comunicação**: Recebe dados do backend exclusivamente através de **Qt Signals** disparados pelo `JarvisUIAdapter`, garantindo conformidade estrita com o modelo de threads do Qt.
 
-### Background Thread (Backend Controller)
--   Runs the blocking `JarvisController.start()` loop.
--   **Communication**: Calls `ui.update()` on the adapter. Since the adapter inherits from `QObject`, its signals are automatically marshaled to the main thread safely.
+### Thread em Segundo Plano (Worker de Execução & Controller)
+- Executa o loop contínuo de áudio e ativações (`JarvisController.start()`) e consumo de tarefas (`command_worker`).
+- **Comunicação**: Chama `ui.update()` no adaptador. Como o adaptador herda de `QObject`, os sinais emitidos são automaticamente despachados (*marshaled*) para a thread de UI de maneira segura e assíncrona.
 
-## Error Handling
--   **Qt Exception Hook**: A global `sys.excepthook` captures uncaught GUI exceptions.
--   **Safe Controller Wrapper**: The background thread is wrapped in a `try/except` to trigger a clean shutdown if the AI core fails.
+---
+
+## 🛡️ Tratamento de Exceções na UI
+- **Qt Exception Hook**: Um hook global em `sys.excepthook` captura exceções não tratadas na interface gráfica, impedindo travamentos silenciosos e registrando os erros no log.
+- **Wrapper Seguro do Controller**: A thread de backend é encapsulada em blocos `try/except` que notificam a UI caso o núcleo de áudio ou IA encontre uma falha irrecuperável, permitindo a finalização segura dos dispositivos de hardware.

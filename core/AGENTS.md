@@ -2,6 +2,8 @@
 
 Este diretório contém a lógica de negócios essencial e as integrações para o assistente Jarvis, agora organizado por domínios de responsabilidade.
 
+> 💡 **Arquitetura Consolidada:** Para visualizar os fluxos ponta a ponta e a máquina de estados global, consulte [`docs/architecture/jarvis_architecture_and_flow.md`](../docs/architecture/jarvis_architecture_and_flow.md).
+
 ## 📁 Detalhamento do Módulo
 
 ### 🏗️ Orquestração (Raiz de `core/`)

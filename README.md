@@ -87,6 +87,13 @@ Nós separamos as coisas para facilitar sua vida. Existem três arquivos princip
 
 Quer que o Jarvis acorde junto com você? Clique com o botão direito no ícone dele na bandeja do Windows e ative o **Autostart**. Ele fará tudo sozinho e iniciará oculto em segundo plano, consumindo pouquíssima memória.
 
+## 🏛️ Arquitetura e Documentação
+
+O Jarvis foi desenhado com arquitetura modular desacoplada em domínios de responsabilidade bem delimitados. Para entender seu funcionamento interno e subsistemas:
+
+- 🧠 **[Visão Consolidada & Grafo de Funcionamento](./docs/architecture/jarvis_architecture_and_flow.md)**: Diagramas completos do ciclo de vida, máquina de estados finitos (`JarvisState`) e fluxo de ponta a ponta.
+- 📚 **[Central de Documentação (docs/README.md)](./docs/README.md)**: Índice completo navegável com deep-dives de subsistemas (Roteamento de Comandos, UI PySide6, Cache SQLite) e diretrizes técnicas.
+
 ## 🗺️ Para onde vamos?
 
 O Jarvis é um projeto vivo e construído para escalar. 

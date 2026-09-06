@@ -7,6 +7,7 @@ O Jarvis é um assistente minimalista controlado por voz para Windows, projetado
 
 ## 🏗️ Arquitetura
 O projeto segue uma estrutura de domínios dentro do módulo `core/` para facilitar a escalabilidade e manutenção.
+> 💡 **Referência Visual e Fluxo Ponta a Ponta:** Consulte [`docs/architecture/jarvis_architecture_and_flow.md`](./docs/architecture/jarvis_architecture_and_flow.md) para o diagrama completo do fluxo de dados, máquina de estados (`JarvisState`) e grafo de classes. O índice completo da documentação está em [`docs/README.md`](./docs/README.md).
 
 - **Ponto de Entrada:** `main.py` gerencia o bootstrap, chaves de API, carrega a UI em PySide6 e inicia a thread `command_worker`.
 - **Lógica Central (`core/`):**

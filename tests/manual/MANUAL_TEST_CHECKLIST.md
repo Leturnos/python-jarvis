@@ -68,10 +68,10 @@ uv run main.py
 - [ ] **Esperado**:
   - A intenção identificada é `fechar_tudo`, configurada como `dangerous`.
   - O Jarvis emite um feedback de voz: *"Planejo o seguinte: Executando plugin: fechar_tudo. Posso executar?"*.
-  - Abre-se uma caixa de diálogo Tkinter no centro da tela com botões SIM/NÃO.
+  - Abre-se o modal de autorização gráfica PySide6 (`SecurityDialog`) no centro da tela exibindo a ação com botões Confirmar e Cancelar.
   - A aplicação entra no estado `CONFIRMING_DRY_RUN`.
 - [ ] Teste a aprovação por **Voz**: Fale *"Sim"* ou *"Confirma"*. A caixa de diálogo se fecha e o comando simula a execução (`echo "Simulating close all..."`).
-- [ ] Teste a rejeição por **Clique**: Dispare o comando novamente e clique no botão **NÃO**. O Jarvis cancela a ação e retorna ao repouso.
+- [ ] Teste a rejeição por **Clique**: Dispare o comando novamente e clique no botão **Cancelar** ou **NÃO**. O Jarvis cancela a ação e retorna ao repouso.
 
 ### 8. Macros e Repetição
 - [ ] Execute algum comando com sucesso.
