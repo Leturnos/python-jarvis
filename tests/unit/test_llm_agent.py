@@ -118,3 +118,125 @@ def test_llm_agent_fallback_default_model(mock_getenv, mock_get_secret):
         assert agent.provider.model == "openrouter/google/gemini-2.5-flash"
     finally:
         config["llm"] = original_llm
+
+
+def test_llm_agent_operational_context():
+    agent = LLMAgent()
+    ctx = agent._get_operational_context()
+    assert "datetime" in ctx
+    assert "active_window" in ctx
+    assert "recent_interactions" in ctx
+    assert len(ctx["datetime"]) > 0
+
+
+@patch.object(LLMAgent, "_execute_with_fallback")
+def test_llm_agent_plan_action_steps(mock_execute):
+    from unittest.mock import MagicMock
+
+    mock_resp = MagicMock()
+    mock_resp.content = """
+    {
+        "steps": [
+            {
+                "type": "command",
+                "command": "dir",
+                "step_risk": "safe",
+                "description": "Listar arquivos"
+            }
+        ]
+    }
+    """
+    mock_execute.return_value = mock_resp
+
+    agent = LLMAgent()
+    steps = agent.plan_action_steps(
+        text="listar arquivos",
+        intent="list_files",
+        explanation="Listando arquivos do diretório",
+        global_risk="safe",
+    )
+
+    assert len(steps) == 1
+    assert steps[0]["command"] == "dir"
+    assert steps[0]["type"] == "command"
+
+
+@patch.object(LLMAgent, "_execute_with_fallback")
+def test_llm_agent_two_stage_action_fallback(mock_execute):
+    from unittest.mock import MagicMock
+
+    # First call: classifier returns action without steps
+    # Second call: specialist planner returns the steps
+    resp_classifier = MagicMock()
+    resp_classifier.content = """
+    {
+        "type": "action",
+        "intent": "open_project",
+        "explanation": "Abrindo projeto no VS Code",
+        "global_risk": "safe"
+    }
+    """
+    resp_classifier.usage = {"total_tokens": 50}
+
+    resp_planner = MagicMock()
+    resp_planner.content = """
+    {
+        "steps": [
+            {
+                "type": "open_app",
+                "target": "code .",
+                "step_risk": "safe",
+                "description": "Abrir VS Code"
+            }
+        ]
+    }
+    """
+
+    mock_execute.side_effect = [resp_classifier, resp_planner]
+
+    agent = LLMAgent()
+    result = agent.process_instruction("abrir meu projeto")
+
+    assert result["type"] == "action"
+    assert result["intent"] == "open_project"
+    assert "steps" in result
+    assert len(result["steps"]) == 1
+    assert result["steps"][0]["target"] == "code ."
+
+
+def test_llm_agent_operational_context_with_window():
+    from core.execution.window_manager import WindowInfo, WindowManager
+
+    mock_win = WindowInfo(
+        hwnd=1001,
+        pid=2002,
+        executable="Code.exe",
+        title="Visual Studio Code",
+    )
+    with patch.object(WindowManager, "get_active_window", return_value=mock_win):
+        agent = LLMAgent()
+        ctx = agent._get_operational_context()
+        assert ctx["active_window"] == '"Visual Studio Code" (Processo: Code.exe)'
+
+
+@patch.object(LLMAgent, "_execute_with_fallback")
+def test_llm_agent_two_stage_action_fallback_empty_steps(mock_execute):
+    from unittest.mock import MagicMock
+
+    resp_classifier = MagicMock()
+    resp_classifier.content = (
+        '{"type": "action", "intent": "unknown", "explanation": "test"}'
+    )
+    resp_classifier.usage = {"total_tokens": 30}
+
+    resp_planner = MagicMock()
+    resp_planner.content = '{"steps": []}'
+    resp_planner.usage = {"total_tokens": 20}
+
+    mock_execute.side_effect = [resp_classifier, resp_planner]
+
+    agent = LLMAgent()
+    result = agent.process_instruction("fazer algo impossivel")
+
+    assert result["type"] == "action"
+    assert result["steps"] == []

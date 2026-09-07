@@ -89,6 +89,45 @@ class LLMAgent:
 
         raise TechnicalError(f"All LLM providers failed. Last error: {last_err}")
 
+    def _get_operational_context(self) -> dict[str, str]:
+        """Gathers dynamic operational context: date/time, active window, and recent history."""
+        from datetime import datetime
+
+        weekdays = [
+            "Segunda-feira",
+            "Terça-feira",
+            "Quarta-feira",
+            "Quinta-feira",
+            "Sexta-feira",
+            "Sábado",
+            "Domingo",
+        ]
+        now = datetime.now()
+        dt_str = f"{weekdays[now.weekday()]}, {now.strftime('%d/%m/%Y %H:%M')}"
+
+        win_ctx = "Área de Trabalho / Nenhuma janela ativa"
+        try:
+            from core.execution.window_manager import WindowManager
+
+            win = WindowManager.get_active_window()
+            if win and win.title:
+                proc = f" (Processo: {win.process_name})" if win.process_name else ""
+                win_ctx = f'"{win.title}"{proc}'
+        except Exception as e:
+            logger.debug(f"Could not retrieve active window context: {e}")
+
+        recent = history_manager.get_recent_interactions(limit=2)
+        if recent:
+            recent_str = "; ".join(f'"{r["query"]}" -> {r["intent"]}' for r in recent)
+        else:
+            recent_str = "Nenhuma interação recente."
+
+        return {
+            "datetime": dt_str,
+            "active_window": win_ctx,
+            "recent_interactions": recent_str,
+        }
+
     @time_it
     def process_instruction(
         self, text: str, context_commands: list[Any] | None = None
@@ -150,12 +189,22 @@ class LLMAgent:
         else:
             intents_str = "        Nenhum comando de plugin carregado."
 
+        tools_names = tool_registry.get_available_tool_names()
+        tools_names_str = (
+            ", ".join(f"'{name}'" for name in tools_names) if tools_names else "nenhuma"
+        )
         tools_desc = tool_registry.get_tools_prompt_description()
+        op_ctx = self._get_operational_context()
 
         prompt = f"""
         Você é o Jarvis, um assistente de terminal no Windows.
         Seu objetivo é ajudar o usuário com automações seguras.
         O usuário falou: "{text}"
+
+        Contexto Operacional do Sistema:
+        - Data e Hora Atual: {op_ctx["datetime"]}
+        - Janela em Foco no Windows: {op_ctx["active_window"]}
+        - Histórico Recente do Usuário: [{op_ctx["recent_interactions"]}]
 
         Comandos de Plugins disponíveis:
 {intents_str}
@@ -217,17 +266,18 @@ class LLMAgent:
         - "mood": Humores, atividades, intenções abstratas (ex: "música alegre", "para estudar").
         - "mixed": Uma mistura dos dois (ex: "rock animado", "lofi triste").
 
-        4. Se for uma CHAMADA DE FERRAMENTA (pesquisa na web, git, inspeção de projeto, clima, cotações, cálculos):
+        4. Se for uma CHAMADA DE FERRAMENTA (consultas especializadas, pesquisas, cálculos, clima, cotações, git):
         {{
             "type": "tool_call",
-            "tool_name": "web_search", "git", "project_inspect", "weather", "finance" ou "calculator",
+            "tool_name": "um dos nomes válidos de ferramenta abaixo",
             "parameters": {{
                 "parametro": "valor"
             }},
             "explanation": "Uma frase explicando o que você vai consultar na ferramenta.",
             "risk_level": "safe"
         }}
-        Use 'tool_call' sempre que o usuário pedir pesquisas na web, status/diff do git, inspeção de arquivos, clima/tempo, cotação de moedas ou cálculos matemáticos.
+        Ferramentas disponíveis: [{tools_names_str}].
+        Use 'tool_call' sempre que a solicitação do usuário puder ser atendida com precisão por uma das ferramentas disponíveis acima.
 
         Tiers de Risco:
         - "safe": Consultas, abrir pastas, git status, web search. (Default)
@@ -288,6 +338,39 @@ class LLMAgent:
                     )
                     json_data["global_risk"] = "high"
 
+                # Backward compatibility: convert legacy 'commands' list to steps
+                if (
+                    not json_data.get("steps")
+                    and "commands" in json_data
+                    and isinstance(json_data["commands"], list)
+                ):
+                    json_data["steps"] = [
+                        {
+                            "type": "command",
+                            "command": cmd,
+                            "step_risk": json_data.get("global_risk", "safe"),
+                            "description": f"Executar {cmd}",
+                        }
+                        for cmd in json_data["commands"]
+                    ]
+
+                # Two-stage fallback: if steps are missing or empty, invoke specialist planner
+                if not json_data.get("steps"):
+                    logger.info(
+                        "Action intent returned without steps. Invoking specialist planner..."
+                    )
+                    planned_steps = self.plan_action_steps(
+                        text=text,
+                        intent=json_data.get("intent", "custom_action"),
+                        explanation=json_data.get("explanation", "Executando ação"),
+                        global_risk=json_data.get("global_risk", "low"),
+                    )
+                    if planned_steps:
+                        json_data["steps"] = planned_steps
+                    else:
+                        logger.warning("Specialist planner failed to produce steps.")
+                        json_data.setdefault("steps", [])
+
             logger.info(f"LLM Response Parsed: {json_data}")
 
             # Log usage
@@ -309,6 +392,57 @@ class LLMAgent:
             logger.error(f"LLM Error: {e}")
             raise TechnicalError(f"LLM processing failed: {e}") from e
 
+    def plan_action_steps(
+        self, text: str, intent: str, explanation: str, global_risk: str = "low"
+    ) -> list[dict[str, Any]]:
+        """Specialist planner: generates atomic, sequential OS automation steps for an action intent."""
+        prompt = f"""
+        Você é o Especialista de Execução e Automação do Jarvis no Windows.
+        O usuário pediu: "{text}"
+        A intenção identificada é: "{intent}"
+        Explicação: "{explanation}"
+        Risco Global Proposto: "{global_risk}"
+
+        Sua tarefa é planejar os passos atômicos sequenciais de execução física no Windows.
+        Retorne um JSON estrito com o seguinte formato:
+        {{
+            "steps": [
+                {{
+                    "type": "command", "open_app", "write", "navigate" ou "wait",
+                    "command": "comando de terminal se for type command",
+                    "target": "caminho ou executável se for type open_app ou navigate",
+                    "text": "texto digitado se for type write",
+                    "duration": 1.0,
+                    "step_risk": "safe", "low", "medium", "high", "dangerous" ou "blocked",
+                    "description": "descrição curta deste passo"
+                }}
+            ]
+        }}
+        Retorne APENAS o JSON, sem markdown.
+        """
+        try:
+            with self._lock:
+                response = self._execute_with_fallback(prompt=prompt)
+            total_tokens = 0
+            if response.usage and isinstance(response.usage, dict):
+                total_tokens = response.usage.get("total_tokens", 0)
+            elif hasattr(response, "usage") and response.usage:
+                total_tokens = getattr(response.usage, "total_tokens", 0)
+            rate_limiter.log_usage(token_count=total_tokens)
+
+            result = response.content.strip()
+            if result.startswith("```json"):
+                result = result[7:-3].strip()
+            elif result.startswith("```"):
+                result = result[3:-3].strip()
+
+            data = json.loads(result)
+            steps = data.get("steps", [])
+            return steps if isinstance(steps, list) else []
+        except Exception as e:
+            logger.warning(f"Error in plan_action_steps: {e}")
+            return []
+
     def synthesize_tool_response(
         self, original_query: str, tool_name: str, tool_result: dict[str, Any]
     ) -> dict[str, Any]:
@@ -320,13 +454,19 @@ class LLMAgent:
         {json.dumps(tool_result, ensure_ascii=False, indent=2)}
 
         Sua tarefa:
-        1. Se os dados da ferramenta respondem à dúvida do usuário (ex: pesquisa web, git status, listagem de arquivos),
-           retorne um JSON com type "chat":
+        1. Se a ferramenta retornou dados informativos (como clima, cotação monetária, cálculo, pesquisa na web, status/diff do git ou inspeção de arquivos):
+           retorne um JSON com type "chat" contendo uma resposta concisa, fluida e natural em Português para ser falada via TTS e exibida na tela.
+           Exemplos de tom de resposta:
+           - Clima: "Em São Paulo está fazendo 24°C com céu limpo."
+           - Moeda: "100 dólares equivalem a aproximadamente 572 reais no momento."
+           - Cálculo: "O resultado é 264,5."
+           - Web/Git: Resuma o ponto principal em 1 ou 2 frases curtas.
+           Evite ler nomes técnicos de chaves do JSON (não fale 'bid', 'precipitation_mm' ou 'wind_speed_kmh' a menos que relevante).
            {{
                "type": "chat",
-               "message": "Sua resposta clara, concisa e natural em Português para ser falada via TTS e exibida na tela."
+               "message": "Sua resposta falada em linguagem natural aqui."
            }}
-        2. Se o usuário pediu para gerar um commit ou ação subsequente e a ferramenta retornou diff/dados suficientes:
+        2. Se a ferramenta retornou dados suficientes para uma ação subsequente solicitada pelo usuário (ex: git diff permitindo commit):
            retorne um JSON com type "action", schema_version "1.0", intent "git_commit", global_risk "medium",
            explanation "Uma explicação da ação proposta.",
            e steps contendo:
@@ -349,6 +489,13 @@ class LLMAgent:
         try:
             with self._lock:
                 response = self._execute_with_fallback(prompt=prompt)
+            total_tokens = 0
+            if response.usage and isinstance(response.usage, dict):
+                total_tokens = response.usage.get("total_tokens", 0)
+            elif hasattr(response, "usage") and response.usage:
+                total_tokens = getattr(response.usage, "total_tokens", 0)
+            rate_limiter.log_usage(token_count=total_tokens)
+
             result = response.content.strip()
             if result.startswith("```json"):
                 result = result[7:-3].strip()

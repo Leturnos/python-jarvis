@@ -25,6 +25,11 @@ class WindowInfo:
     executable: str
     title: str
 
+    @property
+    def process_name(self) -> str:
+        """Alias for executable for backward and cross-component compatibility."""
+        return self.executable
+
 
 class WindowLayoutManager:
     """Manages deterministic DPI-aware window positioning on Windows monitors."""
@@ -126,6 +131,11 @@ class WindowManager:
         except Exception as e:
             logger.error(f"Error getting foreground window info: {e}")
             return None
+
+    @classmethod
+    def get_active_window(cls) -> WindowInfo | None:
+        """Convenience method to retrieve the current active foreground window."""
+        return cls().get_foreground_window_info()
 
     def check_focus_match(
         self,

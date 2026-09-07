@@ -167,6 +167,32 @@ class HistoryManager(SQLiteBase):
             logger.error(f"Error retrieving recent history json: {e}")
             return []
 
+    def get_recent_interactions(self, limit: int = 3) -> list[dict[str, str]]:
+        """Fetches the last N successful interactions for multi-turn LLM context."""
+        try:
+            with self.connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT input_text, intent
+                    FROM command_history
+                    WHERE execution_status = 'success'
+                    AND input_text IS NOT NULL
+                    AND input_text != ''
+                    AND input_text != 'N/A'
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """,
+                    (limit,),
+                )
+                rows = cursor.fetchall()
+                return [
+                    {"query": str(r[0]), "intent": str(r[1])} for r in reversed(rows)
+                ]
+        except Exception as e:
+            logger.error(f"Error retrieving recent interactions: {e}")
+            return []
+
     def _metrics_worker(self) -> None:
         """Background thread that reads from metrics_queue and writes to SQLite in batches."""
         while True:

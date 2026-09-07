@@ -65,6 +65,13 @@ def test_history_db():
     assert "replay" not in last, "Replay action should be excluded"
     print("Test 5: Exclusion of replay/macro passed.")
 
+    # Test 6: Recent interactions for multi-turn LLM context
+    interactions = hm.get_recent_interactions(limit=2)
+    assert len(interactions) == 2
+    assert interactions[-1]["query"] == "replay input"
+    assert interactions[-1]["intent"] == "replay"
+    print("Test 6: Recent interactions retrieval passed.")
+
     hm.close()
 
     if os.path.exists(db_path):
