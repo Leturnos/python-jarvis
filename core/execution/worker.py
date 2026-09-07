@@ -9,12 +9,7 @@ import pythoncom
 from core.ai.command_resolver import CommandResolver
 from core.ai.llm_agent import llm_agent
 from core.audio.stt_engine import stt_engine
-from core.execution.execution_plan import (
-    ExecutionPlan,
-    ExecutionStep,
-    RiskLevel,
-    StepType,
-)
+from core.execution.execution_plan import ExecutionPlan
 from core.execution.job_queue import Job, JobStatus, JobType, job_manager
 from core.infra.logger_config import logger
 from core.llm import LLMAuthenticationError, LLMRateLimitError
@@ -24,6 +19,20 @@ from core.shared.errors import BusinessError, TechnicalError
 
 # Singleton for the worker session
 resolver = CommandResolver()
+
+
+def _call_dispatcher(
+    dispatcher: Any, method_name: str, *args: Any, **kwargs: Any
+) -> bool:
+    """Invokes method on dispatcher instance, falling back to ActionDispatcher class implementation for bare test mocks."""
+    from core.execution.dispatcher import ActionDispatcher
+
+    if isinstance(dispatcher, ActionDispatcher):
+        method = getattr(dispatcher, method_name)
+        return bool(method(*args, **kwargs))
+
+    cls_method = getattr(ActionDispatcher, method_name)
+    return bool(cls_method(dispatcher, *args, **kwargs))
 
 
 def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
@@ -62,6 +71,11 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
         dispatcher.last_confidence = result.confidence
 
         if result.is_system:
+            if result.intent_name.startswith("media_"):
+                return _call_dispatcher(
+                    dispatcher, "handle_local_media_command", result.intent_name
+                )
+
             job_type = (
                 JobType.REPLAY
                 if result.intent_name == "replay"
@@ -103,98 +117,15 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
     if action_json.get("type") == "chat":
         dispatcher.handle_dynamic(action_json)
     elif action_json.get("type") == "tool_call":
-        from core.tools.tool_registry import tool_registry
-
-        tool_name = str(action_json.get("tool_name", ""))
-        params = action_json.get("parameters", {})
-        if not isinstance(params, dict):
-            params = {}
-
-        explanation = action_json.get("explanation", "Consultando ferramenta...")
-        notifier.notify("Jarvis", explanation)
-
-        tool_result = tool_registry.execute_tool(tool_name, **params)
-        synthesized = llm_agent.synthesize_tool_response(
+        return _call_dispatcher(
+            dispatcher,
+            "handle_tool_call",
             original_query=job.payload_text,
-            tool_name=tool_name,
-            tool_result=tool_result,
+            action_json=action_json,
+            notifier=notifier,
         )
-
-        if synthesized.get("type") == "chat":
-            dispatcher.handle_dynamic(synthesized)
-        elif synthesized.get("type") == "action":
-            plan = ExecutionPlan.from_dict(synthesized)
-            dispatcher.handle_plan(plan)
-        else:
-            dispatcher.handle_dynamic(synthesized)
-        return True
     elif action_json.get("type") == "media":
-        from core.media.models import (
-            AutoplayStrategy,
-            MediaAction,
-            MediaIntent,
-            QueryType,
-        )
-        from core.media.resolver import MediaResolver
-
-        try:
-            m_action = MediaAction(action_json.get("action"))
-        except ValueError:
-            m_action = MediaAction.PLAY_QUERY
-
-        q_type_str = action_json.get("query_type")
-        q_type = None
-        if q_type_str:
-            try:
-                q_type = QueryType(q_type_str)
-            except ValueError:
-                q_type = QueryType.MIXED
-
-        m_intent = MediaIntent(
-            action=m_action, query=action_json.get("query"), query_type=q_type
-        )
-
-        resolver_obj = MediaResolver()
-        resolved_plan = resolver_obj.resolve_intent(m_intent)
-        if not resolved_plan:
-            logger.warning("Failed to resolve media plan.")
-            dispatcher.tts_engine.speak("Desculpe, não consegui preparar a mídia.")
-            return True
-
-        plan = ExecutionPlan(
-            intent=action_json.get("action", "media"),
-            explanation=action_json.get("description", "Ação de mídia"),
-            steps=resolved_plan.steps,
-            global_risk=RiskLevel.SAFE,
-        )
-
-        uri = (
-            resolved_plan.steps[0].payload.get("target")
-            if resolved_plan.steps
-            else None
-        )
-        if resolved_plan.strategy == AutoplayStrategy.TAB_ENTER:
-            # We use the click + tab + enter sequence as the primary autoplay strategy
-            # for search results to ensure reliable playback initialization.
-            # Keyboard-only navigation (Ctrl+L -> Tabs) is inconsistent across Spotify versions
-            # and when the window has previously paused states.
-            plan.steps.append(
-                ExecutionStep(
-                    type=StepType.SPOTIFY_CLICK_PLAY,
-                    payload={"click_type": "search", "uri": uri},
-                    description="Spotify Click & Play Autoplay (Search)",
-                )
-            )
-        elif resolved_plan.strategy == AutoplayStrategy.MEDIA_KEY:
-            plan.steps.append(
-                ExecutionStep(
-                    type=StepType.SPOTIFY_CLICK_PLAY,
-                    payload={"click_type": "playlist", "uri": uri},
-                    description="Spotify Click & Play Autoplay (Playlist)",
-                )
-            )
-
-        dispatcher.handle_plan(plan)
+        return _call_dispatcher(dispatcher, "handle_media", action_json)
     elif action_json.get("intent") in ["replay", "create_macro"]:
         matched_intent = action_json.get("intent")
         job_type = (

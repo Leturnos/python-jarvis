@@ -12,7 +12,12 @@ from core.ai.command_resolver import CommandResolver
 from core.ai.llm_agent import llm_agent
 from core.ai.prompt_guard import PromptGuard
 from core.audio.tts_engine import TTSEngine
-from core.execution.execution_plan import ExecutionPlan, RiskLevel
+from core.execution.execution_plan import (
+    ExecutionPlan,
+    ExecutionStep,
+    RiskLevel,
+    StepType,
+)
 from core.execution.plan_builder import PlanBuilder
 from core.execution.step_executor import StepExecutor
 from core.infra.logger_config import logger
@@ -443,6 +448,138 @@ class ActionDispatcher:
             logger.error(f"Failed to build plan for dynamic action: {e}")
             self.tts_engine.speak(str(e))
 
+    def handle_tool_call(
+        self, original_query: str, action_json: dict[str, Any], notifier: Any = None
+    ) -> bool:
+        """Executes a tool call, synthesizes the response, and dispatches the resulting action or chat."""
+        from core.tools.tool_registry import tool_registry
+
+        tool_name = str(action_json.get("tool_name", ""))
+        params = action_json.get("parameters", {})
+        if not isinstance(params, dict):
+            params = {}
+
+        explanation = action_json.get("explanation", "Consultando ferramenta...")
+        if notifier:
+            notifier.notify("Jarvis", explanation)
+
+        tool_result = tool_registry.execute_tool(tool_name, **params)
+        synthesized = llm_agent.synthesize_tool_response(
+            original_query=original_query,
+            tool_name=tool_name,
+            tool_result=tool_result,
+        )
+
+        if synthesized.get("type") == "chat":
+            self.handle_dynamic(synthesized)
+            return True
+        elif synthesized.get("type") == "action":
+            plan = ExecutionPlan.from_dict(synthesized)
+            self.handle_plan(plan)
+            return True
+        else:
+            self.handle_dynamic(synthesized)
+            return True
+
+    def handle_media(self, action_json: dict[str, Any]) -> bool:
+        """Resolves and dispatches media automation plans (Spotify and OS Media)."""
+        from core.media.models import (
+            AutoplayStrategy,
+            MediaAction,
+            MediaIntent,
+            QueryType,
+        )
+        from core.media.resolver import MediaResolver
+
+        raw_action = str(action_json.get("action", "")).strip().lower()
+        if raw_action == "prev":
+            raw_action = "previous"
+        try:
+            m_action = MediaAction(raw_action)
+        except ValueError:
+            m_action = MediaAction.PLAY_QUERY
+
+        q_type_str = action_json.get("query_type")
+        q_type = None
+        if q_type_str:
+            try:
+                q_type = QueryType(str(q_type_str).strip().lower())
+            except ValueError:
+                q_type = QueryType.MIXED
+
+        m_intent = MediaIntent(
+            action=m_action, query=action_json.get("query"), query_type=q_type
+        )
+
+        resolver_obj = MediaResolver()
+        resolved_plan = resolver_obj.resolve_intent(m_intent)
+        if not resolved_plan:
+            logger.warning("Failed to resolve media plan.")
+            self.tts_engine.speak("Desculpe, não consegui preparar a mídia.")
+            return True
+
+        plan = ExecutionPlan(
+            intent=action_json.get("action", "media"),
+            explanation=action_json.get("description", "Ação de mídia"),
+            steps=resolved_plan.steps,
+            global_risk=RiskLevel.SAFE,
+        )
+
+        uri = (
+            resolved_plan.steps[0].payload.get("target")
+            if resolved_plan.steps
+            else None
+        )
+        if resolved_plan.strategy == AutoplayStrategy.TAB_ENTER:
+            plan.steps.append(
+                ExecutionStep(
+                    type=StepType.SPOTIFY_CLICK_PLAY,
+                    payload={"click_type": "search", "uri": uri},
+                    description="Spotify Click & Play Autoplay (Search)",
+                )
+            )
+        elif resolved_plan.strategy == AutoplayStrategy.MEDIA_KEY:
+            plan.steps.append(
+                ExecutionStep(
+                    type=StepType.SPOTIFY_CLICK_PLAY,
+                    payload={"click_type": "playlist", "uri": uri},
+                    description="Spotify Click & Play Autoplay (Playlist)",
+                )
+            )
+
+        self.handle_plan(plan)
+        return True
+
+    def handle_local_media_command(self, intent_name: str) -> bool:
+        """Executes instantaneous OS-level media control commands without LLM."""
+        from core.media.models import MediaAction
+        from core.media.providers.os_controller import OSMediaController
+
+        action_map = {
+            "media_pause": (MediaAction.PAUSE, "Mídia pausada."),
+            "media_play": (MediaAction.PLAY, "Reproduzindo."),
+            "media_next": (MediaAction.NEXT, "Próxima faixa."),
+            "media_prev": (MediaAction.PREV, "Faixa anterior."),
+        }
+        entry = action_map.get(intent_name)
+        if entry:
+            action, msg = entry
+            success = OSMediaController.send_command(action)
+            self.tts_engine.speak(msg)
+            if success:
+                history_manager.log_execution(
+                    self.last_input_text or intent_name,
+                    self.last_input_source or "system",
+                    intent_name,
+                    "safe",
+                    "success",
+                    confidence=self.last_confidence
+                    if self.last_confidence is not None
+                    else 1.0,
+                )
+            return success
+        return False
+
     def dispatch(self, text: str) -> bool:
         """Processes a natural language text instruction through local resolver -> LLM pipeline."""
         logger.info(f"Dispatching text instruction: '{text}'")
@@ -457,7 +594,9 @@ class ActionDispatcher:
             self.last_confidence = result.confidence
 
             if result.is_system:
-                if result.intent_name == "replay":
+                if result.intent_name.startswith("media_"):
+                    return self.handle_local_media_command(result.intent_name)
+                elif result.intent_name == "replay":
                     return self.replay_last_command()
                 elif result.intent_name == "create_macro":
                     return self.initiate_macro_creation()
@@ -483,10 +622,15 @@ class ActionDispatcher:
             state_manager.set_state(JarvisState.THINKING)
             llm_res = llm_agent.process_instruction(text)
             if llm_res:
-                if llm_res.get("type") in ("action", "media"):
+                res_type = llm_res.get("type")
+                if res_type == "tool_call":
+                    return self.handle_tool_call(text, llm_res)
+                elif res_type == "media":
+                    return self.handle_media(llm_res)
+                elif res_type == "action":
                     plan = ExecutionPlan.from_dict(llm_res)
                     return self.handle_plan(plan)
-                elif llm_res.get("type") == "chat":
+                elif res_type == "chat":
                     self.handle_dynamic(llm_res)
                     return True
         except Exception as e:
