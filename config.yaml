@@ -89,3 +89,15 @@ tools:
     project:
       max_file_size_kb: 50          # Limite de leitura por arquivo
 
+  weather:
+    enabled: true
+    default_city: "São Paulo"       # Cidade padrão caso não informada
+    timeout_seconds: 5.0
+
+  finance:
+    enabled: true
+    timeout_seconds: 5.0
+
+  calculator:
+    enabled: true
+

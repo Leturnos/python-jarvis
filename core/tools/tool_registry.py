@@ -67,8 +67,11 @@ tool_registry = ToolRegistry()
 def init_default_tools(registry: ToolRegistry | None = None) -> None:
     """Initializes default scoped tools based on configuration."""
     from core.infra.config import config
+    from core.tools.calculator_tool import CalculatorTool
+    from core.tools.finance_tool import FinanceTool
     from core.tools.git_tool import ScopedGitTool
     from core.tools.project_tool import ProjectInspectTool
+    from core.tools.weather_tool import WeatherTool
     from core.tools.web_search_tool import WebSearchTool
 
     target = registry or tool_registry
@@ -79,6 +82,12 @@ def init_default_tools(registry: ToolRegistry | None = None) -> None:
     if tools_cfg.get("developer", {}).get("enabled", True):
         target.register(ScopedGitTool())
         target.register(ProjectInspectTool())
+    if tools_cfg.get("weather", {}).get("enabled", True):
+        target.register(WeatherTool())
+    if tools_cfg.get("finance", {}).get("enabled", True):
+        target.register(FinanceTool())
+    if tools_cfg.get("calculator", {}).get("enabled", True):
+        target.register(CalculatorTool())
 
 
 init_default_tools()

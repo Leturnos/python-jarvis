@@ -62,3 +62,17 @@ def test_tool_registry_prompt_description():
     assert "dummy_tool" in prompt_desc
     assert "A dummy tool for unit testing." in prompt_desc
     assert "message" in prompt_desc
+
+
+def test_init_default_tools():
+    from core.tools.tool_registry import init_default_tools
+
+    test_reg = ToolRegistry()
+    init_default_tools(test_reg)
+    tool_names = [t.name for t in test_reg.list_tools()]
+    assert "web_search" in tool_names
+    assert "git" in tool_names
+    assert "project_inspect" in tool_names
+    assert "weather" in tool_names
+    assert "finance" in tool_names
+    assert "calculator" in tool_names
