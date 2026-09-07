@@ -125,3 +125,51 @@ def test_llm_tools_flow_git_diff_to_commit_action(
         plan.steps[0].payload["parameters"]["message"]
         == "feat(tools): add tool support"
     )
+
+
+@patch("core.ai.llm_agent.llm_agent.process_instruction")
+@patch("core.ai.llm_agent.llm_agent.synthesize_tool_response")
+@patch("core.tools.tool_registry.tool_registry.execute_tool")
+def test_llm_tools_flow_weather(mock_execute_tool, mock_synthesize, mock_process):
+    dispatcher = MagicMock()
+    notifier = MagicMock()
+
+    # Step 1: LLM returns tool_call for weather
+    mock_process.return_value = {
+        "type": "tool_call",
+        "tool_name": "weather",
+        "parameters": {"city": "Campinas"},
+        "explanation": "Consultando clima em Campinas",
+        "risk_level": "safe",
+    }
+
+    # Step 2: Tool execution mock
+    mock_execute_tool.return_value = {
+        "success": True,
+        "city": "Campinas, São Paulo, Brasil",
+        "temperature": 26.0,
+        "condition": "Céu limpo",
+    }
+
+    # Step 3: Synthesis returns chat
+    mock_synthesize.return_value = {
+        "type": "chat",
+        "message": "Em Campinas está fazendo 26°C com céu limpo.",
+    }
+
+    job = Job(
+        type=JobType.LLM_DYNAMIC,
+        payload=b"dummy_audio",
+        payload_text="como está o tempo em Campinas?",
+    )
+
+    success = _handle_llm(job, dispatcher, notifier)
+    assert success is True
+
+    mock_execute_tool.assert_called_once_with("weather", city="Campinas")
+    mock_synthesize.assert_called_once()
+    assert dispatcher.handle_dynamic.called
+    assert (
+        dispatcher.handle_dynamic.call_args[0][0]["message"]
+        == "Em Campinas está fazendo 26°C com céu limpo."
+    )

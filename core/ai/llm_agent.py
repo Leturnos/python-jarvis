@@ -217,17 +217,17 @@ class LLMAgent:
         - "mood": Humores, atividades, intenções abstratas (ex: "música alegre", "para estudar").
         - "mixed": Uma mistura dos dois (ex: "rock animado", "lofi triste").
 
-        4. Se for uma CHAMADA DE FERRAMENTA (pesquisa na web, status/diff git, inspeção de projeto):
+        4. Se for uma CHAMADA DE FERRAMENTA (pesquisa na web, git, inspeção de projeto, clima, cotações, cálculos):
         {{
             "type": "tool_call",
-            "tool_name": "web_search", "git" ou "project_inspect",
+            "tool_name": "web_search", "git", "project_inspect", "weather", "finance" ou "calculator",
             "parameters": {{
                 "parametro": "valor"
             }},
             "explanation": "Uma frase explicando o que você vai consultar na ferramenta.",
             "risk_level": "safe"
         }}
-        Use 'tool_call' sempre que o usuário pedir pesquisas na web, status/diff do git, ou inspeção de arquivos do projeto.
+        Use 'tool_call' sempre que o usuário pedir pesquisas na web, status/diff do git, inspeção de arquivos, clima/tempo, cotação de moedas ou cálculos matemáticos.
 
         Tiers de Risco:
         - "safe": Consultas, abrir pastas, git status, web search. (Default)
