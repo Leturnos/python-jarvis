@@ -31,6 +31,33 @@ class CommandResolver:
             "salve isso",
             "gravar sequencia",
         ],
+        "media_pause": [
+            "pausar",
+            "pausa",
+            "pausar musica",
+            "parar musica",
+            "pausar a musica",
+        ],
+        "media_play": [
+            "continuar",
+            "play",
+            "despausar",
+            "continuar musica",
+            "tocar musica",
+        ],
+        "media_next": [
+            "proxima musica",
+            "proxima faixa",
+            "avancar musica",
+            "pular musica",
+            "proxima",
+        ],
+        "media_prev": [
+            "musica anterior",
+            "voltar musica",
+            "faixa anterior",
+            "anterior",
+        ],
     }
 
     def __init__(self) -> None:

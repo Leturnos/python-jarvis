@@ -120,3 +120,20 @@ def test_resolver_default_threshold_from_config(resolver):
         # At 0.99 threshold, "abrir bloco de nota" (ratio ~ 0.97) should not match.
         result = resolver.resolve("abrir bloco de nota")
         assert result is None
+
+
+def test_resolver_media_commands(resolver):
+    res = resolver.resolve("pausar musica")
+    assert res is not None
+    assert res.intent_name == "media_pause"
+    assert res.is_system is True
+
+    res2 = resolver.resolve("proxima musica")
+    assert res2 is not None
+    assert res2.intent_name == "media_next"
+    assert res2.is_system is True
+
+    res3 = resolver.resolve("continuar")
+    assert res3 is not None
+    assert res3.intent_name == "media_play"
+    assert res3.is_system is True
