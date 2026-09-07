@@ -36,6 +36,7 @@ def test_tool_registry_register_and_get():
 
     assert registry.get_tool("dummy_tool") is tool
     assert "dummy_tool" in [t.name for t in registry.list_tools()]
+    assert registry.get_available_tool_names() == ["dummy_tool"]
 
 
 def test_tool_registry_execute_success():

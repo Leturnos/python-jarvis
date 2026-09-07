@@ -24,6 +24,10 @@ class ToolRegistry:
         """Lists all registered tools."""
         return list(self._tools.values())
 
+    def get_available_tool_names(self) -> list[str]:
+        """Returns a list of names for all currently registered tools."""
+        return list(self._tools.keys())
+
     def get_tools_prompt_description(self) -> str:
         """Generates a structured text block of available tools for the LLM prompt."""
         if not self._tools:
