@@ -81,3 +81,120 @@ def test_web_search_empty_query():
     result = tool.execute(query="")
     assert result["success"] is False
     assert "empty" in result["error"].lower()
+
+
+@patch("urllib.request.urlopen")
+def test_web_search_duckduckgo_html_fallback(mock_urlopen):
+    # Call 1: Instant Answer API returns empty JSON
+    resp_api = MagicMock()
+    resp_api.read.return_value = b"{}"
+
+    # Call 2: HTML fallback returns web-result blocks
+    html_mock = """
+    <div class="result results_links results_links_deep web-result ">
+        <h2 class="result__title">
+            <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.python.org%2F&amp;rut=123">Welcome to Python.org</a>
+        </h2>
+        <a class="result__snippet" href="#">Python is an easy to learn programming language.</a>
+    </div>
+    """
+    resp_html = MagicMock()
+    resp_html.read.return_value = html_mock.encode("utf-8")
+
+    mock_urlopen.return_value.__enter__.side_effect = [resp_api, resp_html]
+
+    tool = WebSearchTool()
+    result = tool.execute(query="como instalar python", max_results=1)
+
+    assert result["success"] is True
+    assert result["provider"] == "duckduckgo"
+    assert len(result["results"]) == 1
+    assert result["results"][0]["title"] == "Welcome to Python.org"
+    assert result["results"][0]["url"] == "https://www.python.org/"
+    assert "easy to learn" in result["results"][0]["snippet"]
+
+
+@patch("urllib.request.urlopen")
+def test_web_search_duckduckgo_malformed_json_fallback(mock_urlopen):
+    # Call 1: Instant Answer API returns empty body / non-JSON
+    resp_api = MagicMock()
+    resp_api.read.return_value = b""
+
+    # Call 2: HTML fallback returns result
+    html_mock = """
+    <div class="web-result">
+        <a class="result__a" href="https://example.com/guide">Example Guide</a>
+        <a class="result__snippet">Tutorial content</a>
+    </div>
+    """
+    resp_html = MagicMock()
+    resp_html.read.return_value = html_mock.encode("utf-8")
+
+    mock_urlopen.return_value.__enter__.side_effect = [resp_api, resp_html]
+
+    tool = WebSearchTool()
+    result = tool.execute(query="search something", max_results=1)
+
+    assert result["success"] is True
+    assert len(result["results"]) == 1
+    assert result["results"][0]["title"] == "Example Guide"
+    assert result["results"][0]["url"] == "https://example.com/guide"
+
+
+@patch("urllib.request.urlopen")
+def test_web_search_duckduckgo_html_unescape_and_attribute_order(mock_urlopen):
+    # Call 1: Instant Answer API returns empty JSON
+    resp_api = MagicMock()
+    resp_api.read.return_value = b"{}"
+
+    # Call 2: HTML with reversed attributes (href before class), entities (&amp;, &#x27;), and protocol-relative URL
+    html_mock = """
+    <div class="web-result">
+        <h2>
+            <a href="//duckduckgo.com/l/?uddg=%2F%2Fpython.org%2Fnews&amp;rut=1" class="result__a">What&#x27;s New in Python &amp; Friends</a>
+        </h2>
+        <a class="result__snippet">Updates &amp; improvements in 3.13.</a>
+    </div>
+    """
+    resp_html = MagicMock()
+    resp_html.read.return_value = html_mock.encode("utf-8")
+
+    mock_urlopen.return_value.__enter__.side_effect = [resp_api, resp_html]
+
+    tool = WebSearchTool()
+    result = tool.execute(query="python news", max_results=1)
+
+    assert result["success"] is True
+    assert len(result["results"]) == 1
+    res = result["results"][0]
+    assert res["title"] == "What's New in Python & Friends"
+    assert res["snippet"] == "Updates & improvements in 3.13."
+    assert res["url"] == "https://python.org/news"
+
+
+@patch("urllib.request.urlopen")
+def test_web_search_duckduckgo_non_dict_json_and_urlerror_fallback(mock_urlopen):
+    import urllib.error
+
+    # Call 1: Instant Answer API raises URLError (e.g. 503 or transient outage)
+    # Call 2: HTML fallback succeeds
+    html_mock = """
+    <div class="web-result">
+        <a class="result__a" href="https://fallback.org">Fallback Site</a>
+        <a class="result__snippet">Content</a>
+    </div>
+    """
+    resp_html = MagicMock()
+    resp_html.read.return_value = html_mock.encode("utf-8")
+
+    mock_urlopen.return_value.__enter__.side_effect = [
+        urllib.error.URLError("Temporary outage"),
+        resp_html,
+    ]
+
+    tool = WebSearchTool()
+    result = tool.execute(query="fallback test", max_results=1)
+
+    assert result["success"] is True
+    assert len(result["results"]) == 1
+    assert result["results"][0]["title"] == "Fallback Site"

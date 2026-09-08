@@ -1,3 +1,4 @@
+import html
 import json
 import os
 import re
@@ -127,11 +128,15 @@ class WebSearchTool(BaseTool):
             },
         )
 
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            raw_text = resp.read().decode("utf-8", errors="replace")
-            data = json.loads(raw_text)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                raw_text = resp.read().decode("utf-8", errors="replace")
+                parsed = json.loads(raw_text) if raw_text.strip() else {}
+                data = parsed if isinstance(parsed, dict) else {}
+        except (json.JSONDecodeError, ValueError, urllib.error.URLError):
+            data = {}
 
-        results = []
+        results: list[dict[str, Any]] = []
         heading = data.get("Heading", "")
         abstract = data.get("AbstractText", "")
         abstract_url = data.get("AbstractURL", "")
@@ -171,31 +176,76 @@ class WebSearchTool(BaseTool):
         url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
         )
 
         with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            html = resp.read().decode("utf-8", errors="replace")
+            html_raw = resp.read().decode("utf-8", errors="replace")
 
-        # Lightweight regex parsing without heavy bs4 dependency
-        results = []
-        snippets = re.findall(
-            r'<a class="result__snippet[^>]*>(.*?)</a>', html, flags=re.DOTALL
+        # Robust block-based parsing for DuckDuckGo HTML results
+        blocks = re.findall(
+            r'<div[^>]*class="[^"]*web-result[^"]*"[^>]*>(.*?)(?=<div[^>]*class="[^"]*web-result[^"]*"|\Z)',
+            html_raw,
+            flags=re.DOTALL,
         )
-        titles = re.findall(
-            r'<a class="result__url[^>]*>(.*?)</a>', html, flags=re.DOTALL
-        )
+        results: list[dict[str, Any]] = []
+        for block in blocks:
+            if len(results) >= max_results:
+                break
 
-        for i in range(min(len(snippets), max_results)):
-            clean_snippet = re.sub(r"<[^>]+>", "", snippets[i]).strip()
-            clean_title = (
-                re.sub(r"<[^>]+>", "", titles[i]).strip() if i < len(titles) else query
+            t_match = re.search(
+                r'<a\b[^>]*class="[^"]*result__a[^"]*"[^>]*>(.*?)</a>',
+                block,
+                flags=re.DOTALL,
             )
+            s_match = re.search(
+                r'<a\b[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>',
+                block,
+                flags=re.DOTALL,
+            )
+
+            if not t_match and not s_match:
+                continue
+
+            raw_href = ""
+            title = ""
+            if t_match:
+                tag_open = re.search(r"<a\b[^>]*>", block[t_match.start() :])
+                if tag_open:
+                    href_m = re.search(r'href="([^"]*)"', tag_open.group(0))
+                    raw_href = href_m.group(1) if href_m else ""
+                title = html.unescape(re.sub(r"<[^>]+>", "", t_match.group(1))).strip()
+
+            snippet = (
+                html.unescape(re.sub(r"<[^>]+>", "", s_match.group(1))).strip()
+                if s_match
+                else ""
+            )
+
+            # Extract destination URL from uddg query param if present
+            url_str = ""
+            if "uddg=" in raw_href:
+                m_url = re.search(r"uddg=([^&]+)", raw_href)
+                if m_url:
+                    url_str = urllib.parse.unquote(m_url.group(1))
+            elif raw_href.startswith("http"):
+                url_str = raw_href
+
+            if url_str.startswith("//"):
+                url_str = f"https:{url_str}"
+
             results.append(
                 {
-                    "title": clean_title,
-                    "snippet": clean_snippet[:500],
-                    "url": "",
+                    "title": title or query,
+                    "snippet": snippet[:500],
+                    "url": url_str,
                 }
             )
 
