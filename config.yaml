@@ -34,6 +34,11 @@ tts:
 audio_cues:
   enabled: true                       # true para emitir bips sonoros nos estados de ativação
 
+# Comportamento Cognitivo da IA
+ai:
+  proactivity: "objective"            # "objective" (direto e conciso) ou "proactive" (sugere recomendações práticas)
+  max_conversation_turns: 5           # Número de interações recentes mantidas na memória de diálogo
+
 # Provedores de Inteligência Artificial (LLM)
 llm:
   active_provider: "openrouter"       # Provedor ativo: gemini, openai, anthropic, deepseek, openrouter

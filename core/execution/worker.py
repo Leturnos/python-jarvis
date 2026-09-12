@@ -60,8 +60,11 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
             return True
 
         notifier.notify("Jarvis", f"Entendi: '{job.payload_text}'.")
-        dispatcher.last_input_text = job.payload_text
-        dispatcher.last_input_source = "voice_llm"
+
+    dispatcher.last_input_text = job.payload_text
+    dispatcher.last_input_source = (
+        getattr(dispatcher, "last_input_source", "voice_llm") or "voice_llm"
+    )
 
     # 2. Command Resolution (Separated Logic)
     result = resolver.resolve(job.payload_text)

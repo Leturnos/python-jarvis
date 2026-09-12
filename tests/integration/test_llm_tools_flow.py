@@ -396,3 +396,87 @@ def test_dispatcher_handle_media_case_insensitive(mock_resolve_intent):
     dispatcher.handle_media({"action": "PREV"})
     called_intent = mock_resolve_intent.call_args[0][0]
     assert called_intent.action == MediaAction.PREV
+
+
+@patch("core.ai.llm_agent.llm_agent.process_instruction")
+@patch("core.ai.llm_agent.llm_agent.synthesize_tool_response")
+@patch("core.tools.tool_registry.tool_registry.execute_tool")
+def test_llm_tools_flow_weather_rain_direct_answer(
+    mock_execute_tool, mock_synthesize, mock_process
+):
+    from core.ai.conversation_memory import conversation_memory
+    from core.execution.dispatcher import ActionDispatcher
+
+    conversation_memory.clear()
+    dispatcher = ActionDispatcher(
+        config={},
+        step_executor=MagicMock(),
+        tts_engine=MagicMock(),
+        plan_builder=MagicMock(),
+    )
+    notifier = MagicMock()
+
+    mock_process.return_value = {
+        "type": "tool_call",
+        "tool_name": "weather",
+        "parameters": {"city": "Itamonte"},
+        "explanation": "Consultando previsão de chuva para Itamonte",
+        "risk_level": "safe",
+    }
+
+    mock_execute_tool.return_value = {
+        "success": True,
+        "city": "Itamonte, Minas Gerais, Brasil",
+        "temperature": 21.0,
+        "condition": "Encoberto",
+        "today_forecast": {
+            "max_temperature": 25.0,
+            "min_temperature": 15.0,
+            "rain_probability_percent": 80,
+            "rain_expected": True,
+            "condition_summary": "Pancadas de chuva à tarde",
+        },
+    }
+
+    mock_synthesize.return_value = {
+        "type": "chat",
+        "message": "Provavelmente sim. O tempo está fechando e há 80% de chance de chuva à tarde em Itamonte.",
+    }
+
+    job = Job(
+        type=JobType.LLM_DYNAMIC,
+        payload=b"dummy_audio",
+        payload_text="vai chover hoje em Itamonte?",
+    )
+
+    success = _handle_llm(job, dispatcher, notifier)
+    assert success is True
+
+    mock_execute_tool.assert_called_once_with("weather", city="Itamonte")
+    mock_synthesize.assert_called_once()
+    dispatcher.tts_engine.speak.assert_called_with(
+        "Provavelmente sim. O tempo está fechando e há 80% de chance de chuva à tarde em Itamonte."
+    )
+
+    # Check that turn is recorded in conversation memory
+    last_turn = conversation_memory.get_last_turn()
+    assert last_turn is not None
+    assert last_turn.user_query == "vai chover hoje em Itamonte?"
+    assert "Provavelmente sim" in last_turn.assistant_response
+
+
+def test_conversation_memory_integration_in_operational_context():
+    from core.ai.conversation_memory import conversation_memory
+    from core.ai.llm_agent import llm_agent
+
+    conversation_memory.clear()
+    conversation_memory.record_turn(
+        "Como está o tempo em Itamonte?",
+        "Está fechando para chuva, com 80% de probabilidade.",
+        "weather",
+    )
+
+    ctx = llm_agent._get_operational_context()
+    assert "conversation_history" in ctx
+    assert 'Usuário: "Como está o tempo em Itamonte?"' in ctx["conversation_history"]
+    assert 'Jarvis: "Está fechando para chuva' in ctx["conversation_history"]

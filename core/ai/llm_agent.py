@@ -2,6 +2,7 @@ import json
 import threading
 from typing import Any
 
+from core.ai.conversation_memory import conversation_memory
 from core.ai.prompt_guard import PromptGuard
 from core.cache import llm_cache
 from core.infra.config import config
@@ -122,10 +123,13 @@ class LLMAgent:
         else:
             recent_str = "Nenhuma interação recente."
 
+        dialog_ctx = conversation_memory.get_context_prompt()
+
         return {
             "datetime": dt_str,
             "active_window": win_ctx,
             "recent_interactions": recent_str,
+            "conversation_history": dialog_ctx,
         }
 
     @time_it
@@ -196,15 +200,24 @@ class LLMAgent:
         tools_desc = tool_registry.get_tools_prompt_description()
         op_ctx = self._get_operational_context()
 
+        proactivity_mode = config.get("ai", {}).get("proactivity", "objective")
+        if proactivity_mode == "proactive":
+            persona_proactivity = "Quando oportuno, seja proativo sugerindo recomendações úteis e práticas de forma elegante."
+        else:
+            persona_proactivity = "Mantenha um tom estritamente objetivo, direto e conciso, sem conselhos não solicitados."
+
         prompt = f"""
-        Você é o Jarvis, um assistente de terminal no Windows.
-        Seu objetivo é ajudar o usuário com automações seguras.
+        Você é o Jarvis, o assistente pessoal de inteligência artificial do usuário no Windows.
+        Seu estilo é inspirado no J.A.R.V.I.S.: perspicaz, refinado, prestativo e inteligente.
+        {persona_proactivity}
         O usuário falou: "{text}"
 
         Contexto Operacional do Sistema:
         - Data e Hora Atual: {op_ctx["datetime"]}
         - Janela em Foco no Windows: {op_ctx["active_window"]}
-        - Histórico Recente do Usuário: [{op_ctx["recent_interactions"]}]
+        - Diálogo Recente (Memória de Conversa):
+{op_ctx["conversation_history"]}
+        - Histórico de Automações Técnicas: [{op_ctx["recent_interactions"]}]
 
         Comandos de Plugins disponíveis:
 {intents_str}
@@ -246,11 +259,14 @@ class LLMAgent:
             ]
         }}
 
-        2. Se for um CHAT (conversa, pergunta genérica, saudação):
+        2. Se for um CHAT (conversa, pergunta genérica, opinião, saudação ou acompanhamento):
         {{
             "type": "chat",
-            "message": "Sua resposta curta e natural aqui."
+            "message": "Sua resposta curta, inteligente e natural aqui."
         }}
+        Regras para CHAT:
+        - Responda em Português de forma elegante, direta e conversacional (1 a 2 frases para TTS).
+        - Se a instrução for uma pergunta de acompanhamento ao Diálogo Recente (ex: "e amanhã?", "e no Rio?"), use a Memória de Conversa para responder no contexto adequado.
 
         3. Se for uma MÍDIA (tocar música, pausar, pular no Spotify ou sistema):
         {{
@@ -447,25 +463,49 @@ class LLMAgent:
         self, original_query: str, tool_name: str, tool_result: dict[str, Any]
     ) -> dict[str, Any]:
         """Synthesizes a human-readable response or next action based on tool execution results."""
+        proactivity_mode = config.get("ai", {}).get("proactivity", "objective")
+        if proactivity_mode == "proactive":
+            proactivity_guideline = (
+                "- Proatividade: Adicione um conselho prático curto quando oportuno "
+                "(ex: 'recomendo um guarda-chuva se for sair', 'o mercado está em alta, bom momento para trocar')."
+            )
+        else:
+            proactivity_guideline = (
+                "- Estilo Objetivo: Seja direto, conclusivo e conciso. Responda com precisão à dúvida, "
+                "sem adicionar conselhos ou sugestões não solicitadas."
+            )
+
         prompt = f"""
-        Você é o Jarvis, um assistente inteligente no Windows.
-        O usuário pediu: "{original_query}"
-        A ferramenta '{tool_name}' foi executada e retornou o seguinte resultado estruturado:
+        Você é o Jarvis, o assistente pessoal inteligente do usuário no Windows.
+        Sua resposta falada será sintetizada via Text-to-Speech (TTS) e também exibida na tela.
+        O usuário perguntou: "{original_query}"
+        A ferramenta '{tool_name}' foi executada e retornou o seguinte resultado estruturado do mundo real:
         {json.dumps(tool_result, ensure_ascii=False, indent=2)}
 
         Sua tarefa:
-        1. Se a ferramenta retornou dados informativos (como clima, cotação monetária, cálculo, pesquisa na web, status/diff do git ou inspeção de arquivos):
-           retorne um JSON com type "chat" contendo uma resposta concisa, fluida e natural em Português para ser falada via TTS e exibida na tela.
-           Exemplos de tom de resposta:
-           - Clima: "Em São Paulo está fazendo 24°C com céu limpo."
-           - Moeda: "100 dólares equivalem a aproximadamente 572 reais no momento."
-           - Cálculo: "O resultado é 264,5."
-           - Web/Git: Resuma o ponto principal em 1 ou 2 frases curtas.
-           Evite ler nomes técnicos de chaves do JSON (não fale 'bid', 'precipitation_mm' ou 'wind_speed_kmh' a menos que relevante).
+        1. Se a ferramenta retornou dados informativos (como clima, cotação monetária, cálculo, pesquisa na web, status do git ou arquivos):
+           retorne um JSON com type "chat" contendo uma resposta concisa, inteligente e fluida em Português para ser falada via TTS.
+
+           DIRETRIZES FUNDAMENTAIS DE INTELIGÊNCIA:
+           - RACIOCÍNIO DINÂMICO BASEADO NOS DADOS REAIS:
+             Analise com atenção os dados retornados pela ferramenta e formule uma resposta genuína, espontânea e personalizada para a situação real.
+             NÃO use frases prontas repetitivas ou clichês engessados. O tom deve ser vivo e natural.
+           - REGRA DA RESPOSTA DIRETA (DIRECT ANSWER FIRST):
+             Responda conclusivamente à dúvida central do usuário no início da fala, seguida do motivo real indicado pelos dados:
+             * Clima / Chuva ("vai chover hoje?", "preciso de guarda-chuva?"): Conclua diretamente com base na probabilidade e condição real (ex: "Sim", "Provavelmente sim", "Pouco provável", "Não deve chover") e explique o porquê com base no que a previsão aponta (ex: céu aberto, previsão de garoa leve, pancadas fortes à tarde, tempo instável). NÃO mencione temperatura se a pergunta foi apenas sobre chuva.
+             * Finanças / Cotações ("quanto tá o dólar?", "subiu?"): Diga a cotação falada em reais e mencione se a tendência do dia é de alta, baixa ou estabilidade.
+             * Git / Projetos: Explique o panorama prático das alterações humanas, sem despejar nomes técnicos de arquivos.
+             * Web Search: Sintetize o fato apurado diretamente em 1 frase, sem recitar títulos de páginas ou links.
+             * Cálculo: Responda o resultado diretamente.
+           - SÍNTESE QUALITATIVA: Traduza números e telemetria em significado humano prático (nunca leia nomes de variáveis como 'bid', 'precipitation_mm', 'weather_code' ou chaves JSON).
+           - LINGUAGEM FALADA (TTS): No máximo 1 a 2 frases concisas, naturais e fluidas para serem ouvidas com facilidade.
+           {proactivity_guideline}
+
            {{
                "type": "chat",
-               "message": "Sua resposta falada em linguagem natural aqui."
+               "message": "Sua resposta inteligente e falada aqui."
            }}
+
         2. Se a ferramenta retornou dados suficientes para uma ação subsequente solicitada pelo usuário (ex: git diff permitindo commit):
            retorne um JSON com type "action", schema_version "1.0", intent "git_commit", global_risk "medium",
            explanation "Uma explicação da ação proposta.",

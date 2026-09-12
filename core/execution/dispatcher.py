@@ -9,6 +9,7 @@ import json
 from typing import Any
 
 from core.ai.command_resolver import CommandResolver
+from core.ai.conversation_memory import conversation_memory
 from core.ai.llm_agent import llm_agent
 from core.ai.prompt_guard import PromptGuard
 from core.audio.tts_engine import TTSEngine
@@ -217,6 +218,12 @@ class ActionDispatcher:
                 confidence=self.last_confidence,
                 action_json=action_json,
             )
+
+            conversation_memory.record_turn(
+                user_query=self.last_input_text,
+                assistant_response=plan.explanation or "Pronto!",
+                intent=plan.intent,
+            )
             self.tts_engine.speak("Pronto!")
             return True
         except Exception as e:
@@ -383,6 +390,8 @@ class ActionDispatcher:
         """Handles a static wakeword command by building its plan and executing."""
         logger.info(f"Dispatching action for: {wakeword_name}")
         self.last_confidence = confidence
+        self.last_input_text = wakeword_name
+        self.last_input_source = "wakeword"
         wakewords = self.config.get("wakewords", {})
 
         if wakeword_name not in wakewords:
@@ -419,7 +428,14 @@ class ActionDispatcher:
 
         type_hint = action_config.get("type", "action")
         if type_hint == "chat":
-            self.tts_engine.speak(action_config.get("message", "Sem resposta."))
+            msg = action_config.get("message", "Sem resposta.")
+            self.tts_engine.speak(msg)
+
+            conversation_memory.record_turn(
+                user_query=self.last_input_text,
+                assistant_response=msg,
+                intent="chat",
+            )
             history_manager.log_execution(
                 self.last_input_text,
                 self.last_input_source,
@@ -454,6 +470,7 @@ class ActionDispatcher:
         """Executes a tool call, synthesizes the response, and dispatches the resulting action or chat."""
         from core.tools.tool_registry import tool_registry
 
+        self.last_input_text = original_query
         tool_name = str(action_json.get("tool_name", ""))
         params = action_json.get("parameters", {})
         if not isinstance(params, dict):
