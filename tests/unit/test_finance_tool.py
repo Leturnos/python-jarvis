@@ -41,6 +41,7 @@ def test_finance_tool_usd_quote_success(mock_urlopen: MagicMock) -> None:
     assert result["high"] == 5.75
     assert result["low"] == 5.68
     assert result["pct_change"] == "+0.45%"
+    assert result["trend"] == "alta"
 
 
 @patch("urllib.request.urlopen")
@@ -68,6 +69,30 @@ def test_finance_tool_conversion_with_amount(mock_urlopen: MagicMock) -> None:
     assert result["bid"] == 6.10
     assert result["original_amount"] == 50.0
     assert result["converted_value"] == 305.0
+    assert result["trend"] == "baixa"
+
+
+@patch("urllib.request.urlopen")
+def test_finance_tool_stable_trend(mock_urlopen: MagicMock) -> None:
+    api_response = MagicMock()
+    api_response.read.return_value = json.dumps(
+        {
+            "USDBRL": {
+                "code": "USD",
+                "codein": "BRL",
+                "name": "Dólar Americano",
+                "high": "5.72",
+                "low": "5.70",
+                "pctChange": "0.02",
+                "bid": "5.71",
+            }
+        }
+    ).encode("utf-8")
+    mock_urlopen.return_value.__enter__.return_value = api_response
+
+    tool = FinanceTool()
+    result = tool.execute(currencies="dolar")
+    assert result["trend"] == "estável"
 
 
 @patch("urllib.request.urlopen")

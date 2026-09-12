@@ -129,3 +129,62 @@ def test_weather_tool_timeout(mock_urlopen: MagicMock) -> None:
         "timed out" in result["error"].lower()
         or "tempo limite" in result["error"].lower()
     )
+
+
+@patch("urllib.request.urlopen")
+def test_weather_tool_with_daily_forecast_and_rain(mock_urlopen: MagicMock) -> None:
+    geo_response = MagicMock()
+    geo_response.read.return_value = json.dumps(
+        {
+            "results": [
+                {
+                    "name": "São Paulo",
+                    "admin1": "São Paulo",
+                    "country": "Brasil",
+                    "latitude": -23.55,
+                    "longitude": -46.63,
+                }
+            ]
+        }
+    ).encode("utf-8")
+
+    forecast_response = MagicMock()
+    forecast_response.read.return_value = json.dumps(
+        {
+            "current": {
+                "temperature_2m": 21.0,
+                "relative_humidity_2m": 78,
+                "apparent_temperature": 21.5,
+                "precipitation": 0.0,
+                "weather_code": 3,
+                "wind_speed_10m": 10.0,
+            },
+            "daily": {
+                "temperature_2m_max": [25.0],
+                "temperature_2m_min": [15.0],
+                "precipitation_probability_max": [80],
+                "precipitation_sum": [4.2],
+                "weather_code": [61],
+            },
+        }
+    ).encode("utf-8")
+
+    mock_urlopen.side_effect = [
+        MagicMock(__enter__=MagicMock(return_value=geo_response)),
+        MagicMock(__enter__=MagicMock(return_value=forecast_response)),
+    ]
+
+    tool = WeatherTool()
+    result = tool.execute(city="São Paulo")
+
+    assert result["success"] is True
+    assert "São Paulo" in result["city"]
+    assert result["condition"] == "Encoberto"
+    assert result["today_forecast"] is not None
+    forecast = result["today_forecast"]
+    assert forecast["max_temperature"] == 25.0
+    assert forecast["min_temperature"] == 15.0
+    assert forecast["rain_probability_percent"] == 80
+    assert forecast["rain_expected"] is True
+    assert forecast["precipitation_sum_mm"] == 4.2
+    assert "chuva" in forecast["condition_summary"].lower()

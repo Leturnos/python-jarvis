@@ -88,11 +88,16 @@ class FinanceTool(BaseTool):
                 }
 
             quote = data[key]
-            bid = float(quote.get("bid", 0.0))
-            high = float(quote.get("high", 0.0))
-            low = float(quote.get("low", 0.0))
-            pct_raw = float(quote.get("pctChange", 0.0))
+            bid = float(quote.get("bid") or 0.0)
+            high = float(quote.get("high") or 0.0)
+            low = float(quote.get("low") or 0.0)
+            pct_raw = float(quote.get("pctChange") or 0.0)
             pct_str = f"+{pct_raw:.2f}%" if pct_raw >= 0 else f"{pct_raw:.2f}%"
+            trend = (
+                "alta"
+                if pct_raw > 0.05
+                else ("baixa" if pct_raw < -0.05 else "estável")
+            )
 
             result_payload: dict[str, Any] = {
                 "success": True,
@@ -102,6 +107,7 @@ class FinanceTool(BaseTool):
                 "high": high,
                 "low": low,
                 "pct_change": pct_str,
+                "trend": trend,
             }
 
             if amount is not None:

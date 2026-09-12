@@ -93,9 +93,39 @@ class WeatherTool(BaseTool):
             # 2. Weather Forecast
             weather_data = self._fetch_weather(lat, lon)
             current = weather_data.get("current", {})
+            daily = weather_data.get("daily", {})
 
             w_code = current.get("weather_code", 0)
             condition = self.WMO_CODE_MAP.get(w_code, "Tempo instável")
+
+            today_forecast = None
+            max_temps = daily.get("temperature_2m_max", [])
+            if max_temps:
+                max_temp = max_temps[0]
+                min_temps = daily.get("temperature_2m_min", [])
+                min_temp = min_temps[0] if min_temps else None
+                rain_prob_list = daily.get("precipitation_probability_max", [])
+                rain_prob = rain_prob_list[0] if rain_prob_list else None
+                rain_sum_list = daily.get("precipitation_sum", [])
+                rain_sum = rain_sum_list[0] if rain_sum_list else 0.0
+                daily_codes = daily.get("weather_code", [])
+                daily_w_code = daily_codes[0] if daily_codes else w_code
+                daily_condition = self.WMO_CODE_MAP.get(daily_w_code, condition)
+
+                rain_expected = (
+                    (rain_prob is not None and rain_prob >= 40)
+                    or (rain_sum is not None and rain_sum > 0.5)
+                    or (w_code in [51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99])
+                )
+
+                today_forecast = {
+                    "max_temperature": max_temp,
+                    "min_temperature": min_temp,
+                    "rain_probability_percent": rain_prob,
+                    "rain_expected": bool(rain_expected),
+                    "precipitation_sum_mm": rain_sum,
+                    "condition_summary": daily_condition,
+                }
 
             return {
                 "success": True,
@@ -106,6 +136,7 @@ class WeatherTool(BaseTool):
                 "condition": condition,
                 "wind_speed_kmh": current.get("wind_speed_10m"),
                 "precipitation_mm": current.get("precipitation", 0.0),
+                "today_forecast": today_forecast,
             }
         except TimeoutError:
             logger.warning(f"WeatherTool: Request timed out for '{target_city}'")
@@ -149,6 +180,7 @@ class WeatherTool(BaseTool):
         url = (
             f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
             "&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m"
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max"
             "&timezone=auto"
         )
         req = urllib.request.Request(
