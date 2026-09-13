@@ -19,7 +19,7 @@ from core.execution.execution_plan import (
     RiskLevel,
     StepType,
 )
-from core.execution.plan_builder import PlanBuilder
+from core.execution.plan_builder import PlanBuilder, is_action_trusted
 from core.execution.step_executor import StepExecutor
 from core.infra.logger_config import logger
 from core.persistence.history_db import history_manager
@@ -108,6 +108,7 @@ class ActionDispatcher:
             state_manager.set_state(JarvisState.MUTED)
             return True
 
+        orig_plan = plan
         # 1. Prompt Guard Validation
         sanitized_dict = PromptGuard.sanitize_output(plan.to_dict())
         plan = ExecutionPlan.from_dict(sanitized_dict)
@@ -117,8 +118,23 @@ class ActionDispatcher:
             self.tts_engine.speak("Ação bloqueada por segurança.")
             return False
 
+        # Evaluate trusted apps scoping to lower risk if all steps are authorized
+        if plan.steps and all(
+            is_action_trusted(step, self.config) for step in plan.steps
+        ):
+            logger.info(
+                f"Plan '{plan.intent}' steps verified against trusted_apps. Lowering risk level to SAFE."
+            )
+            plan.global_risk = RiskLevel.SAFE
+            orig_plan.global_risk = RiskLevel.SAFE
+            for step in plan.steps:
+                step.step_risk = RiskLevel.SAFE
+            for step in orig_plan.steps:
+                step.step_risk = RiskLevel.SAFE
+
         # 2. Check if Dry-run is needed
         dry_run_config = self.config.get("dry_run", {})
+
         require_confirmation = dry_run_config.get("enabled", True)
 
         if plan.global_risk == RiskLevel.SAFE and dry_run_config.get(

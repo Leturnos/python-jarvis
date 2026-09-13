@@ -18,26 +18,68 @@ def is_action_trusted(step: ExecutionStep, config: dict[str, Any]) -> bool:
     if not trusted_apps:
         return False
 
-    target = step.payload.get("target") or step.payload.get("command") or ""
-    if not target:
+    raw_target = str(
+        step.payload.get("target") or step.payload.get("command") or ""
+    ).strip()
+    if not raw_target:
         return False
-
-    normalized_target = os.path.normpath(os.path.expandvars(target)).lower()
 
     action_type_map = {
         StepType.OPEN_APP: "system_open",
         StepType.COMMAND: "system_exec",
     }
     action_type_str = action_type_map.get(step.type, "")
+    if not action_type_str:
+        return False
+
+    clean_target = os.path.expandvars(raw_target).lower()
+    normalized_target = os.path.normpath(clean_target)
+    target_has_dir = (
+        bool(os.path.dirname(normalized_target))
+        or ("\\" in clean_target)
+        or ("/" in clean_target)
+    )
 
     for entry in trusted_apps:
-        if isinstance(entry, dict):
-            entry_path = os.path.normpath(
-                os.path.expandvars(entry.get("path", ""))
-            ).lower()
-            allowed_actions = entry.get("allowed_actions", [])
-            if normalized_target == entry_path and action_type_str in allowed_actions:
+        if not isinstance(entry, dict):
+            continue
+
+        allowed_actions = entry.get("allowed_actions", [])
+        if action_type_str not in allowed_actions:
+            continue
+
+        entry_name = str(entry.get("name", "")).strip().lower()
+        entry_raw_path = entry.get("path", "")
+        entry_path = (
+            os.path.normpath(os.path.expandvars(entry_raw_path)).lower()
+            if entry_raw_path
+            else ""
+        )
+
+        # 1. Exact full-path match
+        if entry_path and normalized_target == entry_path:
+            return True
+
+        # If the target has directory path components, require strict full-path match
+        if target_has_dir:
+            continue
+
+        # 2. Match by configured app name (e.g. name: "spotify")
+        if entry_name:
+            if clean_target == entry_name:
                 return True
+            if clean_target.startswith(f"{entry_name}:"):
+                return True
+
+        # 3. Match by executable basename/stem (e.g. "spotify" or "spotify.exe" from path)
+        if entry_path:
+            exe_basename = os.path.basename(entry_path)
+            app_stem = os.path.splitext(exe_basename)[0]
+            if clean_target in (exe_basename, app_stem):
+                return True
+            if clean_target.startswith(f"{app_stem}:"):
+                return True
+
     return False
 
 

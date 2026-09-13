@@ -3,11 +3,30 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core.execution.dispatcher import ActionDispatcher
+from core.execution.execution_plan import (
+    ExecutionPlan,
+    ExecutionStep,
+    RiskLevel,
+    StepType,
+)
 
 
 @pytest.fixture
 def mock_config():
     return {
+        "dry_run": {
+            "enabled": True,
+            "bypass_for_safe_intents": True,
+        },
+        "security": {
+            "trusted_apps": [
+                {
+                    "name": "spotify",
+                    "path": r"C:\Program Files\Spotify\Spotify.exe",
+                    "allowed_actions": ["system_open"],
+                }
+            ]
+        },
         "wakewords": {
             "safe_cmd": {
                 "action": "system",
@@ -25,7 +44,7 @@ def mock_config():
                 "description": "Dangerous Action",
                 "commands": ["format C:"],
             },
-        }
+        },
     }
 
 
@@ -112,3 +131,51 @@ def test_handle_dynamic_integrates_security(dispatcher, mock_tts_engine):
     mock_tts_engine.speak.assert_any_call(
         "Atenção: Ação catastrófica detectada. Comando bloqueado por segurança."
     )
+
+
+def test_handle_plan_trusted_app_bypasses_confirmation(dispatcher):
+    plan = ExecutionPlan(
+        intent="media_play",
+        explanation="Abrindo o Spotify",
+        steps=[
+            ExecutionStep(
+                type=StepType.OPEN_APP,
+                payload={"target": "Spotify"},
+                step_risk=RiskLevel.LOW,
+            )
+        ],
+        global_risk=RiskLevel.LOW,
+    )
+    dispatcher._confirm_dry_run = MagicMock()
+    dispatcher.execute_plan = MagicMock(return_value=True)
+
+    result = dispatcher.handle_plan(plan)
+
+    assert result is True
+    assert plan.global_risk == RiskLevel.SAFE
+    assert dispatcher._confirm_dry_run.call_count == 0
+    dispatcher.execute_plan.assert_called_once()
+
+
+def test_handle_plan_untrusted_app_requires_confirmation(dispatcher):
+    plan = ExecutionPlan(
+        intent="open_untrusted",
+        explanation="Abrindo app desconhecido",
+        steps=[
+            ExecutionStep(
+                type=StepType.OPEN_APP,
+                payload={"target": "untrusted_app"},
+                step_risk=RiskLevel.LOW,
+            )
+        ],
+        global_risk=RiskLevel.LOW,
+    )
+    dispatcher._confirm_dry_run = MagicMock(return_value=True)
+    dispatcher.execute_plan = MagicMock(return_value=True)
+
+    result = dispatcher.handle_plan(plan)
+
+    assert result is True
+    assert plan.global_risk == RiskLevel.LOW
+    dispatcher._confirm_dry_run.assert_called_once_with(plan)
+    dispatcher.execute_plan.assert_called_once()

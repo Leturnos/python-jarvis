@@ -35,6 +35,7 @@ from core.shared.constants import Timing
 from core.ui.adapter import JarvisTrayAdapter, JarvisUIAdapter
 from core.ui.app_controller import QtAppController
 from core.ui.notifications import JarvisNotifier
+from core.ui.security_ui import init_security_dialog_manager
 
 
 def qt_exception_hook(exctype: Any, value: Any, tb: Any) -> None:
@@ -129,6 +130,7 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    init_security_dialog_manager()
 
     # Initialize dark theme as early as possible to avoid flash of white or bugged colors
     qdarktheme.setup_theme()

@@ -1,4 +1,3 @@
-import logging
 import queue
 import threading
 import time
@@ -10,11 +9,10 @@ from core.activation import ActivationActionType, ActivationContext, ActivationM
 from core.audio.audio_loop import AudioLoopManager
 from core.audio.stt_engine import stt_engine
 from core.execution.job_queue import Job, JobType
+from core.infra.logger_config import logger
 from core.runtime.state import JarvisState, state_manager
 from core.shared.utils import normalize_text
 from core.shared.voice_responses import CONFIRMATION_APPROVALS, CONFIRMATION_REJECTIONS
-
-logger = logging.getLogger(__name__)
 
 
 class JarvisController:

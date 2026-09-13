@@ -34,3 +34,58 @@ def test_is_action_trusted_requires_full_path_match_and_system_open_action():
         payload={"target": r"C:\Users\Fake\Downloads\Spotify.exe"},
     )
     assert is_action_trusted(fake_path_step, config) is False
+
+
+def test_is_action_trusted_matches_app_name_and_uri():
+    config = {
+        "security": {
+            "trusted_apps": [
+                {
+                    "name": "spotify",
+                    "path": r"C:\Program Files\Spotify\Spotify.exe",
+                    "allowed_actions": ["system_open"],
+                }
+            ]
+        }
+    }
+
+    # Case-insensitive app name from LLM
+    assert (
+        is_action_trusted(
+            ExecutionStep(type=StepType.OPEN_APP, payload={"target": "Spotify"}), config
+        )
+        is True
+    )
+    assert (
+        is_action_trusted(
+            ExecutionStep(type=StepType.OPEN_APP, payload={"target": "spotify"}), config
+        )
+        is True
+    )
+    assert (
+        is_action_trusted(
+            ExecutionStep(type=StepType.OPEN_APP, payload={"target": "spotify.exe"}),
+            config,
+        )
+        is True
+    )
+
+    # URI protocol schemes (e.g. spotify:playlist:123 or spotify:search:rock)
+    assert (
+        is_action_trusted(
+            ExecutionStep(
+                type=StepType.OPEN_APP, payload={"target": "spotify:search:rock"}
+            ),
+            config,
+        )
+        is True
+    )
+
+    # Other non-trusted apps
+    assert (
+        is_action_trusted(
+            ExecutionStep(type=StepType.OPEN_APP, payload={"target": "calculator"}),
+            config,
+        )
+        is False
+    )
