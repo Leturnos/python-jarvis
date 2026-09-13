@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -179,3 +180,53 @@ def test_handle_plan_untrusted_app_requires_confirmation(dispatcher):
     assert plan.global_risk == RiskLevel.LOW
     dispatcher._confirm_dry_run.assert_called_once_with(plan)
     dispatcher.execute_plan.assert_called_once()
+
+
+def test_execute_plan_resets_state_to_idle(dispatcher: Any) -> None:
+    from core.runtime.state import JarvisState, state_manager
+
+    plan = ExecutionPlan(
+        intent="open_trusted",
+        explanation="Abrindo app seguro",
+        steps=[
+            ExecutionStep(
+                type=StepType.OPEN_APP,
+                payload={"target": "Spotify"},
+                step_risk=RiskLevel.SAFE,
+            )
+        ],
+        global_risk=RiskLevel.SAFE,
+    )
+
+    dispatcher.step_executor.execute_step = MagicMock(return_value=True)
+
+    success = dispatcher.execute_plan(plan)
+
+    assert success is True
+    assert state_manager.get_state() == JarvisState.IDLE
+
+
+def test_dispatch_resets_state_to_idle(dispatcher: Any) -> None:
+    from core.runtime.state import JarvisState, state_manager
+
+    with patch("core.ai.llm_agent.llm_agent.process_instruction") as mock_process:
+        mock_process.return_value = {
+            "type": "action",
+            "intent": "open_app",
+            "explanation": "Abrindo Spotify",
+            "steps": [
+                {
+                    "type": "open_app",
+                    "payload": {"target": "Spotify"},
+                    "step_risk": "safe",
+                }
+            ],
+            "global_risk": "safe",
+        }
+        dispatcher.step_executor.execute_step = MagicMock(return_value=True)
+
+        success = dispatcher.dispatch("abrir spotify")
+
+        assert success is True
+        mock_process.assert_called_once_with("abrir spotify")
+        assert state_manager.get_state() == JarvisState.IDLE

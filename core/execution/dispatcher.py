@@ -145,6 +145,7 @@ class ActionDispatcher:
         if require_confirmation:
             if not self._confirm_dry_run(plan):
                 logger.info("Plan rejected by user.")
+                state_manager.set_state(JarvisState.IDLE)
                 return False
 
         # 3. Execute
@@ -241,6 +242,7 @@ class ActionDispatcher:
                 intent=plan.intent,
             )
             self.tts_engine.speak("Pronto!")
+            state_manager.set_state(JarvisState.IDLE)
             return True
         except Exception as e:
             logger.error(f"Critical error during plan execution: {e}")
@@ -315,6 +317,7 @@ class ActionDispatcher:
         if self._confirm_dry_run(plan):
             # 3. If approved, save as plugin
             success = macro_manager.save_macro_as_plugin(plan)
+            state_manager.set_state(JarvisState.IDLE)
             if success:
                 self.tts_engine.speak(f"Macro '{plan.intent}' salva com sucesso!")
                 return True
@@ -322,6 +325,7 @@ class ActionDispatcher:
                 self.tts_engine.speak("Erro ao salvar o arquivo da macro.")
                 return False
 
+        state_manager.set_state(JarvisState.IDLE)
         return False
 
     def _handle_explain_last_action(self) -> None:
@@ -389,6 +393,7 @@ class ActionDispatcher:
             self.active_dialog = None
 
             if not result:
+                state_manager.set_state(JarvisState.IDLE)
                 history_manager.log_execution(
                     self.last_input_text,
                     self.last_input_source,
@@ -619,39 +624,39 @@ class ActionDispatcher:
         self.last_input_text = text
         self.last_input_source = "command_palette"
 
-        resolver = CommandResolver()
-        result = resolver.resolve(text)
-
-        if result:
-            self.last_input_source = result.source
-            self.last_confidence = result.confidence
-
-            if result.is_system:
-                if result.intent_name.startswith("media_"):
-                    return self.handle_local_media_command(result.intent_name)
-                elif result.intent_name == "replay":
-                    return self.replay_last_command()
-                elif result.intent_name == "create_macro":
-                    return self.initiate_macro_creation()
-
-            intents = plugin_manager.get_intents()
-            action_config = {
-                "action": "plugin",
-                "intent": result.intent_name,
-                "risk_level": next(
-                    (
-                        i["risk_level"]
-                        for i in intents
-                        if i["intent"] == result.intent_name
-                    ),
-                    "safe",
-                ),
-            }
-            self.handle_dynamic(action_config)
-            return True
-
-        # LLM Fallback
         try:
+            resolver = CommandResolver()
+            result = resolver.resolve(text)
+
+            if result:
+                self.last_input_source = result.source
+                self.last_confidence = result.confidence
+
+                if result.is_system:
+                    if result.intent_name.startswith("media_"):
+                        return self.handle_local_media_command(result.intent_name)
+                    elif result.intent_name == "replay":
+                        return self.replay_last_command()
+                    elif result.intent_name == "create_macro":
+                        return self.initiate_macro_creation()
+
+                intents = plugin_manager.get_intents()
+                action_config = {
+                    "action": "plugin",
+                    "intent": result.intent_name,
+                    "risk_level": next(
+                        (
+                            i["risk_level"]
+                            for i in intents
+                            if i["intent"] == result.intent_name
+                        ),
+                        "safe",
+                    ),
+                }
+                self.handle_dynamic(action_config)
+                return True
+
+            # LLM Fallback
             state_manager.set_state(JarvisState.THINKING)
             llm_res = llm_agent.process_instruction(text)
             if llm_res:
@@ -674,6 +679,11 @@ class ActionDispatcher:
             state_manager.set_state(JarvisState.ERROR, context={"error": str(e)})
             return False
         finally:
-            if state_manager.get_state() == JarvisState.THINKING:
+            if state_manager.get_state() in (
+                JarvisState.THINKING,
+                JarvisState.EXECUTING,
+                JarvisState.CONFIRMING_DRY_RUN,
+                JarvisState.ERROR,
+            ):
                 state_manager.set_state(JarvisState.IDLE)
         return False

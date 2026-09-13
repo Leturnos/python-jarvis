@@ -17,6 +17,7 @@ from qfluentwidgets import LineEdit
 from core.infra.logger_config import logger
 from core.persistence.history_db import history_manager
 from core.plugins.plugin_manager import plugin_manager
+from core.runtime.state import JarvisState, state_manager
 
 
 class QtCommandPaletteDialog(QDialog):
@@ -301,6 +302,13 @@ class QtCommandPalette(QObject):
             except Exception as e:
                 logger.error(f"Error executing command palette action: {e}")
             finally:
+                if state_manager.get_state() in (
+                    JarvisState.THINKING,
+                    JarvisState.EXECUTING,
+                    JarvisState.CONFIRMING_DRY_RUN,
+                    JarvisState.ERROR,
+                ):
+                    state_manager.set_state(JarvisState.IDLE)
                 try:
                     pythoncom.CoUninitialize()
                 except Exception:
