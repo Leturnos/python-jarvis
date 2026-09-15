@@ -79,6 +79,13 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
                     dispatcher, "handle_local_media_command", result.intent_name
                 )
 
+            if result.intent_name in ("sleep", "mute"):
+                plan = ExecutionPlan(
+                    intent=result.intent_name,
+                    explanation=f"Comando de sistema '{result.intent_name}'.",
+                )
+                return bool(dispatcher.handle_plan(plan))
+
             job_type = (
                 JobType.REPLAY
                 if result.intent_name == "replay"
@@ -309,6 +316,12 @@ def command_worker(
             job_manager.add_job(job)
             task_queue.task_done()
             worker_busy.clear()
-            state_manager.set_state(JarvisState.IDLE)
+            if state_manager.get_state() in (
+                JarvisState.THINKING,
+                JarvisState.EXECUTING,
+                JarvisState.CONFIRMING_DRY_RUN,
+                JarvisState.ERROR,
+            ):
+                state_manager.set_state(JarvisState.IDLE)
 
     pythoncom.CoUninitialize()

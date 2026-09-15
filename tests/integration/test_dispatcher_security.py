@@ -230,3 +230,63 @@ def test_dispatch_resets_state_to_idle(dispatcher: Any) -> None:
         assert success is True
         mock_process.assert_called_once_with("abrir spotify")
         assert state_manager.get_state() == JarvisState.IDLE
+
+
+def test_handle_plan_system_sleep_intent(dispatcher: Any) -> None:
+    from core.runtime.state import JarvisState, state_manager
+
+    plan = ExecutionPlan(
+        intent="sleep",
+        explanation="Indo dormir.",
+    )
+
+    with (
+        patch("core.execution.dispatcher.history_manager.log_execution") as mock_log,
+        patch("core.execution.dispatcher.conversation_memory.record_turn") as mock_mem,
+    ):
+        result = dispatcher.handle_plan(plan)
+
+    assert result is True
+    assert state_manager.get_state() == JarvisState.SLEEPING
+    dispatcher.tts_engine.speak.assert_called_with(
+        "Indo dormir. Use o atalho ou a bandeja para me acordar."
+    )
+    mock_log.assert_called_once()
+    mock_mem.assert_called_once()
+
+
+def test_handle_plan_system_mute_intent(dispatcher: Any) -> None:
+    from core.runtime.state import JarvisState, state_manager
+
+    plan = ExecutionPlan(
+        intent="mute",
+        explanation="Silenciar.",
+    )
+
+    with (
+        patch("core.execution.dispatcher.history_manager.log_execution") as mock_log,
+        patch("core.execution.dispatcher.conversation_memory.record_turn") as mock_mem,
+    ):
+        result = dispatcher.handle_plan(plan)
+
+    assert result is True
+    assert state_manager.get_state() == JarvisState.MUTED
+    dispatcher.tts_engine.speak.assert_called_with("Silenciado.")
+    mock_log.assert_called_once()
+    mock_mem.assert_called_once()
+
+
+def test_dispatch_sleep_and_mute_commands(dispatcher: Any) -> None:
+    from core.runtime.state import JarvisState, state_manager
+
+    with (
+        patch("core.execution.dispatcher.history_manager.log_execution"),
+        patch("core.execution.dispatcher.conversation_memory.record_turn"),
+    ):
+        success_sleep = dispatcher.dispatch("ir dormir")
+        assert success_sleep is True
+        assert state_manager.get_state() == JarvisState.SLEEPING
+
+        success_mute = dispatcher.dispatch("silenciar")
+        assert success_mute is True
+        assert state_manager.get_state() == JarvisState.MUTED

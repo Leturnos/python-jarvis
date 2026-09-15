@@ -137,3 +137,20 @@ def test_resolver_media_commands(resolver):
     assert res3 is not None
     assert res3.intent_name == "media_play"
     assert res3.is_system is True
+
+
+def test_resolver_sleep_and_mute_commands(resolver):
+    res_sleep = resolver.resolve("ir dormir")
+    assert res_sleep is not None
+    assert res_sleep.intent_name == "sleep"
+    assert res_sleep.is_system is True
+
+    res_descansar = resolver.resolve("descansar")
+    assert res_descansar is not None
+    assert res_descansar.intent_name == "sleep"
+    assert res_descansar.is_system is True
+
+    res_mute = resolver.resolve("silenciar")
+    assert res_mute is not None
+    assert res_mute.intent_name == "mute"
+    assert res_mute.is_system is True

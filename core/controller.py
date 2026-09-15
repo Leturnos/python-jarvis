@@ -236,7 +236,8 @@ class JarvisController:
                 except Exception as e:
                     logger.debug(f"Resetting wakeword model during suspend: {e}")
         elif (
-            old_state in (JarvisState.MUTED, JarvisState.SUSPENDED)
+            old_state
+            in (JarvisState.MUTED, JarvisState.SUSPENDED, JarvisState.SLEEPING)
             and new_state == JarvisState.IDLE
         ):
             # Proactively reload models when coming back to IDLE state if lazy loading disabled

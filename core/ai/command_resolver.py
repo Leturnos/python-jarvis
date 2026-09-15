@@ -58,6 +58,22 @@ class CommandResolver:
             "faixa anterior",
             "anterior",
         ],
+        "sleep": [
+            "dormir",
+            "ir dormir",
+            "vai dormir",
+            "va dormir",
+            "descansar",
+            "va descansar",
+            "parar de ouvir",
+            "desativar",
+        ],
+        "mute": [
+            "silenciar",
+            "ficar mudo",
+            "mudo",
+            "mute",
+        ],
     }
 
     def __init__(self) -> None:

@@ -96,16 +96,42 @@ class ActionDispatcher:
         # Handle built-in system states
         if plan.intent in ("sleep", "dormir", "parar_de_ouvir", "stop_listening"):
             logger.info("System command: Entering SLEEPING state.")
-            self.tts_engine.speak(
-                "Indo dormir. Use o atalho ou a bandeja para me acordar."
-            )
+            response_msg = "Indo dormir. Use o atalho ou a bandeja para me acordar."
+            self.tts_engine.speak(response_msg)
             state_manager.set_state(JarvisState.SLEEPING)
+            history_manager.log_execution(
+                self.last_input_text,
+                self.last_input_source,
+                plan.intent,
+                plan.global_risk.value,
+                "success",
+                confidence=self.last_confidence,
+            )
+            conversation_memory.record_turn(
+                user_query=self.last_input_text,
+                assistant_response=response_msg,
+                intent=plan.intent,
+            )
             return True
 
         if plan.intent in ("mute", "silenciar"):
             logger.info("System command: Entering MUTED state.")
-            self.tts_engine.speak("Silenciado.")
+            response_msg = "Silenciado."
+            self.tts_engine.speak(response_msg)
             state_manager.set_state(JarvisState.MUTED)
+            history_manager.log_execution(
+                self.last_input_text,
+                self.last_input_source,
+                plan.intent,
+                plan.global_risk.value,
+                "success",
+                confidence=self.last_confidence,
+            )
+            conversation_memory.record_turn(
+                user_query=self.last_input_text,
+                assistant_response=response_msg,
+                intent=plan.intent,
+            )
             return True
 
         orig_plan = plan
@@ -639,6 +665,12 @@ class ActionDispatcher:
                         return self.replay_last_command()
                     elif result.intent_name == "create_macro":
                         return self.initiate_macro_creation()
+                    elif result.intent_name in ("sleep", "mute"):
+                        plan = ExecutionPlan(
+                            intent=result.intent_name,
+                            explanation=f"Comando de sistema '{result.intent_name}'.",
+                        )
+                        return bool(self.handle_plan(plan))
 
                 intents = plugin_manager.get_intents()
                 action_config = {

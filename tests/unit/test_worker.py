@@ -641,3 +641,67 @@ def test_worker_thread_speaks_on_llm_auth_and_quota_errors(
     mock_dispatcher.tts_engine.speak.assert_called_with(
         "Desculpe, estou sem cota ou créditos no provedor de IA no momento."
     )
+
+
+@patch("core.execution.worker.pythoncom")
+@patch("core.execution.worker.HANDLERS")
+def test_command_worker_preserves_sleeping_and_muted_states(
+    mock_handlers: MagicMock,
+    mock_pythoncom: MagicMock,
+    mock_dispatcher: MagicMock,
+    mock_notifier: MagicMock,
+    clean_job_history: Any,
+) -> None:
+    """Verifies that command_worker preserves SLEEPING and MUTED states when set by handlers."""
+    task_queue: queue.Queue[Any] = queue.Queue()
+    stop_event = threading.Event()
+    worker_busy = threading.Event()
+
+    # 1. SLEEPING state test
+    job_sleep = Job(type=JobType.LLM_DYNAMIC, payload=b"audio")
+    task_queue.put(job_sleep)
+
+    def sleep_side_effect(*args, **kwargs):
+        state_manager.set_state(JarvisState.SLEEPING)
+        stop_event.set()
+        return True
+
+    mock_handlers.get.return_value = sleep_side_effect
+
+    command_worker(task_queue, mock_dispatcher, mock_notifier, stop_event, worker_busy)
+
+    assert state_manager.get_state() == JarvisState.SLEEPING
+    assert job_sleep.status == JobStatus.COMPLETED
+
+    # 2. MUTED state test
+    stop_event.clear()
+    state_manager.set_state(JarvisState.IDLE)
+    job_mute = Job(type=JobType.LLM_DYNAMIC, payload=b"audio")
+    task_queue.put(job_mute)
+
+    def mute_side_effect(*args, **kwargs):
+        state_manager.set_state(JarvisState.MUTED)
+        stop_event.set()
+        return True
+
+    mock_handlers.get.return_value = mute_side_effect
+
+    command_worker(task_queue, mock_dispatcher, mock_notifier, stop_event, worker_busy)
+
+    assert state_manager.get_state() == JarvisState.MUTED
+    assert job_mute.status == JobStatus.COMPLETED
+
+
+def test_handle_llm_local_sleep_command(
+    mock_dispatcher: MagicMock, mock_notifier: MagicMock
+) -> None:
+    """Verifies that _handle_llm resolves 'ir dormir' locally and calls dispatcher.handle_plan."""
+    job = Job(type=JobType.LLM_DYNAMIC, payload=b"audio", payload_text="ir dormir")
+    mock_dispatcher.handle_plan.return_value = True
+
+    result = _handle_llm(job, mock_dispatcher, mock_notifier)
+
+    assert result is True
+    mock_dispatcher.handle_plan.assert_called_once()
+    plan = mock_dispatcher.handle_plan.call_args[0][0]
+    assert plan.intent == "sleep"
