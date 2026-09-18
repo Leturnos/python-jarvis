@@ -98,7 +98,8 @@ class QtAppController(QObject):
         self.command_palette = QtCommandPalette(dispatcher)
         import keyboard
 
-        hotkey = "ctrl+alt+p"
+        cp_config = config.get("command_palette", {})
+        hotkey = cp_config.get("key", "ctrl+shift+p")
         keyboard.add_hotkey(hotkey, self.command_palette.show)
         logger.info(f"Qt Command Palette initialized. Hotkey: {hotkey}")
         return self.command_palette
@@ -123,6 +124,11 @@ class QtAppController(QObject):
         self.show_action = QAction("Show Dashboard", self)
         self.show_action.triggered.connect(self.show_window)
         self.tray_menu.addAction(self.show_action)
+
+        # Command Palette Action
+        self.palette_action = QAction("Command Palette...", self)
+        self.palette_action.triggered.connect(self._open_command_palette)
+        self.tray_menu.addAction(self.palette_action)
 
         self.tray_menu.addSeparator()
 
@@ -223,6 +229,15 @@ class QtAppController(QObject):
         active_provider = config.get("llm", {}).get("active_provider", "gemini")
         for prov, action in self.provider_actions.items():
             action.setChecked(prov == active_provider)
+
+        # Command Palette Action Label
+        cp_key = config.get("command_palette", {}).get("key", "ctrl+shift+p")
+        formatted_hotkey = "+".join(p.strip().capitalize() for p in cp_key.split("+"))
+        self.palette_action.setText(f"Command Palette ({formatted_hotkey})...")
+
+    def _open_command_palette(self) -> None:
+        if hasattr(self, "command_palette") and self.command_palette:
+            self.command_palette.show()
 
     def _set_suspended(self) -> None:
         state_manager.set_state(JarvisState.SLEEPING)
