@@ -47,3 +47,10 @@ def test_load_config_auto_preset():
         assert cfg["_resolved_profile"] == "performance"
         assert cfg["stt"]["model_size"] == "base"
         assert cfg["stt"]["auto_unload_seconds"] == 0
+
+
+def test_command_palette_config_defaults():
+    with patch("builtins.open", mock_open(read_data="")):
+        cfg = load_config()
+        assert "command_palette" in cfg
+        assert cfg["command_palette"]["key"] == "ctrl+shift+p"

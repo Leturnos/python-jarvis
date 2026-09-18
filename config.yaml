@@ -23,6 +23,10 @@ voice_activation:
     key: "ctrl+alt"
     behavior: "hold"
 
+# Paleta de Comandos (UI)
+command_palette:
+  key: "ctrl+shift+p"                 # Atalho de teclado global (ex: ctrl+shift+p, ctrl+alt+p)
+
 # Sintetizador de Voz (TTS)
 tts:
   provider: "sapi5"

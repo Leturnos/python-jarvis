@@ -83,6 +83,9 @@ def load_config() -> dict[str, Any]:
             "device_index": None,
             "frames_per_buffer": 1280,
         },
+        "command_palette": {
+            "key": "ctrl+shift+p",
+        },
         "llm": {
             "active_provider": DEFAULT_PROVIDER,
             "timeout_seconds": 5.0,
