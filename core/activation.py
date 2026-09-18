@@ -169,14 +169,40 @@ class ActivationManager:
             vk_map = {
                 "ctrl": win32con.VK_CONTROL,
                 "control": win32con.VK_CONTROL,
+                "lctrl": win32con.VK_LCONTROL,
+                "rctrl": win32con.VK_RCONTROL,
                 "alt": win32con.VK_MENU,
                 "menu": win32con.VK_MENU,
+                "lalt": win32con.VK_LMENU,
+                "ralt": win32con.VK_RMENU,
+                "altgr": win32con.VK_RMENU,
                 "shift": win32con.VK_SHIFT,
+                "lshift": win32con.VK_LSHIFT,
+                "rshift": win32con.VK_RSHIFT,
                 "win": win32con.VK_LWIN,
                 "windows": win32con.VK_LWIN,
             }
 
             parts = [p.strip().lower() for p in self.ptt_key.split("+")]
+
+            # Special check for Windows AltGr: AltGr synthesizes VK_LCONTROL + VK_RMENU.
+            # If the user presses AltGr, both generic VK_CONTROL and VK_MENU report down.
+            # If the configured hotkey contains ctrl and alt (generic) but NOT altgr specifically,
+            # ensure that this isn't just an AltGr keypress (where VK_LMENU is not pressed).
+            if (
+                any(k in parts for k in ("ctrl", "control", "lctrl"))
+                and any(k in parts for k in ("alt", "menu", "lalt"))
+                and "altgr" not in parts
+            ):
+                is_altgr = bool(
+                    (win32api.GetAsyncKeyState(win32con.VK_RMENU) & 0x8000)
+                    and (win32api.GetAsyncKeyState(win32con.VK_LCONTROL) & 0x8000)
+                    and not (win32api.GetAsyncKeyState(win32con.VK_LMENU) & 0x8000)
+                    and not (win32api.GetAsyncKeyState(win32con.VK_RCONTROL) & 0x8000)
+                )
+                if is_altgr:
+                    return False
+
             all_pressed = True
             for part in parts:
                 vk = vk_map.get(part)
@@ -202,6 +228,17 @@ class ActivationManager:
                 f"Physical PTT hotkey check failed: {e}. Falling back to logical check."
             )
             try:
+                # In keyboard fallback, check for AltGr interference
+                if (
+                    ("ctrl" in self.ptt_key or "control" in self.ptt_key)
+                    and ("alt" in self.ptt_key or "menu" in self.ptt_key)
+                    and "altgr" not in self.ptt_key
+                ):
+                    if keyboard.is_pressed("alt gr") and not (
+                        keyboard.is_pressed("left alt")
+                        or keyboard.is_pressed("right ctrl")
+                    ):
+                        return False
                 return bool(keyboard.is_pressed(self.ptt_key))
             except Exception:
                 return False

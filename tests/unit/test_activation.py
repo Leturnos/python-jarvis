@@ -355,3 +355,34 @@ def test_is_hotkey_pressed_exception_handling(
 
     # Should not crash, just return False
     assert am.is_hotkey_pressed() is False
+
+
+@patch("core.activation.win32api")
+def test_is_hotkey_pressed_ignores_altgr_for_ctrl_alt(
+    mock_win32api: MagicMock, base_config: dict[str, Any]
+) -> None:
+    """Verifies that pressing AltGr alone (VK_LCONTROL + VK_RMENU) does not trigger ctrl+alt."""
+    am = ActivationManager(base_config)
+
+    # VK_LCONTROL = 162 (0xA2), VK_RMENU = 165 (0xA5)
+    # VK_CONTROL = 17, VK_MENU = 18
+    # When AltGr is pressed: VK_CONTROL and VK_MENU are logically down via AltGr,
+    # but VK_LMENU (164) and VK_RCONTROL (163) are NOT down.
+    def mock_get_async_key_state(vk: int) -> int:
+        if vk in (17, 18, 162, 165):
+            return 0x8000
+        return 0
+
+    mock_win32api.GetAsyncKeyState.side_effect = mock_get_async_key_state
+
+    # Should NOT trigger for AltGr
+    assert am.is_hotkey_pressed() is False
+
+    # Now simulate genuine Ctrl+Alt: Left Ctrl (162) + Left Alt (164)
+    def mock_genuine_ctrl_alt(vk: int) -> int:
+        if vk in (17, 18, 162, 164):
+            return 0x8000
+        return 0
+
+    mock_win32api.GetAsyncKeyState.side_effect = mock_genuine_ctrl_alt
+    assert am.is_hotkey_pressed() is True
