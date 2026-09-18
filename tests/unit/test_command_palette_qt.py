@@ -1,6 +1,7 @@
 import threading
 from unittest.mock import MagicMock, patch
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 from core.ui.command_palette_qt import QtCommandPalette, QtCommandPaletteDialog
@@ -100,3 +101,26 @@ def test_command_palette_run_action_resets_state_to_idle() -> None:
 
     # Must be reset to IDLE, not stuck in EXECUTING
     assert state_manager.get_state() == JarvisState.IDLE
+
+
+def test_command_palette_deactivate_behavior():
+    _ = QApplication.instance() or QApplication([])
+    palette = QtCommandPalette(MagicMock())
+    dialog = QtCommandPaletteDialog(palette)
+
+    # Simulate initial WindowDeactivate before ever being activated
+    dialog._is_active = False
+    deactivate_event = QEvent(QEvent.Type.WindowDeactivate)
+    handled = dialog.eventFilter(dialog, deactivate_event)
+    assert handled is False  # Does NOT swallow or hide
+
+    # Simulate WindowActivate
+    activate_event = QEvent(QEvent.Type.WindowActivate)
+    dialog.eventFilter(dialog, activate_event)
+    assert dialog._is_active is True
+
+    # Now a true WindowDeactivate should hide the dialog
+    with patch.object(dialog, "hide") as mock_hide:
+        dialog.eventFilter(dialog, deactivate_event)
+        mock_hide.assert_called_once()
+        assert dialog._is_active is False

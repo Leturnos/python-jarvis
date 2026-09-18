@@ -3,8 +3,9 @@ from typing import Any
 
 import pythoncom
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QCursor, QGuiApplication, QKeyEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QHBoxLayout,
     QListWidget,
@@ -27,6 +28,7 @@ class QtCommandPaletteDialog(QDialog):
         super().__init__(parent)
         self.palette_manager = palette_manager
         self.show_more_history = False
+        self._is_active = False
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -110,9 +112,15 @@ class QtCommandPaletteDialog(QDialog):
             elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self._execute_selected()
                 return True
+        elif event.type() == QEvent.Type.WindowActivate:
+            self._is_active = True
+            return False
         elif event.type() == QEvent.Type.WindowDeactivate:
-            self.hide()
-            return True
+            if self._is_active:
+                self.hide()
+                self._is_active = False
+                return True
+            return False
         return super().eventFilter(watched, event)
 
     def _move_selection(self, step: int) -> None:
@@ -324,6 +332,26 @@ class QtCommandPalette(QObject):
         if not self.dialog:
             self.dialog = QtCommandPaletteDialog(self)
         self.dialog._refresh_list()
+
+        # Center on active display where cursor is located (upper third for modern spotlight experience)
+        screen = QGuiApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            x = geo.x() + (geo.width() - self.dialog.width()) // 2
+            y = geo.y() + (geo.height() - self.dialog.height()) // 3
+            self.dialog.move(x, y)
+
+        self.dialog._is_active = False
         self.dialog.show()
+        self.dialog.raise_()
         self.dialog.activateWindow()
+
+        try:
+            import win32gui
+
+            win32gui.SetForegroundWindow(int(self.dialog.winId()))
+        except Exception as e:
+            logger.debug(f"Could not SetForegroundWindow on Command Palette: {e}")
+
+        self.dialog.search_bar.clear()
         self.dialog.search_bar.setFocus()
