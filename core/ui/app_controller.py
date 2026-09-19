@@ -121,42 +121,42 @@ class QtAppController(QObject):
         self.tray_menu.aboutToShow.connect(self._update_menu_states)
 
         # Dashboard Action
-        self.show_action = QAction("Show Dashboard", self)
+        self.show_action = QAction("Exibir Painel", self)
         self.show_action.triggered.connect(self.show_window)
         self.tray_menu.addAction(self.show_action)
 
         # Command Palette Action
-        self.palette_action = QAction("Command Palette...", self)
+        self.palette_action = QAction("Paleta de Comandos...", self)
         self.palette_action.triggered.connect(self._open_command_palette)
         self.tray_menu.addAction(self.palette_action)
 
         self.tray_menu.addSeparator()
 
         # State Actions
-        self.active_action = QAction("Listening (Active)", self)
+        self.active_action = QAction("Ouvindo (Ativo)", self)
         self.active_action.setCheckable(True)
         self.active_action.triggered.connect(lambda: self.tray_adapter.set_mute(0))
         self.tray_menu.addAction(self.active_action)
 
-        self.suspended_action = QAction("On (Suspended)", self)
+        self.suspended_action = QAction("Em Espera (Pausado)", self)
         self.suspended_action.setCheckable(True)
         self.suspended_action.triggered.connect(self._set_suspended)
         self.tray_menu.addAction(self.suspended_action)
 
         # Disable for Submenu
-        self.mute_menu = self.tray_menu.addMenu("Disable for...")
+        self.mute_menu = self.tray_menu.addMenu("Silenciar por...")
 
-        self.mute_30m = QAction("30 min", self)
+        self.mute_30m = QAction("30 minutos", self)
         self.mute_30m.setCheckable(True)
         self.mute_30m.triggered.connect(lambda: self.tray_adapter.set_mute(30))
         self.mute_menu.addAction(self.mute_30m)
 
-        self.mute_1h = QAction("1 hour", self)
+        self.mute_1h = QAction("1 hora", self)
         self.mute_1h.setCheckable(True)
         self.mute_1h.triggered.connect(lambda: self.tray_adapter.set_mute(60))
         self.mute_menu.addAction(self.mute_1h)
 
-        self.mute_3h = QAction("3 hours", self)
+        self.mute_3h = QAction("3 horas", self)
         self.mute_3h.setCheckable(True)
         self.mute_3h.triggered.connect(lambda: self.tray_adapter.set_mute(180))
         self.mute_menu.addAction(self.mute_3h)
@@ -164,7 +164,7 @@ class QtAppController(QObject):
         self.tray_menu.addSeparator()
 
         # LLM Provider Submenu
-        self.provider_menu = self.tray_menu.addMenu("LLM Provider")
+        self.provider_menu = self.tray_menu.addMenu("Provedor de IA")
         self.provider_actions = {}
         provider_labels = {
             "gemini": "Gemini",
@@ -184,7 +184,7 @@ class QtAppController(QObject):
         self.tray_menu.addSeparator()
 
         # Autostart Action
-        self.autostart_action = QAction("Autostart", self)
+        self.autostart_action = QAction("Iniciar com o Windows", self)
         self.autostart_action.setCheckable(True)
         self.autostart_action.triggered.connect(self._toggle_autostart)
         self.tray_menu.addAction(self.autostart_action)
@@ -192,7 +192,7 @@ class QtAppController(QObject):
         self.tray_menu.addSeparator()
 
         # Quit Action
-        quit_action = QAction("Quit", self)
+        quit_action = QAction("Sair", self)
         quit_action.triggered.connect(self.quit_app)
         self.tray_menu.addAction(quit_action)
 
@@ -233,7 +233,7 @@ class QtAppController(QObject):
         # Command Palette Action Label
         cp_key = config.get("command_palette", {}).get("key", "ctrl+shift+p")
         formatted_hotkey = "+".join(p.strip().capitalize() for p in cp_key.split("+"))
-        self.palette_action.setText(f"Command Palette ({formatted_hotkey})...")
+        self.palette_action.setText(f"Paleta de Comandos ({formatted_hotkey})...")
 
     def _open_command_palette(self) -> None:
         if hasattr(self, "command_palette") and self.command_palette:
@@ -251,7 +251,7 @@ class QtAppController(QObject):
         if not KeyringManager.validate_provider_key(provider):
             self.tray_icon.showMessage(
                 "Jarvis",
-                f"API Key for {provider} not configured.",
+                f"Chave de API do {provider.capitalize()} não configurada.",
                 QSystemTrayIcon.MessageIcon.Warning,
                 3000,
             )
@@ -284,7 +284,7 @@ class QtAppController(QObject):
             llm_agent.reinit_provider()
             self.tray_icon.showMessage(
                 "Jarvis",
-                f"IA alterada para {provider.capitalize()}.",
+                f"Provedor alterado para {provider.capitalize()}.",
                 QSystemTrayIcon.MessageIcon.Information,
                 3000,
             )

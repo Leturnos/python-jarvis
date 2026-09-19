@@ -26,7 +26,7 @@ def test_tray_menu_has_command_palette_action():
     controller.command_palette = MagicMock()
 
     assert hasattr(controller, "palette_action")
-    assert "Command Palette" in controller.palette_action.text()
+    assert "Paleta de Comandos" in controller.palette_action.text()
 
     # Verify _update_menu_states dynamically updates the hotkey label
     with patch(
@@ -34,10 +34,53 @@ def test_tray_menu_has_command_palette_action():
         {"command_palette": {"key": "ctrl+alt+k"}, "llm": {}},
     ):
         controller._update_menu_states()
-        assert "Command Palette (Ctrl+Alt+K)..." == controller.palette_action.text()
+        assert "Paleta de Comandos (Ctrl+Alt+K)..." == controller.palette_action.text()
 
     controller.palette_action.trigger()
     controller.command_palette.show.assert_called_once()
+
+
+def test_tray_menu_actions_and_labels_in_portuguese():
+    app = QApplication.instance() or QApplication([])
+    controller = QtAppController(app, MagicMock(), MagicMock())
+
+    # Check primary actions
+    assert controller.show_action.text() == "Exibir Painel"
+    assert "Paleta de Comandos" in controller.palette_action.text()
+    assert controller.active_action.text() == "Ouvindo (Ativo)"
+    assert controller.suspended_action.text() == "Em Espera (Pausado)"
+    assert controller.autostart_action.text() == "Iniciar com o Windows"
+
+    # Check quit action
+    quit_actions = [a for a in controller.tray_menu.actions() if a.text() == "Sair"]
+    assert len(quit_actions) == 1
+
+    # Check mute submenu and options
+    assert controller.mute_menu.title() == "Silenciar por..."
+    assert controller.mute_30m.text() == "30 minutos"
+    assert controller.mute_1h.text() == "1 hora"
+    assert controller.mute_3h.text() == "3 horas"
+
+    # Check provider submenu
+    assert controller.provider_menu.title() == "Provedor de IA"
+
+
+def test_switch_provider_missing_key_notification_in_portuguese():
+    app = QApplication.instance() or QApplication([])
+    controller = QtAppController(app, MagicMock(), MagicMock())
+    controller.tray_adapter.mute_until = 0.0
+    controller.tray_icon.showMessage = MagicMock()
+
+    with patch(
+        "core.ui.app_controller.KeyringManager.validate_provider_key",
+        return_value=False,
+    ):
+        controller._switch_provider("openai")
+
+    controller.tray_icon.showMessage.assert_called_once()
+    args, _ = controller.tray_icon.showMessage.call_args
+    assert args[0] == "Jarvis"
+    assert args[1] == "Chave de API do Openai não configurada."
 
 
 def test_start_command_palette_uses_configured_hotkey():
