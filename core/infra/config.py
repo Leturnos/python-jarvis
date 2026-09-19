@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from core.infra.logger_config import logger
 from core.infra.presets import PRESETS, detect_recommended_preset
 from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
+from core.shared.utils import get_app_root
 
 load_dotenv()
 
@@ -37,8 +38,9 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
 
 def load_config() -> dict[str, Any]:
     """Loads application configuration, applying performance presets and config.yaml overrides."""
+    yaml_path = get_app_root() / "config.yaml"
     try:
-        with open("config.yaml", encoding="utf-8") as f:
+        with open(yaml_path, encoding="utf-8") as f:
             config_raw = yaml.safe_load(f) or {}
             user_config = cast(dict[str, Any], expand_env_vars(config_raw))
     except Exception as e:

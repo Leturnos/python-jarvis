@@ -15,6 +15,7 @@ from core.infra.logger_config import logger
 from core.llm import LiteLLMProvider
 from core.runtime.state import JarvisState, state_manager
 from core.shared.utils import (
+    get_app_root,
     get_resources_dir,
     is_autostart_enabled_check,
     manage_autostart,
@@ -25,8 +26,8 @@ from core.ui.voice_overlay import VoiceOverlayHUD
 
 
 def update_yaml_active_provider(provider_name: str) -> None:
-    yaml_path = "config.yaml"
-    if not os.path.exists(yaml_path):
+    yaml_path = get_app_root() / "config.yaml"
+    if not yaml_path.exists():
         return
     with open(yaml_path, encoding="utf-8") as f:
         lines = f.readlines()

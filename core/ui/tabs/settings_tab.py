@@ -15,6 +15,7 @@ from qfluentwidgets import InfoBar
 from core.infra.config import config
 from core.infra.keyring_manager import KeyringManager
 from core.infra.presets import detect_recommended_preset, get_system_hardware_info
+from core.shared.utils import get_app_root
 
 
 class SettingsTab(QWidget):
@@ -128,10 +129,11 @@ class SettingsTab(QWidget):
     def _apply_and_restart(self) -> None:
         new_prof = self.PROFILES_ORDER[self.slider.value()]
         try:
-            with open("config.yaml", encoding="utf-8") as f:
+            yaml_path = get_app_root() / "config.yaml"
+            with open(yaml_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
             data["performance_profile"] = new_prof
-            with open("config.yaml", "w", encoding="utf-8") as f:
+            with open(yaml_path, "w", encoding="utf-8") as f:
                 yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
 
             InfoBar.success(

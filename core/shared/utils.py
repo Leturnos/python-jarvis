@@ -2,6 +2,7 @@ import ctypes
 import functools
 import os
 import re
+import sys
 import time
 import winreg
 from collections.abc import Callable
@@ -12,7 +13,16 @@ import win32com.client
 from PIL import Image, ImageDraw
 
 from core.infra.logger_config import logger
-from core.persistence.history_db import history_manager
+
+# Lazy reference to avoid circular import: config -> utils -> history_db -> config
+history_manager: Any = None
+
+
+def get_app_root() -> Path:
+    """Returns the base application directory whether running from source or frozen binary."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent.absolute()
+    return Path(__file__).parent.parent.parent.absolute()
 
 
 def trim_working_set() -> bool:
@@ -44,7 +54,14 @@ def time_it[F: Callable[..., Any]](func: F) -> F:
 
             # Log to database asynchronously
             try:
-                history_manager.log_metric(f"latency_{func.__name__}", duration)
+                hm = history_manager
+                if hm is None:
+                    from core.persistence.history_db import (
+                        history_manager as default_history_manager,
+                    )
+
+                    hm = default_history_manager
+                hm.log_metric(f"latency_{func.__name__}", duration)
             except Exception as e:
                 logger.error(f"Failed to enqueue performance metric: {e}")
 
@@ -76,9 +93,8 @@ def post_process_stt_text(text: str) -> str:
 
 def get_resources_dir() -> Path:
     """Returns and ensures the resources directory exists."""
-    project_dir = Path(__file__).parent.parent.parent.absolute()
-    resources_dir = project_dir / "resources"
-    resources_dir.mkdir(exist_ok=True)
+    resources_dir = get_app_root() / "resources"
+    resources_dir.mkdir(parents=True, exist_ok=True)
     return resources_dir
 
 
@@ -114,11 +130,6 @@ def manage_autostart(enable: bool = True) -> str:
     """Adds or removes Jarvis from Windows Startup using a Shortcut in the Registry."""
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
     app_name = "JarvisAI"
-    project_dir = Path(__file__).parent.parent.parent.absolute()
-    resources_dir = get_resources_dir()
-    shortcut_path = str(resources_dir / "Jarvis.lnk")
-    vbs_path = resources_dir / "launcher.vbs"
-    icon_path = generate_icon_if_needed()
 
     try:
         key = winreg.OpenKey(
@@ -126,6 +137,8 @@ def manage_autostart(enable: bool = True) -> str:
         )
 
         if not enable:
+            resources_dir = get_resources_dir()
+            vbs_path = resources_dir / "launcher.vbs"
             if vbs_path.exists():
                 vbs_path.unlink()
             try:
@@ -137,7 +150,23 @@ def manage_autostart(enable: bool = True) -> str:
                 winreg.CloseKey(key)
                 return "Jarvis was not in Startup."
 
-        # Enable: Create the VBS launcher to run uv silently
+        # Enable: If frozen binary, point directly to the executable
+        if getattr(sys, "frozen", False):
+            cmd = f'"{sys.executable}" --hidden'
+            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, cmd)
+            winreg.CloseKey(key)
+            logger.info(
+                f"Jarvis added to Startup Registry pointing to executable: {cmd}"
+            )
+            return "Jarvis successfully added to Startup!"
+
+        # Enable: Create the VBS launcher to run uv silently in dev mode
+        project_dir = get_app_root()
+        resources_dir = get_resources_dir()
+        shortcut_path = str(resources_dir / "Jarvis.lnk")
+        vbs_path = resources_dir / "launcher.vbs"
+        icon_path = generate_icon_if_needed()
+
         vbs_content = f"""Set objShell = WScript.CreateObject("WScript.Shell")
 objShell.CurrentDirectory = "{str(project_dir)}"
 objShell.Run "uv run main.py --hidden", 0, False
@@ -185,3 +214,11 @@ def is_autostart_enabled_check() -> bool:
         return False
     except Exception:
         return False
+
+
+try:
+    from core.persistence.history_db import history_manager as _hm
+
+    history_manager = _hm
+except ImportError:
+    pass

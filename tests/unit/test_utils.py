@@ -1,8 +1,10 @@
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 from core.shared.utils import (
     generate_icon_if_needed,
+    get_app_root,
     get_resources_dir,
     is_autostart_enabled_check,
     manage_autostart,
@@ -68,6 +70,21 @@ def test_time_it_exception_handled():
         )
 
 
+def test_get_app_root_development():
+    root = get_app_root()
+    assert isinstance(root, Path)
+    assert (root / "core").exists() or (root / "config.yaml").exists()
+
+
+def test_get_app_root_frozen():
+    with (
+        patch.object(sys, "frozen", True, create=True),
+        patch.object(sys, "executable", r"C:\Jarvis\Jarvis.exe"),
+    ):
+        root = get_app_root()
+        assert root == Path(r"C:\Jarvis")
+
+
 def test_get_resources_dir():
     # Robust test decoupled from implementation details (such as the number of chained .parent calls).
     # Since the get_resources_dir function is idempotent and safe (uses mkdir(exist_ok=True)), we can
@@ -121,58 +138,83 @@ def test_generate_icon_if_needed_not_exists():
 
 
 @patch("core.shared.utils.winreg")
+def test_manage_autostart_frozen_mode(mock_winreg):
+    with (
+        patch.object(sys, "frozen", True, create=True),
+        patch.object(sys, "executable", r"C:\Jarvis\Jarvis.exe"),
+        patch("builtins.open") as mock_open_file,
+    ):
+        mock_key = MagicMock()
+        mock_winreg.OpenKey.return_value = mock_key
+
+        msg = manage_autostart(enable=True)
+
+        assert "successfully added to Startup" in msg
+        mock_winreg.SetValueEx.assert_called_once_with(
+            mock_key,
+            "JarvisAI",
+            0,
+            mock_winreg.REG_SZ,
+            r'"C:\Jarvis\Jarvis.exe" --hidden',
+        )
+        mock_winreg.CloseKey.assert_called_once_with(mock_key)
+        mock_open_file.assert_not_called()
+
+
+@patch("core.shared.utils.winreg")
 @patch("core.shared.utils.win32com.client.Dispatch")
 @patch("core.shared.utils.get_resources_dir")
 @patch("core.shared.utils.generate_icon_if_needed")
 @patch("builtins.open", new_callable=mock_open)
-def test_manage_autostart_enable(
+def test_manage_autostart_dev_mode(
     mock_file_open, mock_gen_icon, mock_get_resources, mock_dispatch, mock_winreg
 ):
-    mock_gen_icon.return_value = "fake_icon.ico"
+    with patch.object(sys, "frozen", False, create=True):
+        mock_gen_icon.return_value = "fake_icon.ico"
 
-    mock_res_dir = MagicMock()
-    mock_vbs_path = MagicMock()
-    mock_vbs_path.exists.return_value = True
-    mock_shortcut_path = MagicMock()
-    mock_shortcut_path.__str__.return_value = "fake_shortcut.lnk"
+        mock_res_dir = MagicMock()
+        mock_vbs_path = MagicMock()
+        mock_vbs_path.exists.return_value = True
+        mock_shortcut_path = MagicMock()
+        mock_shortcut_path.__str__.return_value = "fake_shortcut.lnk"
 
-    mock_res_dir.__truediv__.side_effect = lambda x: (
-        mock_vbs_path if "vbs" in x else mock_shortcut_path
-    )
-    mock_get_resources.return_value = mock_res_dir
+        mock_res_dir.__truediv__.side_effect = lambda x: (
+            mock_vbs_path if "vbs" in x else mock_shortcut_path
+        )
+        mock_get_resources.return_value = mock_res_dir
 
-    mock_shell = MagicMock()
-    mock_shortcut = MagicMock()
-    mock_shell.CreateShortCut.return_value = mock_shortcut
-    mock_dispatch.return_value = mock_shell
+        mock_shell = MagicMock()
+        mock_shortcut = MagicMock()
+        mock_shell.CreateShortCut.return_value = mock_shortcut
+        mock_dispatch.return_value = mock_shell
 
-    mock_key = MagicMock()
-    mock_winreg.OpenKey.return_value = mock_key
+        mock_key = MagicMock()
+        mock_winreg.OpenKey.return_value = mock_key
 
-    msg = manage_autostart(enable=True)
+        msg = manage_autostart(enable=True)
 
-    assert "successfully added to Startup" in msg
+        assert "successfully added to Startup" in msg
 
-    # 1. Verify if mock_dispatch was correctly initialized with WScript.Shell
-    mock_dispatch.assert_called_once_with("WScript.Shell")
+        # 1. Verify if mock_dispatch was correctly initialized with WScript.Shell
+        mock_dispatch.assert_called_once_with("WScript.Shell")
 
-    # 2. Verify if the correct shortcut was created and saved
-    mock_shell.CreateShortCut.assert_called_once_with("fake_shortcut.lnk")
-    mock_shortcut.save.assert_called_once()
+        # 2. Verify if the correct shortcut was created and saved
+        mock_shell.CreateShortCut.assert_called_once_with("fake_shortcut.lnk")
+        mock_shortcut.save.assert_called_once()
 
-    # 3. Verify if the correct registry keys were set in the Windows Registry
-    mock_winreg.SetValueEx.assert_called_once_with(
-        mock_key, "JarvisAI", 0, mock_winreg.REG_SZ, '"fake_shortcut.lnk"'
-    )
-    mock_winreg.CloseKey.assert_called_once_with(mock_key)
+        # 3. Verify if the correct registry keys were set in the Windows Registry
+        mock_winreg.SetValueEx.assert_called_once_with(
+            mock_key, "JarvisAI", 0, mock_winreg.REG_SZ, '"fake_shortcut.lnk"'
+        )
+        mock_winreg.CloseKey.assert_called_once_with(mock_key)
 
-    # 4. Verify the exact content written to launcher.vbs
-    mock_file_open.assert_called_once()
-    write_calls = mock_file_open().write.call_args_list
-    assert len(write_calls) == 1
-    written_content = write_calls[0][0][0]
-    assert 'Set objShell = WScript.CreateObject("WScript.Shell")' in written_content
-    assert "uv run main.py --hidden" in written_content
+        # 4. Verify the exact content written to launcher.vbs
+        mock_file_open.assert_called_once()
+        write_calls = mock_file_open().write.call_args_list
+        assert len(write_calls) == 1
+        written_content = write_calls[0][0][0]
+        assert 'Set objShell = WScript.CreateObject("WScript.Shell")' in written_content
+        assert "uv run main.py --hidden" in written_content
 
 
 @patch("core.shared.utils.winreg")
