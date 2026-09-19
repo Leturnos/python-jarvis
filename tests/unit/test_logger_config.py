@@ -1,6 +1,7 @@
 import logging
 import os
 from logging.handlers import RotatingFileHandler
+from unittest.mock import patch
 
 import pytest
 
@@ -92,3 +93,25 @@ def test_rotation_actually_occurs(tmp_path):
     # Assert that rotation occurred and backup file exists
     assert os.path.exists(str(log_file))
     assert os.path.exists(str(tmp_path / "rotation_test.log.1"))
+
+
+def test_setup_logger_uses_get_app_root_for_default_dir(tmp_path):
+    fake_root = tmp_path / "fake_app_root"
+    fake_root.mkdir()
+    expected_log_dir = fake_root / "logs"
+
+    with patch(
+        "core.infra.logger_config.get_app_root", return_value=fake_root
+    ) as mock_get_root:
+        jarvis_logger = setup_logger(log_dir=None)
+        mock_get_root.assert_called()
+
+        rotating_handlers = [
+            h for h in jarvis_logger.handlers if isinstance(h, RotatingFileHandler)
+        ]
+        assert len(rotating_handlers) == 1
+        handler = rotating_handlers[0]
+        normalized_path = os.path.normpath(handler.baseFilename)
+        assert os.path.dirname(normalized_path) == str(expected_log_dir)
+        assert os.path.basename(normalized_path) == "jarvis.log"
+        assert expected_log_dir.exists()

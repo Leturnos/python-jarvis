@@ -15,6 +15,7 @@ from qfluentwidgets import InfoBar, LineEdit
 
 from core.infra.config import config
 from core.infra.keyring_manager import KeyringManager
+from core.infra.logger_config import logger
 from core.infra.presets import detect_recommended_preset, get_system_hardware_info
 from core.shared.utils import get_app_root
 
@@ -172,6 +173,17 @@ class SettingsTab(QWidget):
             f"A chave para {prov.capitalize()} foi salva no Keyring com sucesso!",
             parent=self,
         )
+        active_prov = config.get("llm", {}).get("active_provider", "gemini")
+        if prov == active_prov:
+            try:
+                from core.ai.llm_agent import llm_agent
+
+                llm_agent.reinit_provider()
+                logger.info(
+                    f"Reinitialized LLM provider for active provider '{prov}' after key update."
+                )
+            except Exception as e:
+                logger.warning(f"Could not reinitialize LLM provider immediately: {e}")
 
     def _validate_key(self) -> None:
         idx = self.provider_combo.currentIndex()

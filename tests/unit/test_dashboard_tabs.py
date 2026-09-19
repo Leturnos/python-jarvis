@@ -135,3 +135,49 @@ def test_settings_tab_save_key_empty(mock_set_secret, mock_warning):
         "Por favor, digite ou cole uma chave válida.",
         parent=tab,
     )
+
+
+@patch("core.ai.llm_agent.llm_agent.reinit_provider")
+@patch("core.ui.tabs.settings_tab.InfoBar.success")
+@patch("core.ui.tabs.settings_tab.KeyringManager.set_secret")
+def test_settings_tab_save_key_reinitializes_active_provider(
+    mock_set_secret, mock_success, mock_reinit
+):
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    with patch(
+        "core.ui.tabs.settings_tab.config", {"llm": {"active_provider": "gemini"}}
+    ):
+        tab.provider_combo.setCurrentIndex(tab.providers.index("gemini"))
+        tab.api_key_input.setText("gemini-test-key")
+        tab.save_key_btn.click()
+
+        mock_set_secret.assert_called_once_with(
+            "python-jarvis",
+            "GEMINI_API_KEY",
+            "gemini-test-key",
+        )
+        mock_reinit.assert_called_once()
+
+    # When saving for a different provider, reinit_provider should not be called
+    mock_reinit.reset_mock()
+    mock_set_secret.reset_mock()
+    with patch(
+        "core.ui.tabs.settings_tab.config", {"llm": {"active_provider": "gemini"}}
+    ):
+        tab.provider_combo.setCurrentIndex(tab.providers.index("openai"))
+        tab.api_key_input.setText("openai-test-key")
+        tab.save_key_btn.click()
+
+        mock_set_secret.assert_called_once_with(
+            "python-jarvis",
+            "OPENAI_API_KEY",
+            "openai-test-key",
+        )
+        mock_reinit.assert_not_called()

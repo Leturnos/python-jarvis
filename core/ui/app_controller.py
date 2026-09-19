@@ -338,6 +338,12 @@ class QtAppController(QObject):
     def quit_app(self) -> None:
         logger.info("Quitting Jarvis application from tray menu...")
         try:
+            if hasattr(self, "tray_icon") and self.tray_icon:
+                self.tray_icon.hide()
+        except Exception:
+            pass
+
+        try:
             if self.stop_event:
                 self.stop_event.set()
         except Exception:
@@ -372,12 +378,6 @@ class QtAppController(QObject):
             if hasattr(self, "main_window") and self.main_window:
                 self.main_window.hide()
                 self.main_window.close()
-        except Exception:
-            pass
-
-        try:
-            if hasattr(self, "tray_icon") and self.tray_icon:
-                self.tray_icon.hide()
         except Exception:
             pass
 

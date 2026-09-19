@@ -121,3 +121,31 @@ def test_app_controller_onboarding_mode():
         args, kwargs = mock_warning.call_args
         assert args[0] == "Bem-vindo ao Jarvis!"
         assert kwargs["parent"] == controller.main_window.settings_tab
+
+
+def test_quit_app_hides_tray_icon_first():
+    app = QApplication.instance() or QApplication([])
+    controller = QtAppController(app, MagicMock(), MagicMock())
+    call_order: list[str] = []
+
+    controller.tray_icon.hide = MagicMock(
+        side_effect=lambda: call_order.append("tray_hide")
+    )
+    if controller.stop_event is None:
+        controller.stop_event = MagicMock()
+    controller.stop_event.set = MagicMock(
+        side_effect=lambda: call_order.append("stop_event_set")
+    )
+    controller.voice_overlay.hide = MagicMock(
+        side_effect=lambda: call_order.append("voice_overlay_hide")
+    )
+    controller.main_window.hide = MagicMock(
+        side_effect=lambda: call_order.append("main_window_hide")
+    )
+
+    with patch("os._exit") as mock_exit:
+        controller.quit_app()
+        mock_exit.assert_called_once_with(0)
+
+    assert len(call_order) > 0
+    assert call_order[0] == "tray_hide"
