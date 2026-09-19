@@ -18,3 +18,19 @@ def test_voice_overlay_state_update():
 
     assert hud.isVisible() is True
     assert hud.status_label.text() == "Ouvindo..."
+
+
+def test_voice_overlay_initial_and_ready():
+    _ = QApplication.instance() or QApplication([])
+    hud = VoiceOverlayHUD()
+
+    assert hud.status_label.text() == "Jarvis Pronto"
+
+    snapshot = {
+        "status": "Ready",
+        "score": 0.0,
+        "volume": 0,
+        "state": JarvisState.IDLE,
+    }
+    hud.update_from_snapshot(snapshot)
+    assert hud.status_label.text() == "Pronto"

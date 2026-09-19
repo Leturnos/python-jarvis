@@ -15,7 +15,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, ui_adapter: Any) -> None:
         super().__init__()
-        self.setWindowTitle("Jarvis Dashboard")
+        self.setWindowTitle("Painel do Jarvis")
         self.resize(640, 480)
 
         central_widget = QWidget()
@@ -31,20 +31,20 @@ class MainWindow(QMainWindow):
         self.history_tab = HistoryTab(self)
         self.settings_tab = SettingsTab(self)
 
-        self._add_tab(self.status_tab, "Status")
-        self._add_tab(self.history_tab, "History")
-        self._add_tab(self.settings_tab, "Settings")
+        self._add_tab(self.status_tab, "status", "Status")
+        self._add_tab(self.history_tab, "history", "Histórico")
+        self._add_tab(self.settings_tab, "settings", "Configurações")
 
         layout.addWidget(self.pivot)
         layout.addWidget(self.stacked_widget)
 
-        self.pivot.setCurrentItem("Status")
+        self.pivot.setCurrentItem("status")
         ui_adapter.visual_state_updated.connect(self._on_state_updated)
 
-    def _add_tab(self, widget: QWidget, title: str) -> None:
+    def _add_tab(self, widget: QWidget, route_key: str, title: str) -> None:
         self.stacked_widget.addWidget(widget)
         self.pivot.addItem(
-            routeKey=title,
+            routeKey=route_key,
             text=title,
             onClick=lambda: self.stacked_widget.setCurrentWidget(widget),
         )

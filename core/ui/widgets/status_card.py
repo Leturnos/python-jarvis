@@ -13,13 +13,13 @@ def get_mode_badge_info(
     """Returns badge text and tooltip description for active mode and state."""
     if current_state == JarvisState.SLEEPING:
         return (
-            "Sleeping (Dormindo)",
+            "Dormindo (Pausado)",
             "Jarvis está em modo de descanso para economizar recursos. Use a bandeja para acordar.",
         )
     if current_state == JarvisState.MUTED:
         return (
-            "Muted (Silenciado)",
-            "Jarvis está silenciado. Clique para reativar o microfone.",
+            "Silenciado",
+            "Jarvis está silenciado. Clique na bandeja para reativar o microfone.",
         )
 
     if not shortcut:
@@ -40,20 +40,20 @@ def get_mode_badge_info(
 
     mode_map = {
         "push_to_talk": (
-            f"Push-to-Talk ({formatted_shortcut})",
+            f"Aperte para Falar ({formatted_shortcut})",
             f"Pressione e segure {formatted_shortcut} para falar.",
         ),
         "always_listening": (
-            "Always Listening (Voz)",
+            "Ativação por Voz Contínua",
             "Ouvindo continuamente a frase 'Hey Jarvis'.",
         ),
         "hybrid": (
-            f"Hybrid (Voz + {formatted_shortcut})",
+            f"Híbrido (Voz ou {formatted_shortcut})",
             f"Ativo por palavra de ativação 'Hey Jarvis' ou atalho {formatted_shortcut}.",
         ),
-        "disabled": ("Disabled (Desativado)", "Ativação de voz desativada."),
+        "disabled": ("Desativado", "Ativação de voz desativada."),
     }
-    return mode_map.get(activation_mode, ("Ready", "Assistente pronto."))
+    return mode_map.get(activation_mode, ("Pronto", "Assistente pronto."))
 
 
 class StatusCardWidget(SimpleCardWidget):
@@ -64,25 +64,25 @@ class StatusCardWidget(SimpleCardWidget):
         self.layout.setContentsMargins(20, 20, 20, 20)
         self.layout.setSpacing(10)
 
-        self.title = TitleLabel("Jarvis Status")
+        self.title = TitleLabel("Status do Jarvis")
         self.layout.addWidget(self.title)
 
-        self.wakeword_label = BodyLabel(f"Listening for: {wakeword_name}")
+        self.wakeword_label = BodyLabel(f"Palavra de ativação: {wakeword_name}")
         self.wakeword_label.setObjectName("WakeWordLabel")
         self.layout.addWidget(self.wakeword_label)
 
-        self.mode_label = BodyLabel("Mode: Initializing...")
+        self.mode_label = BodyLabel("Modo: Inicializando...")
         self.mode_label.setObjectName("ModeLabel")
         self.layout.addWidget(self.mode_label)
 
-        self.state_label = BodyLabel("State: IDLE")
+        self.state_label = BodyLabel("Estado: Pronto")
         self.state_label.setObjectName("StateLabel")
         self.layout.addWidget(self.state_label)
 
-        self.status_label = BodyLabel("Status: Initializing...")
+        self.status_label = BodyLabel("Status: Inicializando...")
         self.layout.addWidget(self.status_label)
 
-        self.score_label = BodyLabel("Wake Word Score: 0.00")
+        self.score_label = BodyLabel("Pontuação da Escuta: 0.00")
         self.layout.addWidget(self.score_label)
 
         self.vol_progress = ProgressBar()
@@ -91,19 +91,32 @@ class StatusCardWidget(SimpleCardWidget):
         self.layout.addWidget(self.vol_progress)
 
     def update_from_snapshot(self, snapshot: dict[str, Any]) -> None:
-        self.status_label.setText(f"Status: {snapshot['status']}")
-        self.score_label.setText(f"Wake Word Score: {snapshot['score']:.2f}")
+        raw_status = snapshot.get("status", "")
+        status = "Pronto" if raw_status == "Ready" else raw_status
+        self.status_label.setText(f"Status: {status}")
+        self.score_label.setText(f"Pontuação da Escuta: {snapshot['score']:.2f}")
         self.vol_progress.setValue(snapshot["volume"])
 
         # Mode & Tooltip update
         activation_mode = snapshot.get("mode", "hybrid")
         state = snapshot.get("state", JarvisState.IDLE)
         badge_text, tooltip = get_mode_badge_info(activation_mode, state)
-        self.mode_label.setText(f"Mode: {badge_text}")
+        self.mode_label.setText(f"Modo: {badge_text}")
         self.mode_label.setToolTip(tooltip)
 
         # State Colors handling
-        self.state_label.setText(f"State: {state.name}")
+        state_names_pt = {
+            JarvisState.IDLE: "Pronto (Em espera)",
+            JarvisState.LISTENING: "Ouvindo...",
+            JarvisState.THINKING: "Processando...",
+            JarvisState.CONFIRMING_DRY_RUN: "Aguardando Confirmação",
+            JarvisState.EXECUTING: "Executando...",
+            JarvisState.MUTED: "Silenciado",
+            JarvisState.SLEEPING: "Dormindo (Pausado)",
+            JarvisState.ERROR: "Erro",
+        }
+        state_text = state_names_pt.get(state, state.name)
+        self.state_label.setText(f"Estado: {state_text}")
 
         state_colors = {
             "IDLE": "#00ff00",

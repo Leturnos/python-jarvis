@@ -52,7 +52,7 @@ class VoiceOverlayHUD(QWidget):
         self.icon_label = QLabel("🎙️", self)
         layout.addWidget(self.icon_label)
 
-        self.status_label = QLabel("Jarvis Ready", self)
+        self.status_label = QLabel("Jarvis Pronto", self)
         layout.addWidget(self.status_label, stretch=1)
 
         self.vol_bar = QProgressBar(self)
@@ -78,6 +78,9 @@ class VoiceOverlayHUD(QWidget):
         state: JarvisState = snapshot.get("state", JarvisState.IDLE)
         status: str = snapshot.get("status", "Ready")
         volume: int = snapshot.get("volume", 0)
+
+        if status == "Ready":
+            status = "Pronto"
 
         self.status_label.setText(status)
         self.vol_bar.setValue(volume)
