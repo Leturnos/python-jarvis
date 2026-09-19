@@ -95,3 +95,29 @@ def test_start_command_palette_uses_configured_hotkey():
             mock_add_hotkey.assert_called_once_with(
                 "ctrl+shift+space", controller.command_palette.show
             )
+
+
+def test_app_controller_onboarding_mode():
+    app = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+    tray_adapter = MagicMock()
+
+    with patch("core.ui.app_controller.InfoBar.warning") as mock_warning:
+        controller = QtAppController(app, ui_adapter, tray_adapter, onboarding=True)
+
+        assert controller.main_window.isVisible() is True
+        assert (
+            controller.main_window.pivot.currentRouteKey() == "settings"
+            or controller.main_window.pivot.currentItem()
+            == controller.main_window.pivot.items["settings"]
+        )
+        assert (
+            controller.main_window.stacked_widget.currentWidget()
+            == controller.main_window.settings_tab
+        )
+        mock_warning.assert_called_once()
+        args, kwargs = mock_warning.call_args
+        assert args[0] == "Bem-vindo ao Jarvis!"
+        assert kwargs["parent"] == controller.main_window.settings_tab

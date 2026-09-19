@@ -1,18 +1,21 @@
 import queue
 import threading
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from core.infra.config import config
 from core.infra.logger_config import logger
 from core.shared.sqlite_base import SQLiteBase
+from core.shared.utils import get_app_root
 
 
 class HistoryManager(SQLiteBase):
     def __init__(self, db_path: str | None = None) -> None:
         if db_path is None:
             data_dir = config.get("paths", {}).get("data_dir", "data")
-            db_path = f"{data_dir}/history.db"
+            db_path = str(get_app_root() / data_dir / "history.db")
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
         SQLiteBase.__init__(self, db_path)
         self._init_db()

@@ -5,12 +5,13 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import InfoBar
+from qfluentwidgets import InfoBar, LineEdit
 
 from core.infra.config import config
 from core.infra.keyring_manager import KeyringManager
@@ -58,6 +59,15 @@ class SettingsTab(QWidget):
         if active in self.providers:
             self.provider_combo.setCurrentIndex(self.providers.index(active))
         form.addRow(QLabel("Provedor LLM Ativo:"), self.provider_combo)
+
+        self.api_key_input = LineEdit(self)
+        self.api_key_input.setPlaceholderText("Cole sua chave de API aqui...")
+        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow(QLabel("Nova Chave:"), self.api_key_input)
+
+        self.save_key_btn = QPushButton("Salvar Chave", self)
+        self.save_key_btn.clicked.connect(self._save_key)
+        form.addRow(self.save_key_btn)
 
         self.check_key_btn = QPushButton("Validar Chave do Provedor", self)
         self.check_key_btn.clicked.connect(self._validate_key)
@@ -142,6 +152,26 @@ class SettingsTab(QWidget):
             self.restart_requested.emit()
         except Exception as e:
             InfoBar.error("Erro", f"Falha ao salvar configuração: {e}", parent=self)
+
+    def _save_key(self) -> None:
+        idx = self.provider_combo.currentIndex()
+        prov = self.providers[idx]
+        key_val = self.api_key_input.text().strip()
+        if not key_val:
+            InfoBar.warning(
+                "Chave Vazia",
+                "Por favor, digite ou cole uma chave válida.",
+                parent=self,
+            )
+            return
+        secret_name = f"{prov.upper()}_API_KEY"
+        KeyringManager.set_secret("python-jarvis", secret_name, key_val)
+        self.api_key_input.clear()
+        InfoBar.success(
+            "Chave Salva",
+            f"A chave para {prov.capitalize()} foi salva no Keyring com sucesso!",
+            parent=self,
+        )
 
     def _validate_key(self) -> None:
         idx = self.provider_combo.currentIndex()

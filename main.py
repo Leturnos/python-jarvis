@@ -60,18 +60,16 @@ def main() -> None:
     api_key = KeyringManager.get_secret("python-jarvis", key_name)
     env_key = os.getenv(key_name)
 
+    onboarding_mode = False
     if env_key and (not api_key or env_key != api_key):
         logger.info(f"Migrating {key_name} from .env to secure Keyring.")
         KeyringManager.set_secret("python-jarvis", key_name, env_key)
         logger.info(f"Security tip: You can now remove {key_name} from your .env file.")
     elif not api_key and not env_key:
-        logger.error(f"ERROR: {key_name} not found in Keyring or .env!")
-        print(f"\n[!] Error: API Key for '{active_provider}' not configured.")
-        print(
-            f"[!] Please set {key_name} in your .env file to start the automatic migration."
+        logger.warning(
+            f"{key_name} not found in Keyring or .env. Starting Jarvis in onboarding mode."
         )
-        time.sleep(5)
-        sys.exit(1)
+        onboarding_mode = True
 
     mutex_name = r"Global\JarvisAI_SingleInstance_Mutex"
     mutex = CreateMutex(None, False, mutex_name)
@@ -136,7 +134,11 @@ def main() -> None:
     qdarktheme.setup_theme()
 
     app_controller = QtAppController(
-        app, ui_adapter, tray_adapter, stop_event=stop_event
+        app,
+        ui_adapter,
+        tray_adapter,
+        stop_event=stop_event,
+        onboarding=onboarding_mode,
     )
 
     if not is_minimized:

@@ -6,7 +6,7 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
-from qfluentwidgets import Theme, setTheme
+from qfluentwidgets import InfoBar, Theme, setTheme
 
 from core.ai.llm_agent import llm_agent
 from core.infra.config import config, reload_config
@@ -65,6 +65,7 @@ class QtAppController(QObject):
         ui_adapter: Any,
         tray_adapter: Any,
         stop_event: threading.Event | None = None,
+        onboarding: bool = False,
     ) -> None:
         super().__init__()
         self.provider_switch_done.connect(self._on_provider_switch_done)
@@ -94,6 +95,20 @@ class QtAppController(QObject):
                 self.main_window.setStyleSheet(f.read())
 
         self._setup_tray()
+
+        if onboarding:
+            self.show_window()
+            self.main_window.pivot.setCurrentItem("settings")
+            self.main_window.stacked_widget.setCurrentWidget(
+                self.main_window.settings_tab
+            )
+            active_provider = config.get("llm", {}).get("active_provider", "gemini")
+            InfoBar.warning(
+                "Bem-vindo ao Jarvis!",
+                f"Configure sua chave de API para o provedor '{active_provider.capitalize()}' para ativar o assistente.",
+                parent=self.main_window.settings_tab,
+                duration=10000,
+            )
 
     def start_command_palette(self, dispatcher: Any) -> QtCommandPalette:
         self.command_palette = QtCommandPalette(dispatcher)
