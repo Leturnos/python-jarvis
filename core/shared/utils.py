@@ -13,16 +13,10 @@ import win32com.client
 from PIL import Image, ImageDraw
 
 from core.infra.logger_config import logger
+from core.shared.paths import get_app_root
 
 # Lazy reference to avoid circular import: config -> utils -> history_db -> config
 history_manager: Any = None
-
-
-def get_app_root() -> Path:
-    """Returns the base application directory whether running from source or frozen binary."""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent.absolute()
-    return Path(__file__).parent.parent.parent.absolute()
 
 
 def trim_working_set() -> bool:

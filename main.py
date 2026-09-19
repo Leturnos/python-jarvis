@@ -41,8 +41,6 @@ from core.ui.security_ui import init_security_dialog_manager
 def qt_exception_hook(exctype: Any, value: Any, tb: Any) -> None:
     logger.error("Uncaught Qt Exception:", exc_info=(exctype, value, tb))
     try:
-        from core.ui.notifications import JarvisNotifier
-
         notifier = JarvisNotifier()
         notifier.notify(
             title="Jarvis - Erro Inesperado",

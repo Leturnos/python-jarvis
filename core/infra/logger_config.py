@@ -3,10 +3,7 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-# Pre-define Jarvis logger to prevent circular import when importing get_app_root from core.shared.utils
-logger = logging.getLogger("Jarvis")
-
-from core.shared.utils import get_app_root  # noqa: E402
+from core.shared.paths import get_app_root
 
 
 def setup_logger(log_dir: str | None = None) -> logging.Logger:

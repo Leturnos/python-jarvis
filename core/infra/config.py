@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from core.infra.logger_config import logger
 from core.infra.presets import PRESETS, detect_recommended_preset
 from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
-from core.shared.utils import get_app_root
+from core.shared.paths import get_app_root
 
 load_dotenv()
 
