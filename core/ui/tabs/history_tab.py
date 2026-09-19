@@ -19,13 +19,15 @@ class HistoryTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        self.refresh_btn = QPushButton("Refresh History", self)
+        self.refresh_btn = QPushButton("Atualizar Histórico", self)
         self.refresh_btn.clicked.connect(self.load_history)
         layout.addWidget(self.refresh_btn)
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["ID", "Timestamp", "Command", "Status"])
+        self.table.setHorizontalHeaderLabels(
+            ["ID", "Horário", "Comando / Pergunta", "Resultado"]
+        )
         self.table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.Stretch
         )

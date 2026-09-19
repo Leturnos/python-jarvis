@@ -6,6 +6,17 @@ from qfluentwidgets import BodyLabel, ProgressBar, SimpleCardWidget, TitleLabel
 from core.infra.config import config
 from core.runtime.state import JarvisState
 
+STATE_DISPLAY_NAMES_PT: dict[JarvisState, str] = {
+    JarvisState.IDLE: "Pronto (Em espera)",
+    JarvisState.LISTENING: "Ouvindo...",
+    JarvisState.THINKING: "Processando...",
+    JarvisState.CONFIRMING_DRY_RUN: "Aguardando Confirmação",
+    JarvisState.EXECUTING: "Executando...",
+    JarvisState.MUTED: "Silenciado",
+    JarvisState.SLEEPING: "Dormindo (Pausado)",
+    JarvisState.ERROR: "Erro",
+}
+
 
 def get_mode_badge_info(
     activation_mode: str, current_state: JarvisState, shortcut: str | None = None
@@ -105,17 +116,7 @@ class StatusCardWidget(SimpleCardWidget):
         self.mode_label.setToolTip(tooltip)
 
         # State Colors handling
-        state_names_pt = {
-            JarvisState.IDLE: "Pronto (Em espera)",
-            JarvisState.LISTENING: "Ouvindo...",
-            JarvisState.THINKING: "Processando...",
-            JarvisState.CONFIRMING_DRY_RUN: "Aguardando Confirmação",
-            JarvisState.EXECUTING: "Executando...",
-            JarvisState.MUTED: "Silenciado",
-            JarvisState.SLEEPING: "Dormindo (Pausado)",
-            JarvisState.ERROR: "Erro",
-        }
-        state_text = state_names_pt.get(state, state.name)
+        state_text = STATE_DISPLAY_NAMES_PT.get(state, state.name)
         self.state_label.setText(f"Estado: {state_text}")
 
         state_colors = {

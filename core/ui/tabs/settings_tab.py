@@ -147,13 +147,13 @@ class SettingsTab(QWidget):
         has_key = KeyringManager.validate_provider_key(prov)
         if has_key:
             InfoBar.success(
-                "API Key Status",
-                f"Key for {prov.capitalize()} is configured.",
+                "Chave de API",
+                f"A chave para {prov.capitalize()} está configurada.",
                 parent=self,
             )
         else:
             InfoBar.warning(
-                "API Key Status",
-                f"Key for {prov.capitalize()} is missing.",
+                "Chave de API",
+                f"A chave para {prov.capitalize()} não foi configurada.",
                 parent=self,
             )
