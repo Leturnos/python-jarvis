@@ -101,9 +101,18 @@ def build_bundle(spec_file: Path | None = None) -> bool:
     target_spec = spec_file or SPEC_FILE
     logger.info(f"Building Jarvis bundle using {target_spec}...")
 
-    pyinstaller_cmd = shutil.which("pyinstaller")
-    if pyinstaller_cmd:
-        cmd = [pyinstaller_cmd, str(target_spec.name), "--noconfirm", "--clean"]
+    venv_pyinstaller = Path(sys.executable).parent / (
+        "pyinstaller.exe" if sys.platform == "win32" else "pyinstaller"
+    )
+    if venv_pyinstaller.exists():
+        cmd = [str(venv_pyinstaller), str(target_spec.name), "--noconfirm", "--clean"]
+    elif shutil.which("pyinstaller"):
+        cmd = [
+            shutil.which("pyinstaller"),  # type: ignore[list-item]
+            str(target_spec.name),
+            "--noconfirm",
+            "--clean",
+        ]
     else:
         cmd = [
             sys.executable,

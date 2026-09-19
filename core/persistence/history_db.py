@@ -6,8 +6,8 @@ from typing import Any
 
 from core.infra.config import config
 from core.infra.logger_config import logger
+from core.shared.paths import get_app_root
 from core.shared.sqlite_base import SQLiteBase
-from core.shared.utils import get_app_root
 
 
 class HistoryManager(SQLiteBase):
