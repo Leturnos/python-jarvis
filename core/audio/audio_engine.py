@@ -52,28 +52,39 @@ def load_wakeword_model(
     wake_word_config = voice_act.get("wake_word", {})
     keyword = wake_word_config.get("keyword", "hey_jarvis")
 
-    # Pre-trained paths
+    # Pre-trained paths from openwakeword package
     pretrained_paths = openwakeword.get_pretrained_model_paths()
 
-    models_dir = config.get("paths", {}).get("models_dir", "models")
+    from core.shared.paths import get_app_root
+
+    models_dir_cfg = config.get("paths", {}).get("models_dir", "models")
+    models_dir = str(get_app_root() / models_dir_cfg)
     custom_paths = glob.glob(os.path.join(models_dir, "*.onnx"))
 
-    pretrained_paths + custom_paths
+    selected_paths: list[str] = []
+    loaded_names: list[str] = []
 
-    selected_paths = []
-    loaded_names = []
-
-    # Always load keyword
-    for p in pretrained_paths:
+    # 1. Look for the keyword model in custom_paths first
+    for p in custom_paths:
         if keyword in os.path.basename(p):
             selected_paths.append(p)
             loaded_names.append(keyword)
             break
 
-    # Load any user-provided models from 'models/' directory for offline shortcuts
+    # 2. If not found in custom_paths, look in openwakeword pretrained_paths
+    if not selected_paths:
+        for p in pretrained_paths:
+            if keyword in os.path.basename(p):
+                selected_paths.append(p)
+                loaded_names.append(keyword)
+                break
+
+    # 3. Load any other user-provided models from 'models/' directory for offline shortcuts
     for p in custom_paths:
+        if p in selected_paths:
+            continue
         name = os.path.splitext(os.path.basename(p))[0]
-        if name not in loaded_names:
+        if name not in loaded_names and keyword not in name:
             selected_paths.append(p)
             loaded_names.append(name)
 

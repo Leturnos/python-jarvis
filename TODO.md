@@ -58,10 +58,13 @@ Esta lista contém as tarefas técnicas necessárias para levar o Jarvis do esta
 - [x] **Memory Monitoring:** Monitorar o consumo de RAM da thread principal do OpenWakeWord e JarvisEngine em execuções prolongadas no background.
 
 ## 📦 Fase 6: Distribuição (Entregando o Produto)
-- [ ] **Compilação (.exe):** Usar `Nuitka` ou `PyInstaller` para transformar o projeto em um executável autônomo e otimizado.
-- [ ] **Bundle de Recursos:** Embutir modelos `.onnx`, arquivos de áudio e o ícone `.ico` dentro do binário final.
-- [ ] **Modo "Windowed":** Configurar o build para que o executável rode sem abrir a janela preta do console por padrão.
-- [ ] **Portable Mode:** Gerar build zipada que não exige privilégios de administrador nem instalação no sistema.
+- [x] **Compilação (.exe):** Implementado pipeline automatizado com PyInstaller (`scripts/build_exe.py` e `jarvis.spec`) gerando bundle autônomo em `dist/Jarvis/Jarvis.exe`.
+- [x] **Bundle de Recursos:** Modelos `.onnx`, plugins YAML, configurações e ícones embutidos na pasta do bundle de distribuição.
+- [x] **Modo "Windowed" (No Console):** Configuração `console=False` no spec garantindo inicialização puramente visual sem terminal preto.
+- [x] **Portable Mode:** Pasta portável pronta para execução imediata sem necessidade de instalação prévia de Python ou dependências.
+- [x] **Autostart Nativo:** Registro do Windows (`HKCU\...\Run`) apontando diretamente para `"{sys.executable}" --hidden`.
+- [x] **Onboarding Gráfico (First-Run):** Abertura automática das configurações com cadastro direto de chave de API no Keyring para evitar crashs silenciosos em computadores sem `.env`.
+- [x] **Localização Completa (PT-BR):** Menus de contexto da bandeja, painel principal, histórico de execuções e notificações 100% em português brasileiro.
 - [ ] **Instalador (MSI/EXE):** Criar um setup profissional (ex: Inno Setup) que configure o Autostart e atalhos automaticamente.
 - [ ] **Update Automático OTA:** Implementar a lógica de checagem de versão na inicialização e download automático da nova *release* (`.exe`), substituindo o binário na próxima inicialização.
 

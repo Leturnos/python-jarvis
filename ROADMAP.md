@@ -93,18 +93,20 @@ Este documento detalha as frentes de melhoria para transformar o Python Jarvis d
 
 ---
 
-## 📦 6. Distribuição e Empacotamento
+## 📦 6. Distribuição e Empacotamento (Parcialmente Concluído)
 *Facilitar a instalação e o uso por usuários que não possuem ambiente Python/UV configurado.*
 
-### 🔹 Compilação para Executável (.exe)
-- **Nuitka / PyInstaller:** Pesquisar e implementar a compilação do projeto para um único arquivo executável (binário estático). Preferência pelo `Nuitka` pela performance superior e proteção de código.
-- **Modo "Windowed" (No Console):** Configurar o binário para rodar como um aplicativo de janela nativo do Windows, eliminando a necessidade de uma janela de terminal visível por padrão.
-- **Resource Embedding:** Utilizar técnicas de inclusão de arquivos (Data Files) para embutir os modelos `.onnx` do OpenWakeWord, o ícone `icon.ico` e possíveis arquivos de áudio de resposta diretamente no `.exe`.
+### 🔹 Compilação para Executável (.exe) (Concluído)
+- **PyInstaller Pipeline (`scripts/build_exe.py` e `jarvis.spec`):** Automação de compilação criando um bundle portável autônomo em `dist/Jarvis/Jarvis.exe`.
+- **Modo "Windowed" (No Console):** Configurado `console=False` para rodar como aplicação visual pura, sem console de terminal.
+- **Resource Embedding:** Inclusão automática dos modelos `.onnx` do OpenWakeWord, plugins YAML, `config.yaml` e ícone da aplicação.
+- **Resolução Portável (`get_app_root`):** Suporte nativo a binários congelados (`sys.frozen`), permitindo execução a partir de qualquer pasta.
 
 ### 🔹 Instalação e Modos de Execução
+- **Portable Mode (Concluído):** Pasta de distribuição autossuficiente (`dist/Jarvis/`) que pode ser movida e executada sem permissões de administrador.
+- **Configuração de Registro Nativa (Concluído):** Gravação direta no Registro do Windows (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`) apontando para o `.exe` com o argumento `--hidden`.
+- **Onboarding Gráfico (Concluído):** Inicialização suave na aba de configurações com cadastro no Keyring para evitar falhas em máquinas sem `.env`.
 - **Setup Profissional (Inno Setup / Wix):** Criar um instalador que gerencie a pasta de instalação em `AppData` ou `Program Files`.
-- **Portable Mode:** Fornecer uma versão autossuficiente (como um pacote ZIP) permitindo rodar a aplicação sem instalador ou privilégios de administrador.
-- **Configuração de Registro:** Automatizar a criação da chave de `Run` no registro do Windows para garantir que o Autostart funcione mesmo se o usuário deletar o atalho manual.
 
 ### 🔹 Updates
 - **Auto-Update OTA (Over-The-Air):** Implementar um mecanismo silencioso (via GitHub Releases ou AWS S3) que baixe atualizações em segundo plano e reinicie a aplicação transparentemente.

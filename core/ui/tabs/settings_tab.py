@@ -5,16 +5,19 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import InfoBar
+from qfluentwidgets import InfoBar, LineEdit
 
 from core.infra.config import config
 from core.infra.keyring_manager import KeyringManager
+from core.infra.logger_config import logger
 from core.infra.presets import detect_recommended_preset, get_system_hardware_info
+from core.shared.utils import get_app_root
 
 
 class SettingsTab(QWidget):
@@ -57,6 +60,15 @@ class SettingsTab(QWidget):
         if active in self.providers:
             self.provider_combo.setCurrentIndex(self.providers.index(active))
         form.addRow(QLabel("Provedor LLM Ativo:"), self.provider_combo)
+
+        self.api_key_input = LineEdit(self)
+        self.api_key_input.setPlaceholderText("Cole sua chave de API aqui...")
+        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow(QLabel("Nova Chave:"), self.api_key_input)
+
+        self.save_key_btn = QPushButton("Salvar Chave", self)
+        self.save_key_btn.clicked.connect(self._save_key)
+        form.addRow(self.save_key_btn)
 
         self.check_key_btn = QPushButton("Validar Chave do Provedor", self)
         self.check_key_btn.clicked.connect(self._validate_key)
@@ -128,10 +140,11 @@ class SettingsTab(QWidget):
     def _apply_and_restart(self) -> None:
         new_prof = self.PROFILES_ORDER[self.slider.value()]
         try:
-            with open("config.yaml", encoding="utf-8") as f:
+            yaml_path = get_app_root() / "config.yaml"
+            with open(yaml_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
             data["performance_profile"] = new_prof
-            with open("config.yaml", "w", encoding="utf-8") as f:
+            with open(yaml_path, "w", encoding="utf-8") as f:
                 yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
 
             InfoBar.success(
@@ -140,6 +153,37 @@ class SettingsTab(QWidget):
             self.restart_requested.emit()
         except Exception as e:
             InfoBar.error("Erro", f"Falha ao salvar configuração: {e}", parent=self)
+
+    def _save_key(self) -> None:
+        idx = self.provider_combo.currentIndex()
+        prov = self.providers[idx]
+        key_val = self.api_key_input.text().strip()
+        if not key_val:
+            InfoBar.warning(
+                "Chave Vazia",
+                "Por favor, digite ou cole uma chave válida.",
+                parent=self,
+            )
+            return
+        secret_name = f"{prov.upper()}_API_KEY"
+        KeyringManager.set_secret("python-jarvis", secret_name, key_val)
+        self.api_key_input.clear()
+        InfoBar.success(
+            "Chave Salva",
+            f"A chave para {prov.capitalize()} foi salva no Keyring com sucesso!",
+            parent=self,
+        )
+        active_prov = config.get("llm", {}).get("active_provider", "gemini")
+        if prov == active_prov:
+            try:
+                from core.ai.llm_agent import llm_agent
+
+                llm_agent.reinit_provider()
+                logger.info(
+                    f"Reinitialized LLM provider for active provider '{prov}' after key update."
+                )
+            except Exception as e:
+                logger.warning(f"Could not reinitialize LLM provider immediately: {e}")
 
     def _validate_key(self) -> None:
         idx = self.provider_combo.currentIndex()

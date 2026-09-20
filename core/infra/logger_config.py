@@ -3,6 +3,8 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from core.shared.paths import get_app_root
+
 
 def setup_logger(log_dir: str | None = None) -> logging.Logger:
     """Configures the logging system for console and file output with rotation.
@@ -14,7 +16,7 @@ def setup_logger(log_dir: str | None = None) -> logging.Logger:
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     formatter = logging.Formatter(log_format)
 
-    project_root = Path(__file__).parent.parent.parent.absolute()
+    project_root = get_app_root()
 
     # Resolve log directory
     if log_dir is None:

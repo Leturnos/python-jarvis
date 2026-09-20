@@ -48,8 +48,12 @@ O projeto segue uma estrutura de domínios dentro do módulo `core/` para facili
 6. **Abstração LLM:**
    - **Regra:** Sempre prefira interagir com LLMs usando `BaseLLMProvider` / `LiteLLMProvider` em vez de chamadas diretas a APIs de fornecedores.
 7. **Idioma:**
-   - Interação com usuário: Português.
+   - Interação com usuário e textos de interface gráfica: Português do Brasil.
    - Código, comentários e documentação técnica: Inglês.
+8. **Resolução Portável de Caminhos (`get_app_root`):**
+   - **Regra:** Sempre use `core.shared.paths.get_app_root()` para resolver caminhos do projeto (arquivos `config.yaml`, pastas `models/`, `plugins/`, `resources/`, logs e bancos SQLite). Nunca use `os.getcwd()` nem caminhos relativos de `__file__` sem suporte a `sys.frozen`, pois o aplicativo deve funcionar perfeitamente quando compilado para binário único/one-folder.
+9. **Desacoplamento de Logs e Caminhos:**
+   - **Regra:** O módulo `core.shared.paths` não deve importar `logger` nem módulos de alto nível para evitar dependências circulares durante a inicialização do `setup_logger()`.
 
 ## 🧪 Testes
 - Rode os testes usando `uv run pytest`.
@@ -66,5 +70,11 @@ Sempre revise os arquivos `AGENTS.md` específicos em subdiretórios para obter 
 | Falha em teste de Wake Word | Detecção de tela cheia interferindo no ambiente de CI/Mock. | Mockar o `ActivationManager` em testes unitários do controller. |
 | AttributeError no `ActivationManager` no Boot | Propriedade `@property` de otimização inserida por engano no corpo do `__init__`, fazendo o construtor encerrar prematuramente e a UI fechar. | Manter decoradores `@property` fora do corpo do `__init__`. |
 | Congelamento do PC com Warp | `check_dead_silence()` reiniciando o PyAudio a cada 2.4s de silêncio (`rms < 0.1`) e `is_fullscreen()` detectando janelas maximizadas como jogos. | Validar `rms == 0.0` e checar o estilo Win32 `WS_CAPTION` no detector de tela cheia. |
+| Crash silencioso sem chave no boot do `.exe` | `main.py` executava `sys.exit(1)` no console quando nenhuma chave era encontrada; em binários `--noconsole`, o usuário não via erro algum. | **Onboarding Gráfico:** Entrar em `onboarding_mode`, abrir a janela principal na aba de Configurações e salvar chave via Keyring com re-init do LLM. |
+| Import circular entre logger e utils | `setup_logger()` precisava de `get_app_root()`, mas `utils.py` importava o logger no topo do módulo. | Isolar funções de caminho puras em `core/shared/paths.py` livre de imports de infraestrutura. |
+| Ícones fantasmas na bandeja do Windows | O processo encerrava antes do Windows processar a remoção do ícone da barra de tarefas. | Chamar `tray_icon.hide()` como primeiríssima instrução em `quit_app()`. |
+| Falha no Autostart do executável congelado | `manage_autostart()` gerava scripts VBS chamando `uv run main.py`, que não existem no PC do usuário final. | Gravar comando direto `"{sys.executable}" --hidden` no Registro do Windows quando `sys.frozen` for verdadeiro. |
+| `FileNotFoundError` em metadados LiteLLM | `litellm` necessita de arquivos `.json` de preços/contexto em tempo de execução, ausentes por padrão no PyInstaller. | Incluir dados de pacotes estáticos via `collect_data_files('litellm')` no `jarvis.spec`. |
+| `ValueError: Unknown encoding cl100k_base` no Tiktoken | `tiktoken` descobre plugins via `pkgutil.iter_modules`, que retorna vazio em binários congelados sem declaração explícita de submódulos. | Declarar `tiktoken`, `tiktoken_ext` e `tiktoken_ext.openai_public` em `hidden_imports` e coletar arquivos de extensão no `jarvis.spec`. |
 
 

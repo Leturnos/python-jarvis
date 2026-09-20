@@ -34,3 +34,7 @@ docs/superpowers/plans/
 
 # Worktrees
 .worktrees/
+
+# PyInstaller Build Artifacts
+build/
+dist/

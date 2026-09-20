@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import mock_open, patch
 
 import yaml
@@ -54,3 +55,18 @@ def test_command_palette_config_defaults():
         cfg = load_config()
         assert "command_palette" in cfg
         assert cfg["command_palette"]["key"] == "ctrl+shift+p"
+
+
+def test_load_config_uses_get_app_root():
+    with (
+        patch(
+            "core.infra.config.get_app_root",
+            return_value=Path("/test/app/root"),
+        ) as mock_root,
+        patch("builtins.open", mock_open(read_data="{}")) as mock_file,
+    ):
+        load_config()
+        mock_root.assert_called()
+        mock_file.assert_called_with(
+            Path("/test/app/root/config.yaml"), encoding="utf-8"
+        )

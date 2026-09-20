@@ -6,7 +6,7 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
-from qfluentwidgets import Theme, setTheme
+from qfluentwidgets import InfoBar, Theme, setTheme
 
 from core.ai.llm_agent import llm_agent
 from core.infra.config import config, reload_config
@@ -15,6 +15,7 @@ from core.infra.logger_config import logger
 from core.llm import LiteLLMProvider
 from core.runtime.state import JarvisState, state_manager
 from core.shared.utils import (
+    get_app_root,
     get_resources_dir,
     is_autostart_enabled_check,
     manage_autostart,
@@ -25,8 +26,8 @@ from core.ui.voice_overlay import VoiceOverlayHUD
 
 
 def update_yaml_active_provider(provider_name: str) -> None:
-    yaml_path = "config.yaml"
-    if not os.path.exists(yaml_path):
+    yaml_path = get_app_root() / "config.yaml"
+    if not yaml_path.exists():
         return
     with open(yaml_path, encoding="utf-8") as f:
         lines = f.readlines()
@@ -64,6 +65,7 @@ class QtAppController(QObject):
         ui_adapter: Any,
         tray_adapter: Any,
         stop_event: threading.Event | None = None,
+        onboarding: bool = False,
     ) -> None:
         super().__init__()
         self.provider_switch_done.connect(self._on_provider_switch_done)
@@ -93,6 +95,20 @@ class QtAppController(QObject):
                 self.main_window.setStyleSheet(f.read())
 
         self._setup_tray()
+
+        if onboarding:
+            self.show_window()
+            self.main_window.pivot.setCurrentItem("settings")
+            self.main_window.stacked_widget.setCurrentWidget(
+                self.main_window.settings_tab
+            )
+            active_provider = config.get("llm", {}).get("active_provider", "gemini")
+            InfoBar.warning(
+                "Bem-vindo ao Jarvis!",
+                f"Configure sua chave de API para o provedor '{active_provider.capitalize()}' para ativar o assistente.",
+                parent=self.main_window.settings_tab,
+                duration=10000,
+            )
 
     def start_command_palette(self, dispatcher: Any) -> QtCommandPalette:
         self.command_palette = QtCommandPalette(dispatcher)
@@ -322,6 +338,12 @@ class QtAppController(QObject):
     def quit_app(self) -> None:
         logger.info("Quitting Jarvis application from tray menu...")
         try:
+            if hasattr(self, "tray_icon") and self.tray_icon:
+                self.tray_icon.hide()
+        except Exception:
+            pass
+
+        try:
             if self.stop_event:
                 self.stop_event.set()
         except Exception:
@@ -356,12 +378,6 @@ class QtAppController(QObject):
             if hasattr(self, "main_window") and self.main_window:
                 self.main_window.hide()
                 self.main_window.close()
-        except Exception:
-            pass
-
-        try:
-            if hasattr(self, "tray_icon") and self.tray_icon:
-                self.tray_icon.hide()
         except Exception:
             pass
 

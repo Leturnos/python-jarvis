@@ -15,10 +15,12 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 - **`stt_engine.py`**: Wrapper para o modelo `faster-whisper` com suporte a lazy loading.
 - **`tts_engine.py`**: Engine de Text-to-Speech (SAPI5) com thread dedicada e fila de fala.
 
-### 🤖 Inteligência Artificial (`core/ai/`)
+### 🤖 Inteligência Artificial (`core/ai/` & `core/tools/`)
 - **`llm_agent.py`**: Interface com o provedor de LLM. *Regra:* Prompts devem impor saída JSON estrita.
 - **`command_resolver.py`**: Lógica de roteamento local (Match Exato e Fuzzy Match).
 - **`prompt_guard.py`**: Camada de segurança contra injeção de prompt e sanitização de saída.
+- **`conversation_memory.py`**: Memória conversacional multi-turn em janela deslizante para permitir perguntas de acompanhamento.
+- **`tools/`**: Ferramentas de pesquisa rápida (`weather_tool.py` com probabilidade de precipitação e `stock_tool.py` com cotações de mercado via Yahoo Finance).
 
 ### 🧠 Abstração e Cache de LLM (`core/llm/` & `core/cache/`)
 - **`llm/base.py`**: Definição de `BaseLLMProvider`.
@@ -58,15 +60,20 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 - **`persistence/history_db.py`**: Gerencia o SQLite `data/history.db` para auditoria.
 
 ### 💻 Interface de Usuário (`core/ui/`)
-- **`app_controller.py`**: Controlador central da UI baseado em PySide6 e integração do ciclo de vida da aplicação (inclusive `QSystemTrayIcon`).
-- **`main_window.py`**: Janela principal da interface gráfica PySide6.
+- **`app_controller.py`**: Controlador central da UI baseado em PySide6 e integração do ciclo de vida da aplicação (inclusive `QSystemTrayIcon` e modo Onboarding).
+- **`main_window.py`**: Janela principal com suporte a navegação por abas (`Pivot`).
+- **`tabs/`**: Abas modulares do painel:
+  - `history_tab.py`: Tabela de auditoria do histórico de execuções com busca e atualização.
+  - `settings_tab.py`: Painel de preferências, seleção de provedor LLM, gerenciamento de chaves via Keyring e autostart.
 - **`command_palette.py`**: Interface de entrada rápida via teclado (Spotlight-like) registrada via hotkey global.
 - **`security_ui.py`**: Diálogo modal PySide6 para autorização de comandos com nível de risco elevado.
 - **`notifications.py`**: Notificações nativas do Windows usando `plyer`.
+- **`voice_overlay.py`**: HUD visual flutuante com feedback de escuta do microfone em tempo real.
 - **`widgets/status_card.py`**: Widget personalizado para exibir o status atual do Jarvis.
 
 ### 🧱 Utilitários Compartilhados (`core/shared/`)
-- **`utils.py`**: Funções auxiliares (ex: `normalize_text`).
+- **`paths.py`**: Resolução portável de diretórios raiz (`get_app_root`) compatível com modo desenvolvimento e binários empacotados (`sys.frozen`). Não deve importar logger nem infraestrutura.
+- **`utils.py`**: Funções auxiliares (ex: `normalize_text`, `manage_autostart`).
 - **`errors.py`**: Definições de exceções (Technical vs Business).
 
 ## ⚠️ Considerações Importantes
@@ -74,3 +81,4 @@ Este diretório contém a lógica de negócios essencial e as integrações para
 - **Tratamento de Erros:** A degradação suave é fundamental. Falhas em IA não devem travar o sistema.
 - **Segurança:** O `risk_level` deve ser validado sempre no `dispatcher` antes da execução física.
 - **UI Desacoplada:** *Regra:* Mantenha lógica de negócios e orquestração fora das classes de UI (Widgets/Window). Toda comunicação entre a UI e o Core deve ser feita através do `AppController` ou do `JarvisTrayAdapter`.
+- **Caminhos Portáveis:** *Regra:* Nunca use caminhos absolutos nem assuma `cwd`. Use `get_app_root()` de `core.shared.paths` para localizar recursos em tempo de execução.
