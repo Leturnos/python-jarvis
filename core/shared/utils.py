@@ -7,7 +7,7 @@ import time
 import winreg
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import win32com.client
 from PIL import Image, ImageDraw
@@ -16,7 +16,12 @@ from core.infra.logger_config import logger
 from core.shared.paths import get_app_root
 
 # Lazy reference to avoid circular import: config -> utils -> history_db -> config
-history_manager: Any = None
+if TYPE_CHECKING:
+    from core.persistence.history_db import HistoryManager
+
+    history_manager: HistoryManager | None = None
+else:
+    history_manager = None
 
 
 def trim_working_set() -> bool:
