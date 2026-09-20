@@ -74,5 +74,7 @@ Sempre revise os arquivos `AGENTS.md` específicos em subdiretórios para obter 
 | Import circular entre logger e utils | `setup_logger()` precisava de `get_app_root()`, mas `utils.py` importava o logger no topo do módulo. | Isolar funções de caminho puras em `core/shared/paths.py` livre de imports de infraestrutura. |
 | Ícones fantasmas na bandeja do Windows | O processo encerrava antes do Windows processar a remoção do ícone da barra de tarefas. | Chamar `tray_icon.hide()` como primeiríssima instrução em `quit_app()`. |
 | Falha no Autostart do executável congelado | `manage_autostart()` gerava scripts VBS chamando `uv run main.py`, que não existem no PC do usuário final. | Gravar comando direto `"{sys.executable}" --hidden` no Registro do Windows quando `sys.frozen` for verdadeiro. |
+| `FileNotFoundError` em metadados LiteLLM | `litellm` necessita de arquivos `.json` de preços/contexto em tempo de execução, ausentes por padrão no PyInstaller. | Incluir dados de pacotes estáticos via `collect_data_files('litellm')` no `jarvis.spec`. |
+| `ValueError: Unknown encoding cl100k_base` no Tiktoken | `tiktoken` descobre plugins via `pkgutil.iter_modules`, que retorna vazio em binários congelados sem declaração explícita de submódulos. | Declarar `tiktoken`, `tiktoken_ext` e `tiktoken_ext.openai_public` em `hidden_imports` e coletar arquivos de extensão no `jarvis.spec`. |
 
 

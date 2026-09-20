@@ -54,6 +54,42 @@ def generate_icon_if_needed(icon_path: Path | None = None) -> Path:
     return target
 
 
+def ensure_default_wakeword_model(models_dir: Path | None = None) -> Path | None:
+    """Ensure at least one wakeword model exists in models/, copying 'hey_jarvis' as default if needed."""
+    target_dir = models_dir or MODELS_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    existing = list(target_dir.glob("*.onnx"))
+    if existing:
+        logger.info(
+            f"Found existing wakeword model(s) in {target_dir}: {[f.name for f in existing]}"
+        )
+        return existing[0]
+
+    logger.info(
+        f"No .onnx models found in {target_dir}. Looking for default 'hey_jarvis' model from openwakeword..."
+    )
+    try:
+        import openwakeword
+
+        pretrained = openwakeword.get_pretrained_model_paths()
+        jarvis_model = None
+        for p in pretrained:
+            if "hey_jarvis" in Path(p).name.lower():
+                jarvis_model = Path(p)
+                break
+
+        if jarvis_model and jarvis_model.exists():
+            dest = target_dir / jarvis_model.name
+            shutil.copy2(jarvis_model, dest)
+            logger.info(f"Default wakeword model successfully copied to {dest}")
+            return dest
+    except Exception as exc:
+        logger.warning(f"Could not auto-copy default hey_jarvis model: {exc}")
+
+    return None
+
+
 def verify_prerequisites() -> bool:
     """Verify that all prerequisites for building the executable are met."""
     logger.info("Verifying build prerequisites...")
@@ -61,6 +97,9 @@ def verify_prerequisites() -> bool:
     if not SPEC_FILE.exists():
         logger.error(f"PyInstaller spec file not found: {SPEC_FILE}")
         return False
+
+    # Ensure default 'hey_jarvis' model is available if models/ is empty
+    ensure_default_wakeword_model(MODELS_DIR)
 
     # Check for presence of at least one .onnx model in models/
     onnx_models = list(MODELS_DIR.glob("*.onnx"))
@@ -155,6 +194,45 @@ def print_report(dist_dir: Path, exe_file: Path) -> None:
     print(report)
 
 
+def copy_user_facing_assets(dist_dir: Path | None = None) -> None:
+    """Copy config.yaml, models, plugins and resources to the bundle root for user accessibility."""
+    target = dist_dir or DIST_DIR
+    if not target.exists():
+        return
+
+    logger.info(f"Copying user-facing assets to bundle root at {target}...")
+
+    # 1. config.yaml
+    cfg_src = ROOT_DIR / "config.yaml"
+    if cfg_src.exists():
+        shutil.copy2(cfg_src, target / "config.yaml")
+
+    # 2. models/
+    models_target = target / "models"
+    models_target.mkdir(parents=True, exist_ok=True)
+    if MODELS_DIR.exists():
+        for f in MODELS_DIR.glob("*.onnx"):
+            shutil.copy2(f, models_target / f.name)
+
+    # 3. plugins/
+    plugins_src = ROOT_DIR / "plugins"
+    plugins_target = target / "plugins"
+    plugins_target.mkdir(parents=True, exist_ok=True)
+    if plugins_src.exists():
+        for f in plugins_src.glob("*.*"):
+            shutil.copy2(f, plugins_target / f.name)
+
+    # 4. resources/
+    resources_src = ROOT_DIR / "resources"
+    resources_target = target / "resources"
+    resources_target.mkdir(parents=True, exist_ok=True)
+    if resources_src.exists():
+        for f in resources_src.glob("*.*"):
+            shutil.copy2(f, resources_target / f.name)
+
+    logger.info("User-facing assets successfully copied to bundle root.")
+
+
 def main() -> int:
     """Entry point for the build script."""
     generate_icon_if_needed()
@@ -168,6 +246,8 @@ def main() -> int:
     if not EXE_FILE.exists():
         logger.error(f"Build succeeded but {EXE_FILE} was not found!")
         return 1
+
+    copy_user_facing_assets(DIST_DIR)
 
     print_report(DIST_DIR, EXE_FILE)
     return 0

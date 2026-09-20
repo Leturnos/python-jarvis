@@ -33,10 +33,18 @@ def test_spec_file_configuration():
     assert "plugins" in content, "Spec must include plugins in datas"
     assert "resources" in content, "Spec must include resources in datas"
     assert "config.yaml" in content, "Spec must include config.yaml in datas"
+    assert "collect_data_files" in content, "Spec must collect data files"
+    assert "litellm" in content, "Spec must include litellm datas"
 
     # Verify essential hiddenimports
     essential_hidden_imports = [
         "litellm",
+        "litellm.providers",
+        "litellm.litellm_core_utils",
+        "litellm.llms",
+        "tiktoken",
+        "tiktoken_ext",
+        "tiktoken_ext.openai_public",
         "faster_whisper",
         "openwakeword",
         "plyer.platforms.win.notification",
@@ -70,9 +78,53 @@ def test_build_script_exists_and_is_valid_ast():
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
     assert "verify_prerequisites" in defined_funcs
+    assert "ensure_default_wakeword_model" in defined_funcs
+    assert "copy_user_facing_assets" in defined_funcs
     assert "generate_icon_if_needed" in defined_funcs
     assert "build_bundle" in defined_funcs
     assert "main" in defined_funcs
+
+
+def test_copy_user_facing_assets(tmp_path):
+    sys.path.insert(0, str(ROOT_DIR))
+    try:
+        from scripts.build_exe import copy_user_facing_assets
+
+        fake_dist = tmp_path / "dist" / "Jarvis"
+        fake_dist.mkdir(parents=True)
+
+        copy_user_facing_assets(fake_dist)
+
+        assert (fake_dist / "config.yaml").exists()
+        assert (fake_dist / "models").exists()
+        assert (fake_dist / "plugins").exists()
+        assert (fake_dist / "resources").exists()
+    finally:
+        if str(ROOT_DIR) in sys.path:
+            sys.path.remove(str(ROOT_DIR))
+
+
+def test_ensure_default_wakeword_model(tmp_path):
+    sys.path.insert(0, str(ROOT_DIR))
+    try:
+        from scripts.build_exe import ensure_default_wakeword_model
+
+        fake_models_dir = tmp_path / "models"
+        fake_models_dir.mkdir()
+
+        # When directory is empty, it should auto-copy the default hey_jarvis model
+        result = ensure_default_wakeword_model(fake_models_dir)
+        assert result is not None
+        assert result.exists()
+        assert "hey_jarvis" in result.name.lower()
+        assert result.stat().st_size > 0
+
+        # When called again, it should return the existing model
+        result_again = ensure_default_wakeword_model(fake_models_dir)
+        assert result_again == result
+    finally:
+        if str(ROOT_DIR) in sys.path:
+            sys.path.remove(str(ROOT_DIR))
 
 
 def test_verify_prerequisites_missing_models(tmp_path):
@@ -89,8 +141,9 @@ def test_verify_prerequisites_missing_models(tmp_path):
         with (
             patch("scripts.build_exe.MODELS_DIR", fake_models_dir),
             patch("scripts.build_exe.ICON_FILE", fake_icon),
+            patch("scripts.build_exe.ensure_default_wakeword_model", return_value=None),
         ):
-            # No .onnx files in models dir
+            # No .onnx files and ensure_default_wakeword_model returns None
             assert verify_prerequisites() is False
     finally:
         if str(ROOT_DIR) in sys.path:

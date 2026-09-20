@@ -11,12 +11,22 @@ from pathlib import Path
 
 block_cipher = None
 
+from PyInstaller.utils.hooks import collect_data_files
+
 # Base datas required at runtime
 datas = [
     ('plugins/*.yaml', 'plugins'),
     ('resources/*', 'resources'),
     ('config.yaml', '.'),
 ]
+
+# Collect essential package data files to prevent FileNotFoundError in frozen binaries
+package_datas = ['litellm', 'openwakeword', 'faster_whisper', 'qdarktheme', 'tiktoken', 'tiktoken_ext']
+for pkg in package_datas:
+    try:
+        datas += collect_data_files(pkg)
+    except Exception:
+        pass
 
 # Include onnx models if present; fallback to copying the models dir if none found yet
 if glob.glob('models/*.onnx'):
@@ -27,6 +37,11 @@ else:
 hidden_imports = [
     'litellm',
     'litellm.providers',
+    'litellm.litellm_core_utils',
+    'litellm.llms',
+    'tiktoken',
+    'tiktoken_ext',
+    'tiktoken_ext.openai_public',
     'faster_whisper',
     'openwakeword',
     'plyer.platforms.win.notification',
