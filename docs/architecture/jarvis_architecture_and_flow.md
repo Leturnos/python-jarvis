@@ -231,4 +231,7 @@ classDiagram
 | **Janelas do Windows** | [`core/execution/window_manager.py`](../../core/execution/window_manager.py) | Gerenciamento de janelas via Win32 API, posicionamento e validação de perda de foco. |
 | **Visão Computacional & Mídia** | [`core/media/cv_matcher.py`](../../core/media/cv_matcher.py) | Localização visual de elementos na UI do Spotify via OpenCV template matching. |
 | **Auditoria & Histórico** | [`core/persistence/history_db.py`](../../core/persistence/history_db.py) | Registro de todas as ações no SQLite para auditoria, repetição de comandos e criação automática de macros. |
+| **Memória Conversacional** | [`core/ai/conversation_memory.py`](../../core/ai/conversation_memory.py) | Janela deslizante de histórico de diálogo multi-turn para manter contexto de perguntas encadeadas. |
+| **Resolução de Caminhos** | [`core/shared/paths.py`](../../core/shared/paths.py) | Resolução portável do diretório raiz (`get_app_root`) compatível com binários congelados (`sys.frozen`). |
 | **Estado Global** | [`core/runtime/state.py`](../../core/runtime/state.py) | Máquina de estados com callbacks para transições seguras e gerenciamento de recursos. |
+| **Script de Empacotamento** | [`scripts/build_exe.py`](../../scripts/build_exe.py) | Automação de compilação PyInstaller para bundle portátil em `dist/Jarvis/Jarvis.exe`. |

@@ -46,7 +46,8 @@ Documentação técnica viva sobre o funcionamento interno do Jarvis:
 
 Documentos para instalação, configuração e uso do assistente:
 
-- 🚀 **[README Principal](../README.md)**: Instalação rápida com `uv`, configuração de microfone, `.env`, `config.yaml` e plugins.
+- 🚀 **[README Principal](../README.md)**: Instalação rápida com `uv`, configuração de microfone, `.env`, `config.yaml`, onboarding gráfico e plugins.
+- 📦 **[Empacotamento Executável (`scripts/build_exe.py`)](../scripts/build_exe.py)**: Script automatizado para compilação PyInstaller em One-Folder bundle portátil (`dist/Jarvis/Jarvis.exe`), sem terminal console e com carregamento instantâneo.
 - 🎵 **[Guia de Mídia e Automação do Spotify](../data/media/README.md)**: Como cadastrar templates de imagem e configurar playlists personalizadas.
 - 🛠️ **[Utilitários e Ferramentas](../tools/README.md)**: Scripts auxiliares (ex: `detect_mouse.py` para mapear coordenadas da tela).
 

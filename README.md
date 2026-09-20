@@ -6,17 +6,22 @@ Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", p
 
 ## ✨ O que ele faz?
 
-- **Ativação Inteligente (Novo! 🎙️):** Você escolhe como o Jarvis deve te ouvir. Ele pode ficar sempre atento à frase "Hey Jarvis", funcionar apenas quando você aperta uma tecla (Push-to-Talk), ou ambos!
-- **Controle de Mídia Inteligente (Spotify 🎵 - Novo!):** Diga ao Jarvis para tocar um artista, música ou playlist. Ele trará o Spotify para o primeiro plano e usará inteligência visual (OpenCV) para localizar e clicar nos botões corretos na tela, iniciando a música instantaneamente. Veja o [Guia de Configuração de Mídia](./data/media/README.md) para aprender a cadastrar suas playlists favoritas.
+- **Interface e Menus em Português (Novo! 🇧🇷):** Toda a experiência de uso (menu da bandeja, painel de status, histórico e notificações) foi desenhada em português brasileiro fluído e natural.
+- **Onboarding Gráfico Sem Atrito (Novo! 🔑):** Se for sua primeira vez e ainda não houver chave de API configurada, o Jarvis não quebra silenciosamente: ele abre a tela de Configurações com orientações claras para você salvar sua chave direto no Gerenciador de Credenciais do Windows (Keyring).
+- **Ativação Inteligente (🎙️):** Você escolhe como o Jarvis deve te ouvir. Ele pode ficar sempre atento à frase "Hey Jarvis", funcionar apenas quando você aperta uma tecla (Push-to-Talk), ou ambos!
+- **Controle de Mídia Inteligente (Spotify 🎵):** Diga ao Jarvis para tocar um artista, música ou playlist. Ele trará o Spotify para o primeiro plano e usará inteligência visual (OpenCV) para localizar e clicar nos botões corretos na tela, iniciando a música instantaneamente. Veja o [Guia de Configuração de Mídia](./data/media/README.md) para aprender a cadastrar suas playlists favoritas.
+- **Respostas Diretas e Ferramentas Dinâmicas (🌦️ 📈):** Pergunte sobre o tempo ("vai chover hoje em Itamonte?") ou sobre ações e mercado ("como está a cotação de PETR4?"). O Jarvis consulta ferramentas especializadas e responde de forma objetiva e inteligente.
 - **Modo Gamer e Reunião (Auto-Suspend):** O Jarvis é educado. Se ele perceber que você está jogando ou em uma apresentação (tela cheia), ele entra em suspensão automaticamente para não te interromper.
-- **Entende seu jeito de falar (IA):** Não precisa decorar comandos rígidos. Após ativar o assistente, fale de forma natural e ele usará IA (Google Gemini) para entender sua intenção.
-- **Paleta de Comandos (⌨️):** Falar alto nem sempre é o ideal. Aperte `Ctrl + Shift + P` (ou o atalho configurado no `config.yaml`, acessível também pelo menu da bandeja) a qualquer momento para abrir uma barra de pesquisa rápida na tela e execute suas automações silenciosamente.
+- **Entende seu jeito de falar (IA Multi-Provedor):** Não precisa decorar comandos rígidos. Fale naturalmente com suporte a Google Gemini, OpenAI, Anthropic, DeepSeek e OpenRouter.
+- **Paleta de Comandos (⌨️):** Falar alto nem sempre é o ideal. Aperte `Ctrl + Shift + P` (ou pelo menu da bandeja) a qualquer momento para abrir uma barra de pesquisa rápida na tela e execute suas automações silenciosamente.
 - **Aprende Novas Habilidades (Plugins YAML):** Ensinar algo novo para o Jarvis é tão fácil quanto escrever uma receita de bolo em um arquivo de texto.
 - **Invisível e Seguro:** Roda silenciosamente na bandeja do Windows (System Tray) e possui um sistema de segurança que bloqueia ou pede confirmação antes de executar ações perigosas.
 - **Controle de Descanso:** Você pode dizer "Jarvis, ir dormir" e ele descarregará os modelos pesados da memória para economizar energia do seu PC, ficando em modo de espera até que você o acorde manualmente.
 
-### 🧠 Comandos de Sistema
-Exemplos de como usar as novas capacidades de memória e controle:
+### 🧠 Comandos de Sistema e Conversação
+Exemplos de como usar as capacidades de memória, ferramentas e controle:
+- **Clima e Previsão**: "Vai chover hoje em Itamonte?", "Como está o tempo em São Paulo?".
+- **Cotações e Mercado**: "Qual a cotação da Apple hoje?", "Como está o dólar?".
 - **Descansar/Silenciar**: "Jarvis, ir dormir", "Silenciar", "Parar de ouvir".
 - **Repetir último comando**: "Faz de novo", "De novo".
 - **Salvar como macro**: "Salvar como macro", "Gravar sequência", "Salve isso".
@@ -31,7 +36,8 @@ Exemplos de como usar as novas capacidades de memória e controle:
 
 O projeto utiliza o gerenciador de pacotes rápido `uv`.
 
-1. **Instale o projeto:**
+### Modo Desenvolvimento
+1. **Instale as dependências:**
    ```bash
    uv sync
    ```
@@ -41,26 +47,43 @@ O projeto utiliza o gerenciador de pacotes rápido `uv`.
    uv run main.py
    ```
 
-O Jarvis vai aparecer na sua bandeja do Windows (perto do relógio) e estará pronto para ouvir você!
+O Jarvis vai aparecer na sua bandeja do Windows (perto do relógio). Se for a primeira inicialização e você ainda não configurou uma chave de API, o Jarvis abrirá automaticamente a aba de **Configurações** para você salvar a chave do seu provedor favorito (`Gemini`, `OpenAI`, `Anthropic`, `DeepSeek` ou `OpenRouter`) de forma segura com um clique!
+
+### 📦 Gerando o Executável (.exe) Portátil
+Você pode empacotar o Jarvis em um executável autônomo do Windows (sem console preta de terminal, inicialização rápida e todos os modelos de áudio embutidos):
+
+```bash
+uv run python scripts/build_exe.py
+```
+
+O bundle completo será gerado em `dist/Jarvis/Jarvis.exe`. Você pode mover essa pasta para qualquer local ou criar um atalho na área de trabalho.
 
 ## ⚙️ Configurando o Jarvis
 
-Nós separamos as coisas para facilitar sua vida. Existem três arquivos principais que você precisa conhecer:
+Nós separamos as coisas para facilitar sua vida. Existem três formas principais de personalizar o Jarvis:
 
-1. **Arquivo `.env` (Suas Chaves e Caminhos Locais):**
-   Faça uma cópia do arquivo `.env.example` e renomeie para `.env`.
-   Coloque aqui a chave de API da IA do provedor ativo escolhido (ex: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY` ou `OPENROUTER_API_KEY`) e os caminhos dos seus programas locais.
+1. **Pela Própria Interface Gráfica (Recomendado):**
+   Abra o **Painel do Jarvis** clicando com o botão direito no ícone da bandeja e escolhendo **Mostrar Painel** (ou dois cliques no ícone). Na aba **Configurações**:
+   - Escolha o provedor de IA ativo.
+   - Digite ou cole sua chave de API e clique em **Salvar Chave** (ela será guardada criptografada no Windows Credential Manager / Keyring).
+   - Ative a inicialização com o Windows com um clique.
 
-2. **Arquivo `config.yaml` (Ajustes de Motor):**
+2. **Arquivo `.env` (Opcional - Migração Automática):**
+   Se preferir variáveis de ambiente, copie `.env.example` para `.env` e defina suas chaves (ex: `GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.). Ao iniciar, o Jarvis detecta a chave e a migra automaticamente para o Keyring seguro do Windows, permitindo que você remova o segredo do arquivo de texto por segurança.
+
+3. **Arquivo `config.yaml` (Ajustes de Motor):**
    Aqui você mexe na "mecânica" do Jarvis.
    - **Ativação de Voz (`voice_activation`):**
      - `mode`: Escolha entre `hybrid` (Frase + Tecla), `push_to_talk` (Apenas tecla), `always_listening` (Apenas frase) ou `disabled`.
      - `push_to_talk`: Configure a tecla (ex: `ctrl+alt`) e se quer segurar para falar (`hold`) ou apenas um toque (`toggle`).
      - `auto_suspend`: Ative o `fullscreen: true` para o Jarvis silenciar automaticamente em jogos ou vídeos em tela cheia.
    - **Paleta de Comandos (`command_palette`):** Configure a tecla de atalho global para a paleta (padrão: `ctrl+shift+p`).
-   - **Cérebro do Jarvis (`llm`):** Você pode escolher qual IA o Jarvis usa! No campo `active_provider`, você pode colocar `gemini`, `openai`, `anthropic`, `deepseek` ou `openrouter`. 
-     - *Segurança e Migração Automatizada:* Coloque a chave correspondente ao provedor configurado no seu `.env` ao iniciar o Jarvis pela primeira vez. Ele detectará a chave do provedor ativo, fará a migração automática para o Keyring seguro do Windows (Gerenciador de Credenciais) e você poderá remover a chave do arquivo `.env` por segurança.
-   - **Voz do Jarvis (`tts`):** Quer que o Jarvis tenha uma voz diferente? No campo `voice_keyword`, coloque parte do nome da voz que você tem instalada no Windows (ex: "maria", "zira", "david"). Se ele não encontrar a que você pediu, ele tentará usar uma voz em Português automaticamente.
+   - **Cérebro do Jarvis (`llm`):**
+     - `active_provider`: Escolha entre `gemini`, `openai`, `anthropic`, `deepseek` ou `openrouter`.
+     - `proactivity`: Escolha `objective` (padrão: respostas curtas, diretas e naturais) ou `conversational` (respostas mais explicativas).
+   - **Localização Padrão (`location`):**
+     - Defina sua cidade padrão para consultas de clima (ex: `São Paulo`).
+   - **Voz do Jarvis (`tts`):** No campo `voice_keyword`, coloque parte do nome da voz que você tem instalada no Windows (ex: "maria", "zira", "david"). Se ele não encontrar a que você pediu, ele tentará usar uma voz em Português automaticamente.
 
 3. **A pasta `plugins/` (Ensinando novas habilidades):**
    Esqueça código complexo. Para ensinar o Jarvis a abrir seu projeto favorito, crie um arquivo como `devtools.yaml` na pasta `plugins`:

@@ -30,13 +30,17 @@ Utilizamos uma abordagem de estilização em camadas:
 
 ### 2. O Controlador da Aplicação (`core/ui/app_controller.py`)
 - Centraliza o ciclo de vida da interface gráfica (`QApplication`).
-- Gerencia o ícone na **Bandeja do Sistema** (`QSystemTrayIcon`) e seus menus contextuais dinâmicos.
-- Orquestra a visibilidade da janela principal, aplicação de temas e o encerramento gracioso do processo.
+- Gerencia o ícone na **Bandeja do Sistema** (`QSystemTrayIcon`) e seus menus contextuais 100% em português brasileiro.
+- Suporta o modo **Onboarding Gráfico (`onboarding_mode`)**, abrindo automaticamente as configurações com um aviso claro caso nenhuma chave de API esteja configurada.
+- Garante o encerramento gracioso e limpo do processo, ocultando o ícone da bandeja (`tray_icon.hide()`) prioritariamente para evitar ícones fantasmas na barra de tarefas do Windows.
 
-### 3. As Views da Interface (`core/ui/main_window.py` & `core/ui/widgets/`)
-- **`MainWindow`**: Janela principal que hospeda os widgets modulares e intercepta o evento de fechamento (`closeEvent`) para minimizar silenciosamente para a bandeja do sistema.
-- **`StatusCardWidget`**: Componente modular que consome os snapshots emitidos via sinais Qt para renderizar níveis de áudio, scores de detecção e status da máquina de estados.
-- **`CommandPalette`**: Interface rápida estilo Spotlight (`Ctrl+Alt+P`) para comandos manuais por teclado.
+### 3. As Views da Interface (`core/ui/main_window.py`, `tabs/` & `widgets/`)
+- **`MainWindow` ("Painel do Jarvis")**: Janela principal com navegação moderna Fluent (`Pivot`). Hospeda três abas modulares:
+  - **Aba Status (`StatusCardWidget`)**: Exibe o status do motor, modos de ativação ("Híbrido", "Aperte para Falar", "Silenciado", "Dormindo"), níveis de decibéis e pontuação de escuta.
+  - **Aba Histórico (`HistoryTab`)**: Tabela de auditoria do SQLite com busca e atualização dinâmica dos comandos executados.
+  - **Aba Configurações (`SettingsTab`)**: Configuração de perfil de performance, seleção de provedor LLM, cadastro direto de chave de API no Windows Keyring com re-inicialização em memória e controle de Autostart.
+- **`CommandPalette`**: Interface rápida estilo Spotlight (`Ctrl+Shift+P`) para comandos manuais por teclado.
+- **`VoiceOverlay`**: HUD flutuante semi-transparente que exibe feedback visual do microfone durante a fala.
 - **`SecurityDialog`**: Modal de autorização de segurança para comandos classificados com nível de risco elevado (`dangerous`).
 
 ---
@@ -77,5 +81,5 @@ graph TD
 ---
 
 ## 🛡️ Tratamento de Exceções na UI
-- **Qt Exception Hook**: Um hook global em `sys.excepthook` captura exceções não tratadas na interface gráfica, impedindo travamentos silenciosos e registrando os erros no log.
+- **Qt Exception Hook**: Um hook global em `sys.excepthook` captura exceções não tratadas na interface gráfica, registrando o traceback detalhado no log e disparando uma notificação desktop amigável ao usuário via `JarvisNotifier`, garantindo que falhas em binários sem console (`--noconsole`) nunca passem despercebidas.
 - **Wrapper Seguro do Controller**: A thread de backend é encapsulada em blocos `try/except` que notificam a UI caso o núcleo de áudio ou IA encontre uma falha irrecuperável, permitindo a finalização segura dos dispositivos de hardware.
