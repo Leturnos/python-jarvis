@@ -10,7 +10,7 @@ from core.infra.presets import PRESETS, detect_recommended_preset
 from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
 from core.shared.paths import get_app_root
 
-load_dotenv()
+load_dotenv(get_app_root() / ".env")
 
 
 def expand_env_vars(data: Any) -> Any:

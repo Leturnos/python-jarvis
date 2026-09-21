@@ -2,19 +2,28 @@ import os
 import sqlite3
 from collections.abc import Generator
 from contextlib import AbstractContextManager, contextmanager
+from pathlib import Path
 
 from core.infra.logger_config import logger
+from core.shared.paths import get_app_root
 
 
 class SQLiteBase:
     """Base class to abstract common SQLite database operations with WAL mode and transaction handling."""
 
-    def __init__(self, db_path: str) -> None:
-        self.db_path = db_path
+    def __init__(self, db_path: str | Path) -> None:
+        db_str = str(db_path)
+        if db_str == ":memory:" or db_str.startswith("file:"):
+            self.db_path = db_str
+        else:
+            p = Path(db_path)
+            self.db_path = str(p if p.is_absolute() else get_app_root() / p)
         self._ensure_dir()
 
     def _ensure_dir(self) -> None:
         """Ensures that the directory containing the database file exists."""
+        if self.db_path == ":memory:" or self.db_path.startswith("file:"):
+            return
         directory = os.path.dirname(os.path.abspath(self.db_path))
         if not os.path.exists(directory):
             try:

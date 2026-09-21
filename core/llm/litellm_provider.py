@@ -15,6 +15,7 @@ from core.llm.models import (
     LLMRateLimitError,
     LLMResponse,
 )
+from core.shared.paths import get_app_root
 
 
 class LiteLLMProvider(BaseLLMProvider):
@@ -36,7 +37,7 @@ class LiteLLMProvider(BaseLLMProvider):
         api_key = KeyringManager.get_secret("python-jarvis", key_name)
 
         if not api_key:
-            load_dotenv()
+            load_dotenv(get_app_root() / ".env")
 
             api_key = os.getenv(key_name)
             if api_key:

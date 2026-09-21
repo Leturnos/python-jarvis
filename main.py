@@ -32,6 +32,7 @@ from core.media.cv_matcher import TemplateMatcher
 from core.media.spotify_automator import SpotifyAutomator
 from core.runtime.monitor import MemoryMonitor
 from core.shared.constants import Timing
+from core.shared.paths import get_app_root
 from core.ui.adapter import JarvisTrayAdapter, JarvisUIAdapter
 from core.ui.app_controller import QtAppController
 from core.ui.notifications import JarvisNotifier
@@ -55,6 +56,9 @@ sys.excepthook = qt_exception_hook
 
 
 def main() -> None:
+    # Anchor working directory to application root immediately on bootstrap
+    os.chdir(get_app_root())
+
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
 

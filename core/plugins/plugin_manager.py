@@ -1,15 +1,21 @@
 import glob
 import os
+from pathlib import Path
 from typing import Any, cast
 
 import yaml
 
 from core.infra.logger_config import logger
+from core.shared.paths import get_app_root
 
 
 class PluginManager:
-    def __init__(self, plugins_dir: str = "plugins") -> None:
-        self.plugins_dir = plugins_dir
+    def __init__(self, plugins_dir: str | Path | None = None) -> None:
+        if plugins_dir is None:
+            self.plugins_dir = str(get_app_root() / "plugins")
+        else:
+            p = Path(plugins_dir)
+            self.plugins_dir = str(p if p.is_absolute() else get_app_root() / p)
         self.intents: dict[
             str, Any
         ] = {}  # Map of intent_name -> { description, risk_level, actions, phrases, plugin_name }

@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -8,11 +9,16 @@ from core.ai.llm_agent import llm_agent
 from core.execution.execution_plan import ExecutionPlan
 from core.infra.logger_config import logger
 from core.plugins.plugin_manager import plugin_manager
+from core.shared.paths import get_app_root
 
 
 class MacroManager:
-    def __init__(self, macros_path: str = "plugins/macros.yaml") -> None:
-        self.macros_path = macros_path
+    def __init__(self, macros_path: str | Path | None = None) -> None:
+        if macros_path is None:
+            self.macros_path = str(get_app_root() / "plugins" / "macros.yaml")
+        else:
+            p = Path(macros_path)
+            self.macros_path = str(p if p.is_absolute() else get_app_root() / p)
 
     def create_macro_from_recent(self, recent_jsons: list[str]) -> ExecutionPlan | None:
         """

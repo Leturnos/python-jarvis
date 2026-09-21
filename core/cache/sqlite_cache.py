@@ -2,16 +2,21 @@ import hashlib
 import json
 import re
 import time
+from pathlib import Path
 from typing import Any, cast
 
 from core.cache.base import LLMCacheBase
 from core.infra.logger_config import logger
+from core.shared.paths import get_app_root
 from core.shared.sqlite_base import SQLiteBase
 
 
 class SQLiteLLMCache(SQLiteBase, LLMCacheBase):
-    def __init__(self, db_path: str = "data/llm_cache.db", ttl_seconds: int = 86400):
-        SQLiteBase.__init__(self, db_path)
+    def __init__(self, db_path: str | Path | None = None, ttl_seconds: int = 86400):
+        target_db: str | Path = (
+            get_app_root() / "data" / "llm_cache.db" if db_path is None else db_path
+        )
+        SQLiteBase.__init__(self, target_db)
         self.ttl_seconds = ttl_seconds
         self.hits = 0
         self.misses = 0

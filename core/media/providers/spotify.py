@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any, cast
 
 from core.execution.execution_plan import ExecutionStep, StepType
@@ -10,12 +11,19 @@ from core.media.models import (
     ResolvedMediaPlan,
 )
 from core.media.nlp import NLPProcessor
+from core.shared.paths import get_app_root
 
 
 class SpotifyProvider:
-    def __init__(self, playlists_path: str = "data/media/playlists.json") -> None:
-        self.playlists_path = playlists_path
-        self.nlp = NLPProcessor(playlists_path)
+    def __init__(self, playlists_path: str | Path | None = None) -> None:
+        if playlists_path is None:
+            self.playlists_path = str(
+                get_app_root() / "data" / "media" / "playlists.json"
+            )
+        else:
+            p = Path(playlists_path)
+            self.playlists_path = str(p if p.is_absolute() else get_app_root() / p)
+        self.nlp = NLPProcessor(self.playlists_path)
 
     def _load_intents(self) -> dict[str, Any]:
         try:

@@ -1,7 +1,6 @@
 import queue
 import threading
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from core.infra.config import config
@@ -15,7 +14,6 @@ class HistoryManager(SQLiteBase):
         if db_path is None:
             data_dir = config.get("paths", {}).get("data_dir", "data")
             db_path = str(get_app_root() / data_dir / "history.db")
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
         SQLiteBase.__init__(self, db_path)
         self._init_db()
