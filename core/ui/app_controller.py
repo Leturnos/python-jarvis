@@ -66,6 +66,7 @@ class QtAppController(QObject):
         tray_adapter: Any,
         stop_event: threading.Event | None = None,
         onboarding: bool = False,
+        first_run: bool = False,
     ) -> None:
         super().__init__()
         self.provider_switch_done.connect(self._on_provider_switch_done)
@@ -107,6 +108,15 @@ class QtAppController(QObject):
                 "Bem-vindo ao Jarvis!",
                 f"Configure sua chave de API para o provedor '{active_provider.capitalize()}' para ativar o assistente.",
                 parent=self.main_window.settings_tab,
+                duration=10000,
+            )
+        elif first_run:
+            self.show_window()
+            active_provider = config.get("llm", {}).get("active_provider", "gemini")
+            InfoBar.success(
+                "Bem-vindo ao Jarvis!",
+                f"Assistente pronto para uso! Chave para '{active_provider.capitalize()}' configurada com sucesso.",
+                parent=self.main_window.status_tab,
                 duration=10000,
             )
 

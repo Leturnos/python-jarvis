@@ -9,6 +9,7 @@ from typing import Any
 import qdarktheme
 import win32con
 import win32gui
+from dotenv import dotenv_values
 from PySide6.QtWidgets import QApplication
 from win32api import GetLastError
 from win32event import CreateMutex
@@ -26,6 +27,7 @@ from core.execution.step_executor import StepExecutor
 from core.execution.window_manager import WindowManager
 from core.execution.worker import command_worker
 from core.infra.config import config
+from core.infra.first_run import is_first_run, mark_first_run_completed
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
 from core.media.cv_matcher import TemplateMatcher
@@ -64,22 +66,27 @@ def main() -> None:
 
     Timing.load_from_config(config)
 
+    # Check first run status
+    first_run = is_first_run()
+
     # Transparent migration of the active LLM provider API key to Keyring on startup
     llm_config = config.get("llm", {})
     active_provider = llm_config.get("active_provider", "gemini")
     key_name = f"{active_provider.upper()}_API_KEY"
 
     api_key = KeyringManager.get_secret("python-jarvis", key_name)
-    env_key = os.getenv(key_name)
+    env_path = get_app_root() / ".env"
+    env_vals = dotenv_values(env_path) if env_path.exists() else {}
+    env_key = env_vals.get(key_name)
 
     onboarding_mode = False
     if env_key and (not api_key or env_key != api_key):
-        logger.info(f"Migrating {key_name} from .env to secure Keyring.")
+        logger.info(f"Migrating {key_name} from local .env to secure Keyring.")
         KeyringManager.set_secret("python-jarvis", key_name, env_key)
         logger.info(f"Security tip: You can now remove {key_name} from your .env file.")
     elif not api_key and not env_key:
         logger.warning(
-            f"{key_name} not found in Keyring or .env. Starting Jarvis in onboarding mode."
+            f"{key_name} not found in Keyring or local .env. Starting Jarvis in onboarding mode."
         )
         onboarding_mode = True
 
@@ -151,10 +158,14 @@ def main() -> None:
         tray_adapter,
         stop_event=stop_event,
         onboarding=onboarding_mode,
+        first_run=first_run,
     )
 
-    if not is_minimized:
+    if first_run or not is_minimized:
         app_controller.show_window()
+
+    if first_run:
+        mark_first_run_completed()
 
     # Initialize Qt Command Palette
     app_controller.start_command_palette(dispatcher)

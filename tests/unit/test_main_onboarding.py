@@ -26,3 +26,25 @@ def test_onboarding_mode_triggers_settings_tab_focus():
             mock_warning.assert_called_once()
             args, kwargs = mock_warning.call_args
             assert "Gemini" in args[1]
+
+
+def test_first_run_with_existing_key_shows_welcome_success():
+    app = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+    tray_adapter = MagicMock()
+
+    with patch("core.ui.app_controller.InfoBar.success") as mock_success:
+        with patch(
+            "core.ui.app_controller.config", {"llm": {"active_provider": "gemini"}}
+        ):
+            controller = QtAppController(
+                app, ui_adapter, tray_adapter, onboarding=False, first_run=True
+            )
+
+            assert controller.main_window.isVisible() is True
+            mock_success.assert_called_once()
+            args, kwargs = mock_success.call_args
+            assert args[0] == "Bem-vindo ao Jarvis!"
+            assert "Gemini" in args[1]
