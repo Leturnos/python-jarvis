@@ -1,3 +1,4 @@
+import ctypes
 import logging
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -13,6 +14,28 @@ from core.runtime.state import JarvisState
 logger = logging.getLogger(__name__)
 
 
+def is_screen_locked() -> bool:
+    """Detects if the Windows desktop is currently locked (Win+L / Lock Screen / Winlogon)."""
+    try:
+        user32 = ctypes.windll.user32
+        user32.OpenInputDesktop.restype = ctypes.c_void_p
+        user32.SwitchDesktop.argtypes = [ctypes.c_void_p]
+        user32.CloseDesktop.argtypes = [ctypes.c_void_p]
+
+        desk = user32.OpenInputDesktop(
+            0, False, 0x0100
+        )  # DESKTOP_SWITCHDESKTOP = 0x0100
+        if not desk:
+            return True
+        try:
+            return not bool(user32.SwitchDesktop(desk))
+        finally:
+            user32.CloseDesktop(desk)
+    except Exception as e:
+        logger.debug(f"Error checking if screen is locked: {e}")
+        return False
+
+
 class ActivationActionType(Enum):
     TRIGGER_WAKE = auto()
     TRIGGER_PTT_START = auto()
@@ -25,7 +48,7 @@ class ActivationActionType(Enum):
 @dataclass
 class ActivationAction:
     action_type: ActivationActionType
-    source: str  # WAKE_WORD, PTT, FULLSCREEN_APP, MANUAL, NONE
+    source: str  # WAKE_WORD, PTT, FULLSCREEN_APP, LOCK_SCREEN, MANUAL, NONE
 
 
 @dataclass
@@ -36,11 +59,12 @@ class ActivationContext:
     is_hotkey_pressed: bool
     current_state: JarvisState
     timestamp: float
+    is_screen_locked: bool = False
 
 
 class ActivationManager:
     """Manages the logic for activating Jarvis via Wake Word or Push-To-Talk,
-    and handles automatic suspension in contexts like fullscreen apps.
+    and handles automatic suspension in contexts like fullscreen apps or locked screen.
     """
 
     MIN_SUSPEND_DURATION = 2.0  # Hysteresis to prevent flickering
@@ -52,6 +76,9 @@ class ActivationManager:
         self.ptt_config = self.config.get("push_to_talk", {})
         self.ww_config = self.config.get("wake_word", {})
         self.auto_suspend = self.config.get("auto_suspend", {}).get("fullscreen", True)
+        self.auto_suspend_lock = self.config.get("auto_suspend", {}).get(
+            "lock_screen", True
+        )
 
         self.ptt_key = self.ptt_config.get("key", "ctrl+alt")
         self.ptt_behavior = self.ptt_config.get("behavior", "hold")
@@ -59,6 +86,7 @@ class ActivationManager:
         # State tracking for hysteresis and transitions
         self.last_state_change_time = 0.0
         self.is_ptt_active = False
+        self._last_suspend_source = "FULLSCREEN_APP"
 
         # Metrics
         self.metrics = {
@@ -67,6 +95,7 @@ class ActivationManager:
             "activation_suspend": 0,
             "activation_resume": 0,
             "fullscreen_suspend_count": 0,
+            "lock_screen_suspend_count": 0,
         }
 
     @property
@@ -74,8 +103,26 @@ class ActivationManager:
         mem_opt = self.full_config.get("runtime", {}).get("memory_optimization", {})
         return bool(mem_opt.get("unload_wakeword_on_suspend", True))
 
+    def is_screen_locked(self) -> bool:
+        """Detects if the workstation desktop is currently locked."""
+        return is_screen_locked()
+
     def evaluate(self, context: ActivationContext) -> ActivationAction:
         """Evaluates the current environment context and decides on an activation action."""
+
+        # 0. Check for Lock Screen (Workstation locked)
+        if context.is_screen_locked:
+            if self.auto_suspend_lock and context.current_state == JarvisState.IDLE:
+                self._update_metric("activation_suspend")
+                self._update_metric("lock_screen_suspend_count")
+                self.last_state_change_time = context.timestamp
+                self._last_suspend_source = "LOCK_SCREEN"
+                return ActivationAction(ActivationActionType.SUSPEND, "LOCK_SCREEN")
+            if context.current_state == JarvisState.LISTENING:
+                return ActivationAction(
+                    ActivationActionType.TRIGGER_PTT_STOP, "LOCK_SCREEN"
+                )
+            return ActivationAction(ActivationActionType.NONE, "NONE")
 
         # 1. Check for Fullscreen Suspension
         if self.auto_suspend and context.current_state == JarvisState.IDLE:
@@ -83,18 +130,22 @@ class ActivationManager:
                 self._update_metric("activation_suspend")
                 self._update_metric("fullscreen_suspend_count")
                 self.last_state_change_time = context.timestamp
+                self._last_suspend_source = "FULLSCREEN_APP"
                 return ActivationAction(ActivationActionType.SUSPEND, "FULLSCREEN_APP")
 
         if context.current_state == JarvisState.SUSPENDED:
-            # Hysteresis: Don't resume too quickly
+            # Hysteresis: Don't resume too quickly, and only if NOT fullscreen and NOT locked
             if (
                 not context.is_fullscreen
+                and not context.is_screen_locked
                 and (context.timestamp - self.last_state_change_time)
                 > self.MIN_SUSPEND_DURATION
             ):
                 self._update_metric("activation_resume")
                 self.last_state_change_time = context.timestamp
-                return ActivationAction(ActivationActionType.RESUME, "FULLSCREEN_APP")
+                return ActivationAction(
+                    ActivationActionType.RESUME, self._last_suspend_source
+                )
             return ActivationAction(ActivationActionType.NONE, "NONE")
 
         # 2. Check Push-To-Talk (Priority)

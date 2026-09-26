@@ -162,3 +162,53 @@ def test_voice_confirmation_approval(mock_deps):
 
         active_dialog.approve.assert_called()
         assert controller.ignore_audio_until > 0
+
+
+def test_lock_screen_aborts_listening(mock_deps):
+    controller = JarvisController(**mock_deps)
+    state_manager.set_state(JarvisState.LISTENING)
+    controller.command_frames = [b"audio_chunk"]
+
+    pcm = np.zeros(1280, dtype=np.int16)
+    rms = 20.0
+
+    def slow_read():
+        if state_manager.get_state() == JarvisState.SUSPENDED:
+            mock_deps["stop_event"].set()
+        return pcm, rms
+
+    controller.audio_manager.read_frame = MagicMock(side_effect=slow_read)
+
+    with patch.object(
+        controller.activation_manager, "is_screen_locked", return_value=True
+    ):
+        controller.start()
+
+    assert state_manager.get_state() == JarvisState.SUSPENDED
+    assert controller.command_frames == []
+
+
+def test_lock_screen_cancels_confirming_dry_run(mock_deps):
+    controller = JarvisController(**mock_deps)
+    state_manager.set_state(JarvisState.CONFIRMING_DRY_RUN)
+    controller._pending_plan = MagicMock()
+    controller.confirmation_frames = [b"audio_chunk"]
+
+    pcm = np.zeros(1280, dtype=np.int16)
+    rms = 20.0
+
+    def slow_read():
+        if state_manager.get_state() == JarvisState.SUSPENDED:
+            mock_deps["stop_event"].set()
+        return pcm, rms
+
+    controller.audio_manager.read_frame = MagicMock(side_effect=slow_read)
+
+    with patch.object(
+        controller.activation_manager, "is_screen_locked", return_value=True
+    ):
+        controller.start()
+
+    assert state_manager.get_state() == JarvisState.SUSPENDED
+    assert controller._pending_plan is None
+    assert controller.confirmation_frames == []

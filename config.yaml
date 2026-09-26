@@ -16,6 +16,9 @@ voice_activation:
   response_phrase: "Sim?"             # Frase falada pelo Jarvis ao ser ativado
   volume_multiplier: 1.0              # Ganho do microfone (1.0 = padrão, >1.0 amplifica)
   device_index: null                  # Índice do microfone (null = microfone padrão do Windows)
+  auto_suspend:
+    fullscreen: true                  # Suspende em jogos e apps tela cheia sem borda
+    lock_screen: true                 # Suspende e impede ativação na tela de bloqueio do Windows
   wake_word:
     enabled: true
     keyword: "hey_jarvis"

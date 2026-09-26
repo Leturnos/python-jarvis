@@ -148,6 +148,7 @@ class JarvisController:
                         is_hotkey_pressed=self.activation_manager.is_hotkey_pressed(),
                         current_state=current_state,
                         timestamp=now,
+                        is_screen_locked=self.activation_manager.is_screen_locked(),
                     )
 
                     # 4. State-based Logic
@@ -162,21 +163,22 @@ class JarvisController:
                     if current_state == JarvisState.SLEEPING:
                         self.ui.update(status="SLEEPING")
 
-                        # Allow waking up via PTT
-                        action_obj = self.activation_manager.evaluate(context)
-                        if (
-                            action_obj.action_type
-                            == ActivationActionType.TRIGGER_PTT_START
-                        ):
-                            logger.info("Waking up from Sleep via PTT!")
-                            self.tray.mute_until = 0  # Clear timer if any
-                            stt_engine.load()  # Preload model before listening
-                            self.tts_engine.speak(self.response_phrase)
-                            state_manager.set_state(JarvisState.LISTENING)
-                            self.command_frames = []
-                            self.confirmation_frames = []
-                            self.silence_start = None
-                            self.command_start_time = context.timestamp
+                        # Allow waking up via PTT only if screen is not locked
+                        if not context.is_screen_locked:
+                            action_obj = self.activation_manager.evaluate(context)
+                            if (
+                                action_obj.action_type
+                                == ActivationActionType.TRIGGER_PTT_START
+                            ):
+                                logger.info("Waking up from Sleep via PTT!")
+                                self.tray.mute_until = 0  # Clear timer if any
+                                stt_engine.load()  # Preload model before listening
+                                self.tts_engine.speak(self.response_phrase)
+                                state_manager.set_state(JarvisState.LISTENING)
+                                self.command_frames = []
+                                self.confirmation_frames = []
+                                self.silence_start = None
+                                self.command_start_time = context.timestamp
                         continue
 
                     if current_state == JarvisState.SUSPENDED:
@@ -184,6 +186,14 @@ class JarvisController:
                         continue
 
                     if current_state == JarvisState.CONFIRMING_DRY_RUN:
+                        if context.is_screen_locked:
+                            logger.info(
+                                "Lock screen engaged during confirmation. Cancelling confirmation."
+                            )
+                            self.confirmation_frames = []
+                            self._pending_plan = None
+                            state_manager.set_state(JarvisState.SUSPENDED)
+                            continue
                         self._handle_confirmation(pcm, rms, now)
                         continue
 
@@ -196,6 +206,15 @@ class JarvisController:
                         continue
 
                     if current_state == JarvisState.LISTENING:
+                        if context.is_screen_locked:
+                            logger.info(
+                                "Lock screen engaged during listening. Aborting listening."
+                            )
+                            self.command_frames = []
+                            self.silence_start = None
+                            state_manager.set_state(JarvisState.SUSPENDED)
+                            continue
+
                         # PTT Check: if we are in PTT hold mode and key is released, stop
                         action_obj = self.activation_manager.evaluate(context)
                         if (
@@ -373,10 +392,13 @@ class JarvisController:
         self.silence_start = None
 
     def _handle_suspended(self, context: ActivationContext) -> None:
-        self.ui.update(status="SUSPENDED (Fullscreen)")
+        if context.is_screen_locked:
+            self.ui.update(status="SUSPENDED (Lock Screen)")
+        else:
+            self.ui.update(status="SUSPENDED (Fullscreen)")
         action_obj = self.activation_manager.evaluate(context)
         if action_obj.action_type == ActivationActionType.RESUME:
-            logger.info("Fullscreen app closed/minimized. Resuming to IDLE.")
+            logger.info("Resuming from suspend to IDLE.")
             state_manager.set_state(JarvisState.IDLE)
 
     def _handle_idle(
