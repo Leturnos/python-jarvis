@@ -53,14 +53,14 @@ def test_llm_agent_initialization_with_keyring(
 
 @patch("core.llm.litellm_provider.KeyringManager.get_secret")
 @patch("core.llm.litellm_provider.KeyringManager.set_secret")
-@patch("os.getenv")
+@patch("core.llm.litellm_provider.dotenv_values")
 @patch("litellm.completion")
 def test_llm_agent_initialization_fallback_and_migration(
-    mock_litellm, mock_getenv, mock_set_secret, mock_get_secret
+    mock_litellm, mock_dotenv, mock_set_secret, mock_get_secret
 ):
     # Keyring empty, but .env has the key
     mock_get_secret.return_value = None
-    mock_getenv.return_value = "env_key_456"
+    mock_dotenv.return_value = {"GEMINI_API_KEY": "env_key_456"}
 
     # Initialize
     LLMAgent()

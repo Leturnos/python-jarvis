@@ -1,7 +1,5 @@
-import os
-
 import keyring
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 from core.infra.logger_config import logger
 from core.shared.paths import get_app_root
@@ -41,18 +39,21 @@ class KeyringManager:
 
         Returns True if found, False otherwise with a friendly log message.
         """
-        load_dotenv(get_app_root() / ".env")
+        env_path = get_app_root() / ".env"
+        env_vals = dotenv_values(env_path) if env_path.exists() else {}
 
         key_name = f"{provider_name.upper()}_API_KEY"
         keyring_key = KeyringManager.get_secret("python-jarvis", key_name)
 
-        env_key = os.getenv(key_name)
+        env_key = env_vals.get(key_name)
 
         key: str | None = None
 
         # Update Keyring if .env key is different or new
         if env_key and (not keyring_key or env_key != keyring_key):
-            logger.info(f"Migrating/updating {key_name} from .env to secure Keyring.")
+            logger.info(
+                f"Migrating/updating {key_name} from local .env to secure Keyring."
+            )
             KeyringManager.set_secret("python-jarvis", key_name, env_key)
             key = env_key
         else:

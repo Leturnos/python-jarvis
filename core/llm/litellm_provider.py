@@ -1,8 +1,7 @@
-import os
 from typing import Any
 
 import litellm
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 from core.infra.config import config
 from core.infra.keyring_manager import KeyringManager
@@ -37,11 +36,11 @@ class LiteLLMProvider(BaseLLMProvider):
         api_key = KeyringManager.get_secret("python-jarvis", key_name)
 
         if not api_key:
-            load_dotenv(get_app_root() / ".env")
-
-            api_key = os.getenv(key_name)
+            env_path = get_app_root() / ".env"
+            env_vals = dotenv_values(env_path) if env_path.exists() else {}
+            api_key = env_vals.get(key_name)
             if api_key:
-                logger.info(f"{key_name} found in .env. Saving to Keyring.")
+                logger.info(f"{key_name} found in local .env. Saving to Keyring.")
                 KeyringManager.set_secret("python-jarvis", key_name, api_key)
 
         if not api_key:
@@ -53,6 +52,11 @@ class LiteLLMProvider(BaseLLMProvider):
         self, prompt: str, system_instruction: str | None = None
     ) -> LLMResponse:
         """Generates content using LiteLLM."""
+        if not self.api_key:
+            raise LLMAuthenticationError(
+                f"Chave de API para '{self.provider}' não está configurada no python-jarvis."
+            )
+
         if not check_internet_connection_async(timeout=0.5):
             logger.warning("Internet offline detected before LLM request.")
             raise LLMProviderError(
@@ -70,9 +74,8 @@ class LiteLLMProvider(BaseLLMProvider):
             kwargs: dict[str, Any] = {
                 "timeout": timeout_val,
                 "num_retries": retries_val,
+                "api_key": self.api_key,
             }
-            if self.api_key:
-                kwargs["api_key"] = self.api_key
 
             response = litellm.completion(
                 model=self.full_model_name,
@@ -124,6 +127,12 @@ class LiteLLMProvider(BaseLLMProvider):
 
     def test_connection(self) -> bool:
         """Verifies if the API key and provider connection are valid using a 1-token request."""
+        if not self.api_key:
+            logger.warning(
+                f"Active connection test skipped: no API key configured for {self.provider}."
+            )
+            return False
+
         messages = [{"role": "user", "content": "ping"}]
         try:
             timeout_val = float(config.get("llm", {}).get("timeout_seconds", 5.0))
@@ -131,9 +140,8 @@ class LiteLLMProvider(BaseLLMProvider):
             kwargs: dict[str, Any] = {
                 "timeout": timeout_val,
                 "num_retries": retries_val,
+                "api_key": self.api_key,
             }
-            if self.api_key:
-                kwargs["api_key"] = self.api_key
 
             litellm.completion(
                 model=self.full_model_name,
