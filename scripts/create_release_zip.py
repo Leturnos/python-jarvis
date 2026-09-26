@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 
 
-def create_release_zip(version: str = "v0.1.0") -> Path:
+def create_release_zip(version: str = "v0.2.0") -> Path:
     root_dir = Path(__file__).resolve().parent.parent
     dist_dir = root_dir / "dist"
     jarvis_dir = dist_dir / "Jarvis"
@@ -17,7 +17,7 @@ def create_release_zip(version: str = "v0.1.0") -> Path:
     zip_path = dist_dir / zip_filename
 
     exclude_dirs = {"data", "logs", "__pycache__"}
-    exclude_files = {".env", ".gitignore"}
+    exclude_files = {".env", ".gitignore", ".first_run_completed"}
     exclude_extensions = {".log", ".db", ".db-wal", ".db-shm", ".pyc"}
 
     print(f"Creating release archive: {zip_path}...")
@@ -45,5 +45,5 @@ def create_release_zip(version: str = "v0.1.0") -> Path:
 
 
 if __name__ == "__main__":
-    cli_version = sys.argv[1] if len(sys.argv) > 1 else "v0.1.0"
+    cli_version = sys.argv[1] if len(sys.argv) > 1 else "v0.2.0"
     create_release_zip(cli_version)
