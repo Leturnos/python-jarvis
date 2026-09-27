@@ -40,7 +40,7 @@ class KeyringManager:
         Returns True if found, False otherwise with a friendly log message.
         """
         env_path = get_app_root() / ".env"
-        env_vals = dotenv_values(env_path) if env_path.exists() else {}
+        env_vals = dotenv_values(env_path)
 
         key_name = f"{provider_name.upper()}_API_KEY"
         keyring_key = KeyringManager.get_secret("python-jarvis", key_name)

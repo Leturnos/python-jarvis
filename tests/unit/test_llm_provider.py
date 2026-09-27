@@ -9,6 +9,7 @@ from core.llm.models import LLMProviderError
 
 def test_litellm_provider_configures_timeout_and_zero_retries():
     provider = LiteLLMProvider(provider="gemini", model="gemini-2.5-flash")
+    provider.api_key = "mock_test_key"
 
     with patch(
         "core.llm.litellm_provider.check_internet_connection_async", return_value=True
@@ -35,6 +36,7 @@ def test_litellm_provider_configures_timeout_and_zero_retries():
 
 def test_litellm_provider_fast_check_offline():
     provider = LiteLLMProvider(provider="gemini", model="gemini-2.5-flash")
+    provider.api_key = "mock_test_key"
 
     with patch(
         "core.llm.litellm_provider.check_internet_connection_async", return_value=False

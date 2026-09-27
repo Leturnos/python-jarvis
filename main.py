@@ -76,7 +76,7 @@ def main() -> None:
 
     api_key = KeyringManager.get_secret("python-jarvis", key_name)
     env_path = get_app_root() / ".env"
-    env_vals = dotenv_values(env_path) if env_path.exists() else {}
+    env_vals = dotenv_values(env_path)
     env_key = env_vals.get(key_name)
 
     onboarding_mode = False

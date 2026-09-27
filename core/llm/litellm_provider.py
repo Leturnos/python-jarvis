@@ -37,7 +37,7 @@ class LiteLLMProvider(BaseLLMProvider):
 
         if not api_key:
             env_path = get_app_root() / ".env"
-            env_vals = dotenv_values(env_path) if env_path.exists() else {}
+            env_vals = dotenv_values(env_path)
             api_key = env_vals.get(key_name)
             if api_key:
                 logger.info(f"{key_name} found in local .env. Saving to Keyring.")
