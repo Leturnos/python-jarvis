@@ -5,7 +5,26 @@ import zipfile
 from pathlib import Path
 
 
-def create_release_zip(version: str = "v0.2.0") -> Path:
+def get_default_version() -> str:
+    root_dir = Path(__file__).resolve().parent.parent
+    pyproject = root_dir / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            import tomllib
+
+            with open(pyproject, "rb") as f:
+                data = tomllib.load(f)
+                ver = data.get("project", {}).get("version")
+                if ver:
+                    return f"v{ver}" if not ver.startswith("v") else ver
+        except Exception:
+            pass
+    return "v0.2.1"
+
+
+def create_release_zip(version: str | None = None) -> Path:
+    if version is None:
+        version = get_default_version()
     root_dir = Path(__file__).resolve().parent.parent
     dist_dir = root_dir / "dist"
     jarvis_dir = dist_dir / "Jarvis"
@@ -45,5 +64,5 @@ def create_release_zip(version: str = "v0.2.0") -> Path:
 
 
 if __name__ == "__main__":
-    cli_version = sys.argv[1] if len(sys.argv) > 1 else "v0.2.0"
+    cli_version = sys.argv[1] if len(sys.argv) > 1 else get_default_version()
     create_release_zip(cli_version)

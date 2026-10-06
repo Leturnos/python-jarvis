@@ -39,6 +39,7 @@ class Timing:
     WINDOW_RECOVERY_SLEEP = 0.4  # Yield time during window restoration
     POST_FOCUS_RENDER_SLEEP = 0.5  # Wait time after gaining focus before screenshotting
     AUTOPLAY_CLICK_DELAY = 1.8  # Timing delay to trigger auto-play actions
+    MEDIA_STARTUP_DELAY = 3.0  # Delay for media app loading before focus/autoplay
 
     MOUSE_DETECT_POLLING = 0.1  # Mouse position polling loop delay
 
@@ -53,6 +54,7 @@ class Timing:
         "WINDOW_RECOVERY_SLEEP": 0.4,
         "POST_FOCUS_RENDER_SLEEP": 0.5,
         "AUTOPLAY_CLICK_DELAY": 1.8,
+        "MEDIA_STARTUP_DELAY": 3.0,
         "MOUSE_DETECT_POLLING": 0.1,
     }
 

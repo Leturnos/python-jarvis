@@ -151,6 +151,10 @@ def test_settings_tab_save_key_reinitializes_active_provider(
     window = MainWindow(ui_adapter)
     tab = window.settings_tab
 
+    import core.ai.llm_agent  # noqa: F401
+
+    mock_set_secret.reset_mock()
+
     with patch(
         "core.ui.tabs.settings_tab.config", {"llm": {"active_provider": "gemini"}}
     ):

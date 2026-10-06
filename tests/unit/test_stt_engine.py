@@ -138,11 +138,14 @@ def test_stt_engine_auto_unload_timer(mock_whisper):
         }
     }
     engine = STTEngine(config_dict=config_dict)
-    engine.load()
-    assert engine.model is not None
-    engine._reset_unload_timer()
-    time.sleep(1.2)
-    assert engine.model is None
+    try:
+        engine.load()
+        assert engine.model is not None
+        engine._reset_unload_timer()
+        time.sleep(1.2)
+        assert engine.model is None
+    finally:
+        engine.unload()
 
 
 def test_stt_engine_auto_unload_disabled_when_zero(mock_whisper):
@@ -156,8 +159,11 @@ def test_stt_engine_auto_unload_disabled_when_zero(mock_whisper):
         }
     }
     engine = STTEngine(config_dict=config_dict)
-    engine.load()
-    engine._reset_unload_timer()
-    time.sleep(0.3)
-    assert engine._unload_timer is None
-    assert engine.model is not None
+    try:
+        engine.load()
+        engine._reset_unload_timer()
+        time.sleep(0.3)
+        assert engine._unload_timer is None
+        assert engine.model is not None
+    finally:
+        engine.unload()

@@ -250,6 +250,21 @@ def main() -> int:
     copy_user_facing_assets(DIST_DIR)
 
     print_report(DIST_DIR, EXE_FILE)
+
+    # Automatically create release distribution ZIP archive
+    if "--no-zip" not in sys.argv:
+        try:
+            try:
+                from scripts.create_release_zip import create_release_zip
+            except ImportError:
+                from create_release_zip import create_release_zip
+
+            zip_path = create_release_zip()
+            logger.info(f"Release ZIP archive successfully created: {zip_path}")
+        except Exception as exc:
+            logger.error(f"Failed to create release ZIP: {exc}")
+            return 1
+
     return 0
 
 

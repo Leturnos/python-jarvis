@@ -197,8 +197,6 @@ class StepExecutor:
 
                 if not process_name and AppRegistry.SPOTIFY_APP_NAME in target.lower():
                     process_name = AppRegistry.SPOTIFY_PROCESS
-                    if not window_title_pattern:
-                        window_title_pattern = AppRegistry.SPOTIFY_APP_NAME
 
                 try:
                     window = self.window_manager.open_and_stabilize_app(

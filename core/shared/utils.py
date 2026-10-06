@@ -29,8 +29,13 @@ def trim_working_set() -> bool:
     if os.name != "nt":
         return False
     try:
-        # EmptyWorkingSet(-1) flushes the working set of the current process (pseudo-handle -1)
-        result = ctypes.windll.psapi.EmptyWorkingSet(-1)
+        get_current_process = ctypes.windll.kernel32.GetCurrentProcess
+        get_current_process.restype = ctypes.c_void_p
+        handle = get_current_process()
+
+        empty_working_set = ctypes.windll.psapi.EmptyWorkingSet
+        empty_working_set.argtypes = [ctypes.c_void_p]
+        result = empty_working_set(handle)
         return bool(result)
     except Exception as e:
         logger.debug(f"Failed to trim working set: {e}")

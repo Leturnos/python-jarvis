@@ -108,7 +108,9 @@ class WindowManager:
                 if executable_name:
                     p_name = (p.info.get("name") or "").lower()
                     target_name = executable_name.lower()
-                    if p_name == target_name:
+                    if p_name == target_name or p_name.removesuffix(
+                        ".exe"
+                    ) == target_name.removesuffix(".exe"):
                         pids.add(p.info["pid"])
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
@@ -150,9 +152,14 @@ class WindowManager:
         if active_win.pid == target_win.pid:
             return True
         if (
-            active_win.executable.lower() == target_win.executable.lower()
-            and window_title_pattern
-            and re.search(window_title_pattern, active_win.title, re.IGNORECASE)
+            active_win.executable
+            and target_win.executable
+            and active_win.executable.lower().removesuffix(".exe")
+            == target_win.executable.lower().removesuffix(".exe")
+            and (
+                not window_title_pattern
+                or re.search(window_title_pattern, active_win.title, re.IGNORECASE)
+            )
         ):
             return True
         return False
@@ -190,11 +197,17 @@ class WindowManager:
                         is_match = False
                         if candidate_pids and pid in candidate_pids:
                             is_match = True
-                        elif (
-                            executable_name
-                            and executable.lower() == executable_name.lower()
-                        ):
-                            is_match = True
+                        elif executable_name:
+                            p_name = executable.lower().removesuffix(".exe")
+                            target_p = executable_name.lower().removesuffix(".exe")
+                            if p_name == target_p:
+                                if window_title_pattern:
+                                    if re.search(
+                                        window_title_pattern, title, re.IGNORECASE
+                                    ):
+                                        is_match = True
+                                else:
+                                    is_match = True
                         elif window_title_pattern and re.search(
                             window_title_pattern, title, re.IGNORECASE
                         ):
@@ -291,14 +304,7 @@ class WindowManager:
                 active_win = self.get_foreground_window_info()
                 if active_win:
                     if self.check_focus_match(active_win, window, window_title_pattern):
-                        try:
-                            rect = win32gui.GetWindowRect(window.hwnd)
-                            cx = rect[0] + (rect[2] - rect[0]) // 2
-                            cy = rect[1] + (rect[3] - rect[1]) // 2
-                            pyautogui.click(cx, cy)
-                            time.sleep(Timing.UI_STABILIZATION_MEDIUM)
-                        except Exception:
-                            pass
+                        time.sleep(Timing.UI_STABILIZATION_SHORT)
                         return window
                 else:
                     return window

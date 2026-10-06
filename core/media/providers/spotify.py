@@ -11,6 +11,7 @@ from core.media.models import (
     ResolvedMediaPlan,
 )
 from core.media.nlp import NLPProcessor
+from core.shared.constants import Timing
 from core.shared.paths import get_app_root
 
 
@@ -73,7 +74,7 @@ class SpotifyProvider:
                 ),
                 ExecutionStep(
                     type=StepType.WAIT,
-                    payload={"duration": 2.5},
+                    payload={"duration": Timing.MEDIA_STARTUP_DELAY},
                     description="Wait for Spotify load",
                 ),
             ]

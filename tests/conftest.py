@@ -1,7 +1,11 @@
+import os
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+# Ensure Qt applications run headless in tests so no GUI windows pop up on the desktop
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.runtime.state import JarvisState, state_manager
 
