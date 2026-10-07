@@ -254,10 +254,83 @@ def test_main_execution_flow(tmp_path):
             patch("scripts.build_exe.EXE_FILE", fake_exe),
             patch("scripts.build_exe.DIST_DIR", fake_exe.parent),
             patch("scripts.build_exe.print_report") as mock_report,
+            patch(
+                "scripts.build_exe.create_release_zip",
+                return_value=tmp_path / "Jarvis.zip",
+            ) as mock_zip,
         ):
             ret = main()
             assert ret == 0
             mock_report.assert_called_once()
+            mock_zip.assert_called_once()
     finally:
         if str(ROOT_DIR) in sys.path:
             sys.path.remove(str(ROOT_DIR))
+
+
+def test_main_execution_flow_no_zip(tmp_path):
+    sys.path.insert(0, str(ROOT_DIR))
+    try:
+        from scripts.build_exe import main
+
+        fake_exe = tmp_path / "dist" / "Jarvis" / "Jarvis.exe"
+        fake_exe.parent.mkdir(parents=True)
+        fake_exe.write_bytes(b"exe")
+
+        with (
+            patch("scripts.build_exe.verify_prerequisites", return_value=True),
+            patch(
+                "scripts.build_exe.generate_icon_if_needed",
+                return_value=tmp_path / "icon.ico",
+            ),
+            patch("scripts.build_exe.build_bundle", return_value=True),
+            patch("scripts.build_exe.EXE_FILE", fake_exe),
+            patch("scripts.build_exe.DIST_DIR", fake_exe.parent),
+            patch("scripts.build_exe.print_report") as mock_report,
+            patch("scripts.build_exe.create_release_zip") as mock_zip,
+            patch("sys.argv", ["build_exe.py", "--no-zip"]),
+        ):
+            ret = main()
+            assert ret == 0
+            mock_report.assert_called_once()
+            mock_zip.assert_not_called()
+    finally:
+        if str(ROOT_DIR) in sys.path:
+            sys.path.remove(str(ROOT_DIR))
+
+
+def test_create_release_zip_packages_cleanly(tmp_path):
+    import zipfile
+
+    from scripts.create_release_zip import create_release_zip
+
+    fake_dist = tmp_path / "dist"
+    fake_jarvis = fake_dist / "Jarvis"
+    fake_jarvis.mkdir(parents=True)
+
+    # Valid files
+    (fake_jarvis / "Jarvis.exe").write_bytes(b"binary")
+    (fake_jarvis / "config.yaml").write_text("model: test", encoding="utf-8")
+
+    # Excluded files and directories
+    (fake_jarvis / ".env").write_text("KEY=SECRET", encoding="utf-8")
+    (fake_jarvis / "test.log").write_text("log content", encoding="utf-8")
+    (fake_jarvis / "test.pyc").write_bytes(b"bytecode")
+    logs_dir = fake_jarvis / "logs"
+    logs_dir.mkdir()
+    (logs_dir / "app.log").write_text("nested log", encoding="utf-8")
+
+    zip_file = create_release_zip(dist_dir=fake_dist)
+
+    assert zip_file.exists()
+    assert zip_file.name.startswith("Jarvis-")
+    assert zip_file.name.endswith("-windows-x64.zip")
+
+    with zipfile.ZipFile(zip_file, "r") as zf:
+        namelist = zf.namelist()
+        assert "Jarvis/Jarvis.exe" in namelist
+        assert "Jarvis/config.yaml" in namelist
+        assert not any(".env" in name for name in namelist)
+        assert not any(".log" in name for name in namelist)
+        assert not any(".pyc" in name for name in namelist)
+        assert not any("logs/" in name for name in namelist)

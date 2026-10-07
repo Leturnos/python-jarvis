@@ -19,6 +19,14 @@ ICON_FILE = RESOURCES_DIR / "icon.ico"
 DIST_DIR = ROOT_DIR / "dist" / "Jarvis"
 EXE_FILE = DIST_DIR / "Jarvis.exe"
 
+try:
+    from scripts.create_release_zip import create_release_zip
+except ImportError:
+    try:
+        from create_release_zip import create_release_zip
+    except ImportError:
+        create_release_zip = None  # type: ignore[assignment]
+
 
 def generate_icon_if_needed(icon_path: Path | None = None) -> Path:
     """Ensure an application icon exists, creating a default one if missing."""
@@ -254,12 +262,10 @@ def main() -> int:
     # Automatically create release distribution ZIP archive
     if "--no-zip" not in sys.argv:
         try:
-            try:
-                from scripts.create_release_zip import create_release_zip
-            except ImportError:
-                from create_release_zip import create_release_zip
+            if create_release_zip is None:
+                raise ImportError("create_release_zip module could not be loaded")
 
-            zip_path = create_release_zip()
+            zip_path = create_release_zip(dist_dir=DIST_DIR.parent)
             logger.info(f"Release ZIP archive successfully created: {zip_path}")
         except Exception as exc:
             logger.error(f"Failed to create release ZIP: {exc}")

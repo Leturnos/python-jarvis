@@ -10,6 +10,19 @@ from core.controller import JarvisController
 from core.runtime.state import JarvisState, state_manager
 
 
+@pytest.fixture(autouse=True)
+def mock_activation_manager():
+    """Ensure hardware/session states (fullscreen, lock screen) do not interfere with controller tests."""
+    with (
+        patch("core.activation.ActivationManager.is_fullscreen", return_value=False),
+        patch("core.activation.ActivationManager.is_screen_locked", return_value=False),
+        patch(
+            "core.activation.ActivationManager.is_hotkey_pressed", return_value=False
+        ),
+    ):
+        yield
+
+
 @pytest.fixture
 def mock_deps():
     stop_event = threading.Event()

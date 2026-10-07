@@ -22,18 +22,20 @@ def get_default_version() -> str:
     return "v0.2.1"
 
 
-def create_release_zip(version: str | None = None) -> Path:
+def create_release_zip(
+    version: str | None = None, dist_dir: Path | None = None
+) -> Path:
     if version is None:
         version = get_default_version()
     root_dir = Path(__file__).resolve().parent.parent
-    dist_dir = root_dir / "dist"
-    jarvis_dir = dist_dir / "Jarvis"
+    base_dist = dist_dir or (root_dir / "dist")
+    jarvis_dir = base_dist / "Jarvis"
 
     if not jarvis_dir.exists():
         raise FileNotFoundError(f"Directory not found: {jarvis_dir}")
 
     zip_filename = f"Jarvis-{version}-windows-x64.zip"
-    zip_path = dist_dir / zip_filename
+    zip_path = base_dist / zip_filename
 
     exclude_dirs = {"data", "logs", "__pycache__"}
     exclude_files = {".env", ".gitignore", ".first_run_completed"}
