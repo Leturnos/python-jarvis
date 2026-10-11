@@ -1,5 +1,6 @@
 import json
 import threading
+from datetime import datetime
 from typing import Any
 
 from core.ai.conversation_memory import conversation_memory
@@ -92,8 +93,6 @@ class LLMAgent:
 
     def _get_operational_context(self) -> dict[str, str]:
         """Gathers dynamic operational context: date/time, active window, and recent history."""
-        from datetime import datetime
-
         weekdays = [
             "Segunda-feira",
             "Terça-feira",
@@ -571,8 +570,14 @@ class LLMAgent:
                 logger.info(
                     f"Sending prompt to LLM ({self.provider.provider}) for raw text generation..."
                 )
-                response = self.provider.generate_content(prompt=prompt)
-            return response.content.strip()
+                response = self._execute_with_fallback(prompt=prompt)
+            total_tokens = 0
+            if response.usage and isinstance(response.usage, dict):
+                total_tokens = response.usage.get("total_tokens", 0)
+            elif hasattr(response, "usage") and response.usage:
+                total_tokens = getattr(response.usage, "total_tokens", 0)
+            rate_limiter.log_usage(token_count=total_tokens)
+            return str(response.content.strip())
         except Exception as e:
             logger.error(f"Error generating text from LLM: {e}")
             raise

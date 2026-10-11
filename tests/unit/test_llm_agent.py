@@ -240,3 +240,18 @@ def test_llm_agent_two_stage_action_fallback_empty_steps(mock_execute):
 
     assert result["type"] == "action"
     assert result["steps"] == []
+
+
+@patch.object(LLMAgent, "_execute_with_fallback")
+def test_generate_text_uses_fallback(mock_execute):
+    from unittest.mock import MagicMock
+
+    resp = MagicMock()
+    resp.content = "  Resposta gerada com sucesso  "
+    mock_execute.return_value = resp
+
+    agent = LLMAgent()
+    res = agent.generate_text("Explique o que é Python")
+
+    mock_execute.assert_called_once_with(prompt="Explique o que é Python")
+    assert res == "Resposta gerada com sucesso"
