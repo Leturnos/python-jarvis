@@ -146,3 +146,39 @@ def test_state_thread_safety() -> None:
 
     assert len(errors) == 0
     assert manager.get_state() in (JarvisState.LISTENING, JarvisState.THINKING)
+
+
+def test_suspended_transitions_from_listening_and_confirming_dry_run(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Verifies that transitioning to SUSPENDED from LISTENING and CONFIRMING_DRY_RUN is valid."""
+    manager = StateManager()
+
+    # Enable propagation temporarily for the test so caplog can intercept it
+    jarvis_logger = logging.getLogger("Jarvis")
+    original_propagate = jarvis_logger.propagate
+    jarvis_logger.propagate = True
+    caplog.set_level("WARNING", logger="Jarvis")
+
+    try:
+        # LISTENING -> SUSPENDED
+        manager.set_state(JarvisState.LISTENING)
+        manager.set_state(JarvisState.SUSPENDED)
+        assert manager.get_state() == JarvisState.SUSPENDED
+
+        # SUSPENDED -> IDLE -> THINKING -> CONFIRMING_DRY_RUN -> SUSPENDED
+        manager.set_state(JarvisState.IDLE)
+        manager.set_state(JarvisState.THINKING)
+        manager.set_state(JarvisState.CONFIRMING_DRY_RUN)
+        manager.set_state(JarvisState.SUSPENDED)
+        assert manager.get_state() == JarvisState.SUSPENDED
+
+        # Ensure NO "Invalid transition attempt" was logged
+        invalid_warnings = [
+            record.message
+            for record in caplog.records
+            if "Invalid transition attempt" in record.message
+        ]
+        assert invalid_warnings == []
+    finally:
+        jarvis_logger.propagate = original_propagate

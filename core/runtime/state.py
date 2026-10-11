@@ -71,6 +71,7 @@ class StateManager:
                 JarvisState.IDLE,
                 JarvisState.MUTED,
                 JarvisState.SLEEPING,
+                JarvisState.SUSPENDED,
                 JarvisState.ERROR,
             ],
             JarvisState.THINKING: [
@@ -86,6 +87,7 @@ class StateManager:
                 JarvisState.IDLE,
                 JarvisState.MUTED,
                 JarvisState.SLEEPING,
+                JarvisState.SUSPENDED,
                 JarvisState.ERROR,
             ],
             JarvisState.EXECUTING: [
