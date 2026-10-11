@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from core.activation import ActivationActionType, ActivationContext, ActivationManager
+from core.audio.audio_cues import CueType
 from core.audio.audio_loop import AudioLoopManager
 from core.audio.stt_engine import stt_engine
 from core.execution.job_queue import Job, JobType
@@ -50,12 +51,13 @@ class JarvisController:
         stop_event: threading.Event,
         pa: Any,
         stream: Any,
+        audio_cue_manager: Any = None,
     ) -> None:
         """Initializes the controller with injected dependencies.
 
         Args:
             config, tts_engine, dispatcher, model, loaded_names, ui, tray,
-            task_queue, stop_event, pa, stream: Dependencies required for
+            task_queue, stop_event, pa, stream, audio_cue_manager: Dependencies required for
             orchestration.
         """
         self.config = config
@@ -67,6 +69,7 @@ class JarvisController:
         self.tray = tray
         self.task_queue = task_queue
         self.stop_event = stop_event
+        self.audio_cue_manager = audio_cue_manager
 
         # AudioLoopManager handles PyAudio lifecycle
         self.audio_manager = AudioLoopManager(
@@ -173,6 +176,8 @@ class JarvisController:
                                 logger.info("Waking up from Sleep via PTT!")
                                 self.tray.mute_until = 0  # Clear timer if any
                                 stt_engine.load()  # Preload model before listening
+                                if self.audio_cue_manager:
+                                    self.audio_cue_manager.play_cue(CueType.WAKE)
                                 self.tts_engine.speak(self.response_phrase)
                                 state_manager.set_state(JarvisState.LISTENING)
                                 self.command_frames = []
@@ -385,6 +390,8 @@ class JarvisController:
             self._stop_listening_and_process(now)
 
     def _stop_listening_and_process(self, now: float) -> None:
+        if self.audio_cue_manager:
+            self.audio_cue_manager.play_cue(CueType.COMMAND_RECOGNIZED)
         audio_bytes = b"".join(self.command_frames)
         state_manager.set_state(JarvisState.THINKING)
         self.task_queue.put(Job(type=JobType.LLM_DYNAMIC, payload=audio_bytes))
@@ -457,6 +464,8 @@ class JarvisController:
                 logger.info(
                     f"Wake word '{ww_name_clean}' detected! (Score: {highest_score:.2f})"
                 )
+                if self.audio_cue_manager:
+                    self.audio_cue_manager.play_cue(CueType.WAKE)
 
                 configured_keyword = (
                     self.config.get("voice_activation", {})
@@ -482,6 +491,8 @@ class JarvisController:
 
             elif source == "PTT":
                 logger.info("PTT Activation triggered!")
+                if self.audio_cue_manager:
+                    self.audio_cue_manager.play_cue(CueType.WAKE)
                 self.tts_engine.speak(self.response_phrase)
                 state_manager.set_state(JarvisState.LISTENING)
                 self.command_frames = []

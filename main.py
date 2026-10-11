@@ -15,6 +15,7 @@ from win32api import GetLastError
 from win32event import CreateMutex
 from winerror import ERROR_ALREADY_EXISTS
 
+from core.audio.audio_cues import AudioCueManager
 from core.audio.audio_engine import (
     get_audio_stream,
     load_wakeword_model,
@@ -130,10 +131,16 @@ def main() -> None:
     step_executor = StepExecutor(config, window_manager, spotify_automator, tts_engine)
 
     plan_builder = PlanBuilder(config)
+    audio_cue_manager = AudioCueManager(config)
 
     pa, stream = get_audio_stream(config)
     dispatcher = ActionDispatcher(
-        config, step_executor, tts_engine, plan_builder, stream
+        config,
+        step_executor,
+        tts_engine,
+        plan_builder,
+        stream,
+        audio_cue_manager=audio_cue_manager,
     )
     model, loaded_names = load_wakeword_model(config)
 
@@ -198,6 +205,7 @@ def main() -> None:
         stop_event=stop_event,
         pa=pa,
         stream=stream,
+        audio_cue_manager=audio_cue_manager,
     )
 
     def run_controller_safely() -> None:

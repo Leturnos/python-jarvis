@@ -12,6 +12,7 @@ from core.ai.command_resolver import CommandResolver
 from core.ai.conversation_memory import conversation_memory
 from core.ai.llm_agent import llm_agent
 from core.ai.prompt_guard import PromptGuard
+from core.audio.audio_cues import CueType
 from core.audio.tts_engine import TTSEngine
 from core.execution.execution_plan import (
     ExecutionPlan,
@@ -47,6 +48,7 @@ class ActionDispatcher:
         tts_engine: TTSEngine,
         plan_builder: PlanBuilder,
         audio_stream: Any = None,
+        audio_cue_manager: Any = None,
     ) -> None:
         """Initializes the ActionDispatcher with its dependencies.
 
@@ -56,12 +58,14 @@ class ActionDispatcher:
             tts_engine (TTSEngine): The text-to-speech engine.
             plan_builder (PlanBuilder): The execution plan builder.
             audio_stream (optional): The PyAudio stream for secondary recording tasks.
+            audio_cue_manager (optional): Audio cue manager for audio cues.
         """
         self.config = config
         self.step_executor = step_executor
         self.tts_engine = tts_engine
         self.plan_builder = plan_builder
         self.audio_stream = audio_stream
+        self.audio_cue_manager = audio_cue_manager
         self.last_input_text = "N/A"
         self.last_input_source = "voice"
         self.last_confidence = 1.0
@@ -267,6 +271,8 @@ class ActionDispatcher:
                 assistant_response=plan.explanation or "Pronto!",
                 intent=plan.intent,
             )
+            if self.audio_cue_manager:
+                self.audio_cue_manager.play_cue(CueType.ACTION_COMPLETED)
             self.tts_engine.speak("Pronto!")
             state_manager.set_state(JarvisState.IDLE)
             return True
