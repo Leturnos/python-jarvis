@@ -12,6 +12,8 @@ from core.ai.llm_agent import llm_agent
 from core.infra.config import config, reload_config, update_yaml_active_provider
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
+from core.infra.update_preferences import UpdatePreferenceManager
+from core.infra.updater import ReleaseInfo, UpdateManager
 from core.llm import LiteLLMProvider
 from core.runtime.state import JarvisState, state_manager
 from core.shared.constants import DEFAULT_PROVIDER
@@ -27,6 +29,7 @@ from core.ui.voice_overlay import VoiceOverlayHUD
 
 class QtAppController(QObject):
     provider_switch_done = Signal(bool, str)
+    update_available_boot = Signal(object)
 
     def __init__(
         self,
@@ -39,6 +42,7 @@ class QtAppController(QObject):
     ) -> None:
         super().__init__()
         self.provider_switch_done.connect(self._on_provider_switch_done)
+        self.update_available_boot.connect(self._show_update_notification)
         self.app = app
         self.app.setQuitOnLastWindowClosed(False)
         self.tray_adapter = tray_adapter
@@ -91,6 +95,8 @@ class QtAppController(QObject):
                 parent=self.main_window.status_tab,
                 duration=10000,
             )
+
+        self._start_boot_update_check()
 
     def start_command_palette(self, dispatcher: Any) -> QtCommandPalette:
         self.command_palette = QtCommandPalette(dispatcher)
@@ -398,3 +404,65 @@ class QtAppController(QObject):
             pass
 
         os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    def _start_boot_update_check(self) -> None:
+        """Starts a background thread to check for updates on startup if enabled."""
+        check_on_boot = config.get("updates", {}).get("check_on_boot", True)
+        if not check_on_boot:
+            return
+        threading.Thread(target=self._run_boot_update_check, daemon=True).start()
+
+    def _run_boot_update_check(self) -> None:
+        """Runs the boot update check with interval rate-limiting and user snooze enforcement."""
+        try:
+            pref_mgr = UpdatePreferenceManager()
+            if not pref_mgr.can_check_on_boot():
+                logger.debug(
+                    "Boot update check skipped: rate limited by check interval."
+                )
+                return
+
+            pref_mgr.record_check()
+            updater = UpdateManager()
+            info = updater.check_for_updates()
+            if not info or not info.has_update:
+                return
+
+            if not pref_mgr.should_notify_version(info.version):
+                logger.info(
+                    f"Update {info.version} available but notification suppressed by user preference."
+                )
+                return
+
+            self.update_available_boot.emit(info)
+        except Exception as e:
+            logger.debug(f"Boot update check failed silently: {e}")
+
+    def _show_update_notification(self, info: ReleaseInfo) -> None:
+        """Shows unobtrusive tray balloon or InfoBar notification when an update is available."""
+        if hasattr(self, "tray_icon") and self.tray_icon and self.tray_icon.isVisible():
+            self.tray_icon.showMessage(
+                f"Jarvis - Nova Versão {info.version}",
+                "Uma nova versão está disponível. Clique para abrir as configurações e atualizar.",
+                QSystemTrayIcon.MessageIcon.Information,
+                8000,
+            )
+            try:
+                self.tray_icon.messageClicked.connect(
+                    self._on_update_tray_message_clicked
+                )
+            except Exception:
+                pass
+        elif hasattr(self, "main_window") and self.main_window.isVisible():
+            InfoBar.info(
+                f"Nova Versão {info.version} Disponível",
+                f"{info.title}. Acesse a aba Configurações para atualizar.",
+                parent=self.main_window,
+                duration=10000,
+            )
+
+    def _on_update_tray_message_clicked(self) -> None:
+        """Navigates to Settings tab when user clicks the update tray balloon."""
+        self.show_window()
+        self.main_window.pivot.setCurrentItem("settings")
+        self.main_window.stacked_widget.setCurrentWidget(self.main_window.settings_tab)

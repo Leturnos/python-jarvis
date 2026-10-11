@@ -1,11 +1,16 @@
+import threading
+from pathlib import Path
+
 import yaml
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QSlider,
     QVBoxLayout,
@@ -17,15 +22,21 @@ from core.infra.config import config, update_yaml_active_provider
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
 from core.infra.presets import detect_recommended_preset, get_system_hardware_info
+from core.infra.update_preferences import UpdatePreferenceManager
+from core.infra.updater import ReleaseInfo, UpdateManager
 from core.shared.constants import DEFAULT_PROVIDER
-from core.shared.utils import get_app_root
+from core.shared.paths import get_app_root, get_app_version
 
 
 class SettingsTab(QWidget):
-    """Tab widget for managing LLM providers, API keys, and performance settings."""
+    """Tab widget for managing LLM providers, API keys, performance, and updates."""
 
     restart_requested = Signal()
     provider_changed = Signal(str)
+    update_checked = Signal(object)
+    update_progress = Signal(int, int)
+    update_download_finished = Signal(object)
+    update_failed = Signal(str)
 
     PROFILES_ORDER = [
         "auto",
@@ -115,6 +126,53 @@ class SettingsTab(QWidget):
         self._update_slider_text(self.slider.value())
 
         layout.addWidget(perf_group)
+
+        # Updates Group
+        self.update_mgr = UpdateManager()
+        self.pref_mgr = UpdatePreferenceManager()
+        self._latest_release: ReleaseInfo | None = None
+
+        self.update_checked.connect(self._on_update_check_finished)
+        self.update_progress.connect(self._on_update_progress)
+        self.update_download_finished.connect(self._on_download_finished)
+        self.update_failed.connect(self._on_update_failed)
+
+        update_group = QGroupBox("Atualizações do Sistema", self)
+        update_layout = QVBoxLayout(update_group)
+
+        self.version_label = QLabel(
+            f"<b>Versão Instalada:</b> v{get_app_version()}", self
+        )
+        update_layout.addWidget(self.version_label)
+
+        self.update_status_label = QLabel(
+            "Nenhuma verificação recente realizada.", self
+        )
+        self.update_status_label.setWordWrap(True)
+        update_layout.addWidget(self.update_status_label)
+
+        btn_row = QHBoxLayout()
+        self.check_update_btn = QPushButton("Verificar Atualizações", self)
+        self.check_update_btn.clicked.connect(self._on_check_update_clicked)
+        btn_row.addWidget(self.check_update_btn)
+
+        self.apply_update_btn = QPushButton("Baixar e Atualizar", self)
+        self.apply_update_btn.setVisible(False)
+        self.apply_update_btn.clicked.connect(self._download_and_apply_update)
+        btn_row.addWidget(self.apply_update_btn)
+
+        self.snooze_btn = QPushButton("Lembrar Mais Tarde", self)
+        self.snooze_btn.setVisible(False)
+        self.snooze_btn.clicked.connect(self._on_snooze_clicked)
+        btn_row.addWidget(self.snooze_btn)
+
+        update_layout.addLayout(btn_row)
+
+        self.update_progress_bar = QProgressBar(self)
+        self.update_progress_bar.setVisible(False)
+        update_layout.addWidget(self.update_progress_bar)
+
+        layout.addWidget(update_group)
         layout.addStretch(1)
 
     def _update_slider_text(self, value: int) -> None:
@@ -240,3 +298,112 @@ class SettingsTab(QWidget):
             f"Provedor alterado para {prov.capitalize()}.",
             parent=self,
         )
+
+    def _on_check_update_clicked(self) -> None:
+        self.check_update_btn.setEnabled(False)
+        self.update_status_label.setText("Buscando atualizações no GitHub...")
+        threading.Thread(target=self._check_updates_async, daemon=True).start()
+
+    def _check_updates_async(self) -> None:
+        try:
+            info = self.update_mgr.check_for_updates()
+            self.pref_mgr.record_check()
+            self.update_checked.emit(info)
+        except Exception as e:
+            self.update_failed.emit(str(e))
+
+    def _check_updates_sync(self) -> None:
+        """Synchronous check helper used in unit tests."""
+        info = self.update_mgr.check_for_updates()
+        self.pref_mgr.record_check()
+        self._on_update_check_finished(info)
+
+    def _on_update_check_finished(self, info: ReleaseInfo | None) -> None:
+        self.check_update_btn.setEnabled(True)
+        if info is None:
+            self.update_status_label.setText(
+                "Não foi possível verificar atualizações (sem conexão com GitHub)."
+            )
+            self.apply_update_btn.setVisible(False)
+            self.snooze_btn.setVisible(False)
+            return
+
+        self._latest_release = info
+        if info.has_update:
+            self.update_status_label.setText(
+                f"<b>Nova versão disponível:</b> {info.version} - {info.title}"
+            )
+            self.apply_update_btn.setText(f"Baixar e Atualizar para {info.version}")
+            self.apply_update_btn.setVisible(True)
+            self.snooze_btn.setVisible(True)
+        else:
+            self.update_status_label.setText(
+                "Você está usando a versão mais recente do Jarvis!"
+            )
+            self.apply_update_btn.setVisible(False)
+            self.snooze_btn.setVisible(False)
+
+    def _on_snooze_clicked(self) -> None:
+        self.pref_mgr.snooze(24.0)
+        self.snooze_btn.setVisible(False)
+        InfoBar.info(
+            "Lembrete Adiado",
+            "Aviso de atualização adiado por 24 horas.",
+            parent=self,
+        )
+
+    def _download_and_apply_update(self) -> None:
+        if not self._latest_release or not self._latest_release.download_url:
+            InfoBar.warning(
+                "Atualização",
+                "Nenhum pacote de atualização disponível para download.",
+                parent=self,
+            )
+            return
+
+        self.apply_update_btn.setEnabled(False)
+        self.check_update_btn.setEnabled(False)
+        self.update_progress_bar.setVisible(True)
+        self.update_progress_bar.setValue(0)
+        self.update_status_label.setText("Baixando atualização...")
+
+        def _worker() -> None:
+            try:
+
+                def _prog(downloaded: int, total: int) -> None:
+                    if total > 0:
+                        self.update_progress.emit(downloaded, total)
+
+                assert self._latest_release is not None
+                zip_path = self.update_mgr.download_asset(
+                    self._latest_release.download_url,
+                    progress_callback=_prog,
+                )
+                self.update_status_label.setText("Extraindo arquivos...")
+                extracted = self.update_mgr.extract_archive(zip_path)
+                self.update_download_finished.emit(extracted)
+            except Exception as exc:
+                self.update_failed.emit(str(exc))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_update_progress(self, downloaded: int, total: int) -> None:
+        pct = int((downloaded / total) * 100) if total > 0 else 0
+        self.update_progress_bar.setValue(pct)
+        mb_down = downloaded / (1024 * 1024)
+        mb_total = total / (1024 * 1024)
+        self.update_status_label.setText(
+            f"Baixando: {mb_down:.1f}MB / {mb_total:.1f}MB ({pct}%)"
+        )
+
+    def _on_download_finished(self, extracted_dir: object) -> None:
+        self.update_status_label.setText("Aplicando atualização e reiniciando...")
+        if isinstance(extracted_dir, Path):
+            self.update_mgr.apply_update_and_restart(extracted_dir)
+
+    def _on_update_failed(self, err_msg: str) -> None:
+        self.check_update_btn.setEnabled(True)
+        self.apply_update_btn.setEnabled(True)
+        self.update_progress_bar.setVisible(False)
+        self.update_status_label.setText(f"Falha na atualização: {err_msg}")
+        InfoBar.error("Erro na Atualização", err_msg, parent=self)

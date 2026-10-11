@@ -149,3 +149,49 @@ def test_quit_app_hides_tray_icon_first():
 
     assert len(call_order) > 0
     assert call_order[0] == "tray_hide"
+
+
+def test_boot_update_check_suppressed_when_rate_limited():
+    app = QApplication.instance() or QApplication([])
+    with patch(
+        "core.ui.app_controller.config", {"updates": {"check_on_boot": True}, "llm": {}}
+    ):
+        with patch("core.ui.app_controller.UpdatePreferenceManager") as mock_pref_cls:
+            mock_pref = mock_pref_cls.return_value
+            mock_pref.can_check_on_boot.return_value = False
+
+            with patch("core.ui.app_controller.UpdateManager") as mock_upd_cls:
+                controller = QtAppController(app, MagicMock(), MagicMock())
+                controller._run_boot_update_check()
+                mock_upd_cls.return_value.check_for_updates.assert_not_called()
+
+
+def test_boot_update_check_notifies_user_when_allowed():
+    app = QApplication.instance() or QApplication([])
+    from core.infra.updater import ReleaseInfo
+
+    info = ReleaseInfo(
+        version="v999.0.0",
+        title="v999.0.0",
+        body="Notas",
+        html_url="",
+        download_url="https://example.com/asset.zip",
+        asset_name="asset.zip",
+        asset_size=1024,
+        has_update=True,
+    )
+
+    with patch(
+        "core.ui.app_controller.config", {"updates": {"check_on_boot": True}, "llm": {}}
+    ):
+        with patch("core.ui.app_controller.UpdatePreferenceManager") as mock_pref_cls:
+            mock_pref = mock_pref_cls.return_value
+            mock_pref.can_check_on_boot.return_value = True
+            mock_pref.should_notify_version.return_value = True
+
+            with patch("core.ui.app_controller.UpdateManager") as mock_upd_cls:
+                mock_upd_cls.return_value.check_for_updates.return_value = info
+                controller = QtAppController(app, MagicMock(), MagicMock())
+                controller._show_update_notification = MagicMock()
+                controller._run_boot_update_check()
+                controller._show_update_notification.assert_called_once_with(info)

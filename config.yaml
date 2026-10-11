@@ -116,3 +116,12 @@ tools:
   calculator:
     enabled: true
 
+
+# ==============================================================================
+# ATUALIZAÇÕES DO SISTEMA (AUTO-UPDATER)
+# ==============================================================================
+updates:
+  check_on_boot: true
+  check_interval_hours: 24.0
+  github_repo: "Leturnos/python-jarvis"
+

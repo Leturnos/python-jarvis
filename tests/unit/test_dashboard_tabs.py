@@ -218,3 +218,77 @@ def test_settings_tab_set_active_provider_success(
             "Provedor alterado para Openai.",
             parent=tab,
         )
+
+
+def test_settings_tab_update_section_components():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    from core.shared.paths import get_app_version
+
+    assert hasattr(tab, "version_label")
+    assert hasattr(tab, "update_status_label")
+    assert hasattr(tab, "check_update_btn")
+    assert hasattr(tab, "apply_update_btn")
+    assert tab.check_update_btn.text() == "Verificar Atualizações"
+    assert f"v{get_app_version()}" in tab.version_label.text()
+
+
+def test_settings_tab_check_update_none():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    from core.infra.updater import ReleaseInfo
+    from core.shared.paths import get_app_version
+
+    current_ver = get_app_version()
+    info = ReleaseInfo(
+        version=f"v{current_ver}",
+        title=f"v{current_ver}",
+        body="",
+        html_url="",
+        download_url="",
+        asset_name="",
+        asset_size=0,
+        has_update=False,
+    )
+    with patch.object(tab.update_mgr, "check_for_updates", return_value=info):
+        tab._check_updates_sync()
+        assert "versão mais recente" in tab.update_status_label.text()
+        assert tab.apply_update_btn.isHidden()
+
+
+def test_settings_tab_check_update_available():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    from core.infra.updater import ReleaseInfo
+
+    future_ver = "v999.0.0"
+    info = ReleaseInfo(
+        version=future_ver,
+        title=future_ver,
+        body="Notas da versão",
+        html_url="",
+        download_url="https://example.com/asset.zip",
+        asset_name="asset.zip",
+        asset_size=1024,
+        has_update=True,
+    )
+    with patch.object(tab.update_mgr, "check_for_updates", return_value=info):
+        tab._check_updates_sync()
+        assert future_ver in tab.update_status_label.text()
+        assert not tab.apply_update_btn.isHidden()
+        assert future_ver in tab.apply_update_btn.text()
