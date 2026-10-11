@@ -257,7 +257,7 @@ class QtCommandPalette(QObject):
             )
 
         try:
-            recent_cmds = history_manager.get_recent_commands(limit=5)
+            recent_cmds = history_manager.get_recent_commands(limit=15)
             for cmd_str in recent_cmds:
                 self.all_commands.append(
                     {
