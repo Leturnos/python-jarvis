@@ -136,19 +136,36 @@ def test_log_usage_insert_and_upsert(mock_config, temp_db) -> None:
     conn.close()
 
 
-def test_check_quotas_error_fails_open(mock_config) -> None:
+def test_check_quotas_error_fails_open(mock_config, tmp_path) -> None:
     """Verifies check_quotas returns True (fail-open) and logs error when database connection fails."""
     rl = RateLimiter()
-    rl.db_path = "invalid_path/non_existent_directory/database.db"
+    rl.db_path = str(tmp_path / "test_error.db")
 
-    # Database connection should fail, check_quotas must return True
-    assert rl.check_quotas() is True
+    with patch("sqlite3.connect", side_effect=sqlite3.OperationalError("DB error")):
+        assert rl.check_quotas() is True
 
 
-def test_log_usage_error_handled_safely(mock_config) -> None:
+def test_log_usage_error_handled_safely(mock_config, tmp_path) -> None:
     """Verifies log_usage handles database connection errors gracefully without raising exceptions."""
     rl = RateLimiter()
-    rl.db_path = "invalid_path/non_existent_directory/database.db"
+    rl.db_path = str(tmp_path / "test_error.db")
 
-    # Should complete without throwing an exception
-    rl.log_usage(token_count=100)
+    with patch("sqlite3.connect", side_effect=sqlite3.OperationalError("DB error")):
+        # Should complete without throwing an exception
+        rl.log_usage(token_count=100)
+
+
+def test_rate_limiter_uses_history_manager_connection():
+    from unittest.mock import MagicMock
+
+    mock_history = MagicMock()
+    mock_history.db_path = "mock.db"
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value = mock_cursor
+    mock_cursor.fetchone.return_value = (1, 100)
+    mock_history.connection.return_value.__enter__.return_value = mock_conn
+
+    rl = RateLimiter(history_mgr=mock_history)
+    assert rl.check_quotas() is True
+    mock_history.connection.assert_called_once()
