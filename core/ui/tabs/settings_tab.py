@@ -13,10 +13,11 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import InfoBar, LineEdit
 
-from core.infra.config import config
+from core.infra.config import config, update_yaml_active_provider
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
 from core.infra.presets import detect_recommended_preset, get_system_hardware_info
+from core.shared.constants import DEFAULT_PROVIDER
 from core.shared.utils import get_app_root
 
 
@@ -24,6 +25,7 @@ class SettingsTab(QWidget):
     """Tab widget for managing LLM providers, API keys, and performance settings."""
 
     restart_requested = Signal()
+    provider_changed = Signal(str)
 
     PROFILES_ORDER = [
         "auto",
@@ -56,10 +58,10 @@ class SettingsTab(QWidget):
             "openrouter",
         ]
         self.provider_combo.addItems([p.capitalize() for p in self.providers])
-        active = config.get("llm", {}).get("active_provider", "gemini")
+        active = config.get("llm", {}).get("active_provider", DEFAULT_PROVIDER)
         if active in self.providers:
             self.provider_combo.setCurrentIndex(self.providers.index(active))
-        form.addRow(QLabel("Provedor LLM Ativo:"), self.provider_combo)
+        form.addRow(QLabel("Provedor LLM:"), self.provider_combo)
 
         self.api_key_input = LineEdit(self)
         self.api_key_input.setPlaceholderText("Cole sua chave de API aqui...")
@@ -69,6 +71,10 @@ class SettingsTab(QWidget):
         self.save_key_btn = QPushButton("Salvar Chave", self)
         self.save_key_btn.clicked.connect(self._save_key)
         form.addRow(self.save_key_btn)
+
+        self.set_active_btn = QPushButton("Definir como Provedor Ativo", self)
+        self.set_active_btn.clicked.connect(self._set_active_provider)
+        form.addRow(self.set_active_btn)
 
         self.check_key_btn = QPushButton("Validar Chave do Provedor", self)
         self.check_key_btn.clicked.connect(self._validate_key)
@@ -173,7 +179,7 @@ class SettingsTab(QWidget):
             f"A chave para {prov.capitalize()} foi salva no Keyring com sucesso!",
             parent=self,
         )
-        active_prov = config.get("llm", {}).get("active_provider", "gemini")
+        active_prov = config.get("llm", {}).get("active_provider", DEFAULT_PROVIDER)
         if prov == active_prov:
             try:
                 from core.ai.llm_agent import llm_agent
@@ -201,3 +207,36 @@ class SettingsTab(QWidget):
                 f"A chave para {prov.capitalize()} não foi configurada.",
                 parent=self,
             )
+
+    def _set_active_provider(self) -> None:
+        idx = self.provider_combo.currentIndex()
+        prov = self.providers[idx]
+        has_key = KeyringManager.validate_provider_key(prov)
+        if not has_key:
+            InfoBar.warning(
+                "Chave Não Configurada",
+                f"Configure e salve a chave de API para {prov.capitalize()} antes de ativá-lo.",
+                parent=self,
+            )
+            return
+
+        from core.ai.llm_agent import llm_agent
+
+        config.setdefault("llm", {})["active_provider"] = prov
+        try:
+            update_yaml_active_provider(prov)
+        except Exception as e:
+            logger.warning(f"Could not persist active provider to yaml: {e}")
+
+        try:
+            llm_agent.reinit_provider()
+            logger.info(f"Active LLM provider switched to '{prov}' via SettingsTab.")
+        except Exception as e:
+            logger.warning(f"Could not reinitialize LLM provider immediately: {e}")
+
+        self.provider_changed.emit(prov)
+        InfoBar.success(
+            "Provedor Ativo",
+            f"Provedor alterado para {prov.capitalize()}.",
+            parent=self,
+        )

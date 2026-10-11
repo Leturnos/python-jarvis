@@ -178,3 +178,29 @@ def reload_config() -> dict[str, Any]:
     config.clear()
     config.update(new_config)
     return config
+
+
+def update_yaml_active_provider(provider_name: str) -> None:
+    """Updates the active_provider entry in config.yaml while preserving file structure."""
+    yaml_path = get_app_root() / "config.yaml"
+    if not yaml_path.exists():
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_llm_block = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("llm:"):
+            in_llm_block = True
+        elif in_llm_block and stripped.startswith("active_provider:"):
+            indent = line[: len(line) - len(line.lstrip())]
+            lines[i] = f'{indent}active_provider: "{provider_name}"\n'
+            break
+        elif in_llm_block and (
+            line.strip() and not line.startswith(" ") and not line.startswith("\t")
+        ):
+            in_llm_block = False
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)

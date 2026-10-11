@@ -9,13 +9,13 @@ from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
 from qfluentwidgets import InfoBar, Theme, setTheme
 
 from core.ai.llm_agent import llm_agent
-from core.infra.config import config, reload_config
+from core.infra.config import config, reload_config, update_yaml_active_provider
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
 from core.llm import LiteLLMProvider
 from core.runtime.state import JarvisState, state_manager
+from core.shared.constants import DEFAULT_PROVIDER
 from core.shared.utils import (
-    get_app_root,
     get_resources_dir,
     is_autostart_enabled_check,
     manage_autostart,
@@ -23,37 +23,6 @@ from core.shared.utils import (
 from core.ui.command_palette_qt import QtCommandPalette
 from core.ui.main_window import MainWindow
 from core.ui.voice_overlay import VoiceOverlayHUD
-
-
-def update_yaml_active_provider(provider_name: str) -> None:
-    yaml_path = get_app_root() / "config.yaml"
-    if not yaml_path.exists():
-        return
-    with open(yaml_path, encoding="utf-8") as f:
-        lines = f.readlines()
-
-    in_llm_block = False
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped.startswith("llm:"):
-            in_llm_block = True
-        elif in_llm_block and stripped.startswith("active_provider:"):
-            # Preserve indentation
-            indent = line[: line.find("active_provider:")]
-            lines[i] = f'{indent}active_provider: "{provider_name}"\n'
-            break
-        elif in_llm_block and line.strip() == "":
-            pass
-        elif (
-            in_llm_block
-            and not line.startswith(" ")
-            and not line.startswith("active_provider:")
-            and stripped != ""
-        ):
-            in_llm_block = False
-
-    with open(yaml_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
 
 
 class QtAppController(QObject):
@@ -80,6 +49,9 @@ class QtAppController(QObject):
         self.main_window = MainWindow(ui_adapter)
         self.main_window.settings_tab.restart_requested.connect(
             self.restart_application
+        )
+        self.main_window.settings_tab.provider_changed.connect(
+            lambda _: self._update_menu_states()
         )
         self.voice_overlay = VoiceOverlayHUD()
         self.command_palette: QtCommandPalette | None = None
@@ -252,7 +224,7 @@ class QtAppController(QObject):
         self.autostart_action.setChecked(is_autostart_enabled_check())
 
         # LLM Provider
-        active_provider = config.get("llm", {}).get("active_provider", "gemini")
+        active_provider = config.get("llm", {}).get("active_provider", DEFAULT_PROVIDER)
         for prov, action in self.provider_actions.items():
             action.setChecked(prov == active_provider)
 
@@ -308,6 +280,13 @@ class QtAppController(QObject):
             config["llm"]["active_provider"] = provider
             update_yaml_active_provider(provider)
             llm_agent.reinit_provider()
+            if (
+                hasattr(self.main_window, "settings_tab")
+                and self.main_window.settings_tab
+            ):
+                if provider in self.main_window.settings_tab.providers:
+                    idx = self.main_window.settings_tab.providers.index(provider)
+                    self.main_window.settings_tab.provider_combo.setCurrentIndex(idx)
             self.tray_icon.showMessage(
                 "Jarvis",
                 f"Provedor alterado para {provider.capitalize()}.",

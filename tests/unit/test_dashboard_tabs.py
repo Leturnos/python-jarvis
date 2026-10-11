@@ -185,3 +185,36 @@ def test_settings_tab_save_key_reinitializes_active_provider(
             "openai-test-key",
         )
         mock_reinit.assert_not_called()
+
+
+@patch("core.ui.tabs.settings_tab.update_yaml_active_provider")
+@patch("core.ai.llm_agent.llm_agent.reinit_provider")
+@patch("core.ui.tabs.settings_tab.InfoBar.success")
+@patch(
+    "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key", return_value=True
+)
+def test_settings_tab_set_active_provider_success(
+    mock_validate, mock_success, mock_reinit, mock_update_yaml
+):
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+    tab.provider_combo.setCurrentIndex(tab.providers.index("openai"))
+
+    with patch(
+        "core.ui.tabs.settings_tab.config", {"llm": {"active_provider": "gemini"}}
+    ):
+        tab.set_active_btn.click()
+
+        mock_validate.assert_called_once_with("openai")
+        mock_update_yaml.assert_called_once_with("openai")
+        mock_reinit.assert_called_once()
+        mock_success.assert_called_once_with(
+            "Provedor Ativo",
+            "Provedor alterado para Openai.",
+            parent=tab,
+        )
