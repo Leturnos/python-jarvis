@@ -210,10 +210,14 @@ def copy_user_facing_assets(dist_dir: Path | None = None) -> None:
 
     logger.info(f"Copying user-facing assets to bundle root at {target}...")
 
-    # 1. config.yaml
+    # 1. config.yaml and pyproject.toml
     cfg_src = ROOT_DIR / "config.yaml"
     if cfg_src.exists():
         shutil.copy2(cfg_src, target / "config.yaml")
+
+    pyproj_src = ROOT_DIR / "pyproject.toml"
+    if pyproj_src.exists():
+        shutil.copy2(pyproj_src, target / "pyproject.toml")
 
     # 2. models/
     models_target = target / "models"

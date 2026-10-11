@@ -6,24 +6,22 @@ from pathlib import Path
 
 
 def get_default_version() -> str:
-    root_dir = Path(__file__).resolve().parent.parent
-    pyproject = root_dir / "pyproject.toml"
-    if pyproject.exists():
-        try:
-            import tomllib
+    try:
+        from core.shared.paths import get_app_version
 
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
-                ver = data.get("project", {}).get("version")
-                if ver:
-                    return f"v{ver}" if not ver.startswith("v") else ver
-        except Exception:
-            pass
-    return "v0.2.1"
+        ver = get_app_version()
+        if ver and ver != "0.0.0":
+            return f"v{ver}" if not ver.startswith("v") else ver
+    except Exception:
+        pass
+
+    return "v0.0.0"
 
 
 def create_release_zip(
-    version: str | None = None, dist_dir: Path | None = None
+    version: str | None = None,
+    dist_dir: Path | None = None,
+    versioned_name: bool = False,
 ) -> Path:
     if version is None:
         version = get_default_version()
@@ -34,7 +32,11 @@ def create_release_zip(
     if not jarvis_dir.exists():
         raise FileNotFoundError(f"Directory not found: {jarvis_dir}")
 
-    zip_filename = f"Jarvis-{version}-windows-x64.zip"
+    if versioned_name or "--versioned" in sys.argv:
+        zip_filename = f"Jarvis-{version}-windows-x64.zip"
+    else:
+        zip_filename = "Jarvis-windows-x64.zip"
+
     zip_path = base_dist / zip_filename
 
     exclude_dirs = {"data", "logs", "__pycache__"}

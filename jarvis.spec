@@ -18,6 +18,7 @@ datas = [
     ('plugins/*.yaml', 'plugins'),
     ('resources/*', 'resources'),
     ('config.yaml', '.'),
+    ('pyproject.toml', '.'),
 ]
 
 # Collect essential package data files to prevent FileNotFoundError in frozen binaries

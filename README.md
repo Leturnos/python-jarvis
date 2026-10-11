@@ -56,7 +56,17 @@ Você pode empacotar o Jarvis em um executável autônomo do Windows (sem consol
 uv run python scripts/build_exe.py
 ```
 
-O bundle completo será gerado em `dist/Jarvis/Jarvis.exe`. Você pode mover essa pasta para qualquer local ou criar um atalho na área de trabalho.
+O bundle completo será gerado em `dist/Jarvis/Jarvis.exe` e o pacote compactado em `dist/Jarvis-windows-x64.zip`.
+
+#### 💾 Persistência de Dados e Modo Portátil (`portable.flag`)
+- **Padrão (%APPDATA%):** Para que você possa atualizar de versão sem nunca perder seus bancos de dados, o executável do Jarvis armazena seu histórico de comandos (`history.db`), cache de IA (`llm_cache.db`) e preferências em `%APPDATA%\Jarvis\data`.
+- **Modo Portátil (`portable.flag`):** Se você prefere rodar o Jarvis de forma 100% isolada e autocontida (ex: em um pendrive ou pasta dedicada) sem gravar nada no seu Windows, basta criar um arquivo vazio chamado `portable.flag` dentro da pasta `dist/Jarvis/`. O Jarvis identificará a flag no boot e manterá todos os bancos na pasta local `dist/Jarvis/data/`.
+
+#### 🔄 Atualizações Automáticas (Auto-Updater)
+O Jarvis possui um sistema de atualização integrado com o GitHub Releases:
+- **Trava Inteligente no Boot:** Verifica novidades em segundo plano sem lentidão e sem popups repetitivos (intervalo mínimo padrão de 24 horas).
+- **Respeito ao Usuário:** As opções *"Lembrar Mais Tarde"* (adiamento por 24h) e *"Ignorar Esta Versão"* garantem que você nunca seja interrompido durante seu fluxo de trabalho.
+- **Verificação Manual:** A qualquer momento, acesse a aba **Configurações** no Painel do Jarvis para conferir novidades e atualizar com um clique.
 
 ## ⚙️ Configurando o Jarvis
 
