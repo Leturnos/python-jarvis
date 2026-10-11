@@ -60,7 +60,9 @@ def test_path_guard_blocks_system_directories(tmp_path: Path):
 
 
 def test_path_guard_defaults_to_project_root_when_empty():
+    from core.shared.paths import get_app_root
+
     guard = PathGuard(allowed_workspaces=[])
     allowed = guard.get_allowed_workspaces()
     assert len(allowed) >= 1
-    assert Path.cwd().resolve() in allowed
+    assert get_app_root().resolve() in allowed

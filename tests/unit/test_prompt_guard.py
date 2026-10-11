@@ -139,14 +139,14 @@ def test_sanitize_output_execution_plan_blocked_by_catastrophic_target():
         "schema_version": "1.0",
         "type": "action",
         "intent": "dangerous_action",
-        "explanation": "Acessar system32",
+        "explanation": "Deletar system32",
         "global_risk": "dangerous",
         "steps": [
             {
-                "type": "open_app",
+                "type": "command",
                 "step_risk": "dangerous",
-                "description": "Acessar pasta sensível",
-                "command": "dir",
+                "description": "Deletar pasta do sistema",
+                "command": "rmdir /s /q C:\\Windows\\System32",
                 "target": "C:\\Windows\\System32",
             }
         ],
@@ -155,6 +155,52 @@ def test_sanitize_output_execution_plan_blocked_by_catastrophic_target():
     sanitized = PromptGuard.sanitize_output(plan_dict)
     assert sanitized["global_risk"] == "blocked"
     assert sanitized["steps"][0]["step_risk"] == "blocked"
+
+
+def test_sanitize_output_execution_plan_allows_open_app_in_windows_path():
+    plan_dict = {
+        "schema_version": "1.0",
+        "type": "action",
+        "intent": "open_app",
+        "explanation": "Abrir Bloco de Notas do Windows",
+        "global_risk": "safe",
+        "steps": [
+            {
+                "type": "open_app",
+                "step_risk": "safe",
+                "description": "Abrir notepad",
+                "target": "C:\\Windows\\System32\\notepad.exe",
+            }
+        ],
+    }
+
+    sanitized = PromptGuard.sanitize_output(plan_dict)
+    assert sanitized["global_risk"] == "safe"
+    assert sanitized["steps"][0]["step_risk"] == "safe"
+
+
+def test_sanitize_output_execution_plan_allows_benign_system_queries():
+    # Words like 'firmware' contain 'rm', 'model' contains 'del', etc.
+    plan_dict = {
+        "schema_version": "1.0",
+        "type": "action",
+        "intent": "system_query",
+        "explanation": "Consultar informações de firmware no Windows",
+        "global_risk": "safe",
+        "steps": [
+            {
+                "type": "command",
+                "step_risk": "safe",
+                "description": "Obter modelo e firmware",
+                "command": "Get-ComputerInfo | Select CsModel, FirmwareType",
+                "target": "C:\\Windows",
+            }
+        ],
+    }
+
+    sanitized = PromptGuard.sanitize_output(plan_dict)
+    assert sanitized["global_risk"] == "safe"
+    assert sanitized["steps"][0]["step_risk"] == "safe"
 
 
 def test_sanitize_output_execution_plan_multiple_steps_escalation():

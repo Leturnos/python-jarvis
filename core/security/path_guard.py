@@ -4,6 +4,7 @@ from pathlib import Path
 from core.infra.config import config
 from core.infra.logger_config import logger
 from core.shared.errors import SecurityError
+from core.shared.paths import get_app_root
 
 
 class PathGuard:
@@ -19,7 +20,7 @@ class PathGuard:
             for ws in allowed_workspaces:
                 self._add_workspace(ws)
         else:
-            # Fallback to config or current working directory
+            # Fallback to config or application root directory
             configured = (
                 config.get("tools", {})
                 .get("developer", {})
@@ -29,7 +30,7 @@ class PathGuard:
                 for ws in configured:
                     self._add_workspace(ws)
             else:
-                self._workspaces.append(Path.cwd().resolve())
+                self._workspaces.append(get_app_root().resolve())
 
     def _add_workspace(self, workspace: str | Path) -> None:
         expanded = os.path.expandvars(str(workspace))
@@ -60,7 +61,7 @@ class PathGuard:
         raw_path = Path(raw_str).expanduser()
 
         if not raw_path.is_absolute():
-            base = Path(base_dir).resolve() if base_dir else Path.cwd().resolve()
+            base = Path(base_dir).resolve() if base_dir else get_app_root().resolve()
             candidate = (base / raw_path).resolve()
         else:
             candidate = raw_path.resolve()

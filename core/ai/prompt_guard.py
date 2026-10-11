@@ -50,13 +50,39 @@ class PromptGuard:
         if "steps" in action_json:
             highest_risk = "safe"
             for step in action_json["steps"]:
+                step_type = step.get("type", "").lower()
                 cmd = step.get("command", "").lower()
                 target = step.get("target", "").lower()
 
-                # Catastrophic blocks
-                if any(
-                    bad in cmd for bad in ["rm -rf /", "del /f /s /q c:\\", "format c:"]
-                ) or any(bad in target for bad in ["windows", "system32"]):
+                # Catastrophic commands
+                is_destructive_cmd = any(
+                    bad in cmd or bad in target
+                    for bad in [
+                        "rm -rf /",
+                        "del /f /s /q c:\\",
+                        "format c:",
+                        "format /",
+                        "rd /s /q c:\\",
+                    ]
+                )
+
+                # Windows system directory tampering:
+                # Disallow modifying/deleting system directories via shell/command,
+                # but permit legitimate application launching (open_app)
+                is_destructive_system = False
+                targets_system = any(
+                    bad in target or bad in cmd for bad in ["windows", "system32"]
+                )
+                if targets_system and step_type != "open_app":
+                    is_destructive_system = bool(
+                        re.search(
+                            r"\b(del|rm|format|erase|rd|rmdir|remove-item)\b",
+                            cmd,
+                            re.IGNORECASE,
+                        )
+                    )
+
+                if is_destructive_cmd or is_destructive_system:
                     logger.warning(
                         "Output sanitization: Blocked catastrophic step detected."
                     )
