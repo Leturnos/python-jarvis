@@ -2,12 +2,12 @@ import time
 from pathlib import Path
 
 from core.infra.logger_config import logger
-from core.shared.paths import get_app_root
+from core.shared.paths import get_user_data_dir
 
 
 def get_first_run_marker_path() -> Path:
     """Returns the path to the first run completion marker file."""
-    return get_app_root() / "data" / ".first_run_completed"
+    return get_user_data_dir() / ".first_run_completed"
 
 
 def is_first_run() -> bool:

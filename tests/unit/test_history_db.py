@@ -22,3 +22,23 @@ def test_history_manager_default_path_uses_app_root():
                     assert (fake_root / "custom_data").is_dir()
                 finally:
                     hm.close()
+
+
+def test_history_manager_default_path_uses_user_data_dir():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        fake_data_dir = Path(temp_dir)
+        with patch(
+            "core.persistence.history_db.get_user_data_dir", return_value=fake_data_dir
+        ):
+            with patch.dict(
+                "core.persistence.history_db.config",
+                {"paths": {"data_dir": "data"}},
+            ):
+                hm = HistoryManager(db_path=None)
+                try:
+                    expected_db_path = str(fake_data_dir / "history.db")
+                    assert (
+                        Path(hm.db_path).resolve() == Path(expected_db_path).resolve()
+                    )
+                finally:
+                    hm.close()
