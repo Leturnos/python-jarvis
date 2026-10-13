@@ -1,5 +1,8 @@
 # 🎙️ Python Jarvis
 
+[![GitHub Release](https://img.shields.io/github/v/release/Leturnos/python-jarvis?color=blue&label=Vers%C3%A3o%20Mais%20Recente)](https://github.com/Leturnos/python-jarvis/releases/latest)
+[![Windows](https://img.shields.io/badge/Plataforma-Windows%2010%20%7C%2011-0078D6?logo=windows)](https://github.com/Leturnos/python-jarvis)
+
 Um assistente virtual leve e eficiente para Windows, focado em automatizar suas tarefas do dia a dia. Com ele, você prepara seu ambiente de trabalho ou roda scripts apenas usando a voz ou o teclado.
 
 Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", peça o que precisa, e ele faz por você.
@@ -32,11 +35,27 @@ Exemplos de como usar as capacidades de memória, ferramentas e controle:
 2. **Terminal (Opcional):** Suporte nativo para o [Warp](https://www.warp.dev/), mas funciona com qualquer aplicação.
 3. **Microfone:** Qualquer microfone padrão conectado ao PC.
 
-## 🛠️ Como Instalar e Usar
+## 🛠️ Como Baixar e Usar
+
+### ⚡ Para Usuários (Download Rápido sem Programar)
+
+Se você quer apenas usar o Jarvis no seu dia a dia sem precisar instalar Python ou configurar código:
+
+1. **Acesse as Releases:** Na barra lateral direita desta página no GitHub, clique na seção **[Releases](https://github.com/Leturnos/python-jarvis/releases/latest)** (ou acesse diretamente a [Última Release](https://github.com/Leturnos/python-jarvis/releases/latest)).
+2. **Baixe o Arquivo:** Na seção **Assets** no final da página da release, clique em `Jarvis-windows-x64.zip` para fazer o download.
+3. **Extraia o ZIP:** Clique com o botão direito no arquivo baixado e selecione **"Extrair Tudo..."** para a pasta de sua preferência (por exemplo, `C:\Programas\Jarvis\` ou dentro da sua pasta de usuário).
+4. **Abra o Jarvis:** Entre na pasta extraída e dê dois cliques no executável `Jarvis.exe`.
+5. **Configuração Inicial:** Na primeira execução, o Jarvis abrirá automaticamente a tela de **Configurações** para você escolher seu provedor de IA favorito (como Google Gemini, OpenAI, Anthropic, DeepSeek, etc.) e salvar sua chave de API com segurança no Gerenciador de Credenciais do Windows.
+6. **Pronto!** O Jarvis ficará ativo e silencioso na bandeja do Windows (perto do relógio). Você já pode falar "Hey Jarvis" ou pressionar `Ctrl + Shift + P` para usar a paleta de comandos.
+
+> 💡 **Atualizações Automáticas:** Uma vez instalado, o próprio Jarvis avisa quando houver novas versões e atualiza automaticamente pelo painel de Configurações!
+
+---
+
+### 💻 Para Desenvolvedores (Modo Desenvolvimento)
 
 O projeto utiliza o gerenciador de pacotes rápido `uv`.
 
-### Modo Desenvolvimento
 1. **Instale as dependências:**
    ```bash
    uv sync
