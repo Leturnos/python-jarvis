@@ -14,12 +14,14 @@ def test_main_window_tabs_structure():
     window = MainWindow(ui_adapter)
 
     assert window.windowTitle() == "Painel do Jarvis"
-    assert window.stacked_widget.count() == 3
+    assert window.stacked_widget.count() == 4
     assert "status" in window.pivot.items
     assert "history" in window.pivot.items
+    assert "plugins" in window.pivot.items
     assert "settings" in window.pivot.items
     assert window.pivot.items["status"].text() == "Status"
     assert window.pivot.items["history"].text() == "Histórico"
+    assert window.pivot.items["plugins"].text() == "Plugins"
     assert window.pivot.items["settings"].text() == "Configurações"
 
 

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 from qfluentwidgets import SegmentedWidget
 
 from core.ui.tabs.history_tab import HistoryTab
+from core.ui.tabs.plugins_tab import PluginsTab
 from core.ui.tabs.settings_tab import SettingsTab
 from core.ui.tabs.status_tab import StatusTab
 
@@ -29,10 +30,12 @@ class MainWindow(QMainWindow):
 
         self.status_tab = StatusTab(ui_adapter.wakeword_name, self)
         self.history_tab = HistoryTab(self)
+        self.plugins_tab = PluginsTab(self)
         self.settings_tab = SettingsTab(self)
 
         self._add_tab(self.status_tab, "status", "Status")
         self._add_tab(self.history_tab, "history", "Histórico")
+        self._add_tab(self.plugins_tab, "plugins", "Plugins")
         self._add_tab(self.settings_tab, "settings", "Configurações")
 
         layout.addWidget(self.pivot)
