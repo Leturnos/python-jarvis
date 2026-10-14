@@ -294,3 +294,49 @@ def test_settings_tab_check_update_available():
         assert future_ver in tab.update_status_label.text()
         assert not tab.apply_update_btn.isHidden()
         assert future_ver in tab.apply_update_btn.text()
+
+
+def test_settings_tab_on_download_finished_emits_update_restart_requested(tmp_path):
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    received_paths = []
+    tab.update_restart_requested.connect(lambda path: received_paths.append(path))
+
+    extracted_dir = tmp_path / "extracted_jarvis"
+    extracted_dir.mkdir()
+
+    tab._on_download_finished(extracted_dir)
+
+    assert tab.update_status_label.text() == "Aplicando atualização e reiniciando..."
+    assert len(received_paths) == 1
+    assert received_paths[0] == extracted_dir
+
+
+def test_settings_tab_on_update_extracting():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    tab._on_update_extracting()
+    assert tab.update_status_label.text() == "Extraindo arquivos..."
+
+
+def test_settings_tab_on_download_finished_non_path_fallback():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    with patch.object(tab, "_on_update_failed") as mock_failed:
+        tab._on_download_finished("not-a-path-object")
+        mock_failed.assert_called_once_with("Diretório de arquivos extraídos inválido.")

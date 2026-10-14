@@ -176,28 +176,46 @@ class UpdateManager:
     ) -> Path:
         """Generates an external batch script to wait for Jarvis exit, sync files, and restart."""
         script_path = self.temp_dir / "updater.bat"
-        # Windows batch file to sync binaries while avoiding open file locks
+        log_path = self.temp_dir / "updater.log"
+
+        clean_source = str(source_dir).rstrip("\\/")
+        clean_dest = str(dest_dir).rstrip("\\/")
+        clean_exe = str(exe_path).rstrip("\\/")
+
+        # Windows batch file to sync binaries while avoiding open file locks.
+        # Avoids tasklist/taskkill because WMI/RPC queries can hang indefinitely on Windows.
+        # Instead, uses a short handle release pause and robocopy's native retry mechanism.
         script_content = f"""@echo off
 setlocal enabledelayedexpansion
 
-echo [Jarvis Updater] Aguardando encerramento do processo PID {pid}...
-:wait_loop
-tasklist /fi "PID eq {pid}" 2>nul | find "{pid}" >nul
-if not errorlevel 1 (
-    timeout /t 1 /nobreak >nul
-    goto wait_loop
-)
+set "LOG_FILE={log_path}"
+echo [%date% %time%] [Jarvis Updater] Iniciando processo de atualizacao... > "!LOG_FILE!" 2>&1
+echo [%date% %time%] PID alvo: {pid} >> "!LOG_FILE!" 2>&1
+echo [%date% %time%] Origem: {clean_source} >> "!LOG_FILE!" 2>&1
+echo [%date% %time%] Destino: {clean_dest} >> "!LOG_FILE!" 2>&1
+echo [%date% %time%] Executavel: {clean_exe} >> "!LOG_FILE!" 2>&1
 
-echo [Jarvis Updater] Copiando novos arquivos para {dest_dir}...
-robocopy "{source_dir}" "{dest_dir}" /E /XD data logs .git /XF .env config.yaml portable.flag /NFL /NDL /NJH /NJS /nc /ns /np
-if %ERRORLEVEL% LEQ 7 (
-    echo [Jarvis Updater] Atualizacao concluida com sucesso!
+echo [%date% %time%] Aguardando encerramento do processo e liberacao de handles... >> "!LOG_FILE!" 2>&1
+ping 127.0.0.1 -n 3 >nul 2>&1
+
+echo [%date% %time%] Copiando novos arquivos para {clean_dest}... >> "!LOG_FILE!" 2>&1
+robocopy "{clean_source}" "{clean_dest}" /E /XD data logs .git /XF .env config.yaml portable.flag /R:5 /W:1 /NFL /NDL /NJH /NJS /nc /ns /np >> "!LOG_FILE!" 2>&1
+set "RC=!ERRORLEVEL!"
+echo [%date% %time%] Codigo de retorno do robocopy: !RC! >> "!LOG_FILE!" 2>&1
+
+if !RC! LEQ 7 (
+    echo [%date% %time%] Atualizacao concluida com sucesso! >> "!LOG_FILE!" 2>&1
 ) else (
-    echo [Jarvis Updater] Falha ao copiar arquivos: erro %ERRORLEVEL%
+    echo [%date% %time%] Falha ao copiar arquivos: erro !RC! >> "!LOG_FILE!" 2>&1
 )
 
-echo [Jarvis Updater] Reiniciando Jarvis...
-start "" "{exe_path}"
+echo [%date% %time%] Reiniciando Jarvis em {clean_exe}... >> "!LOG_FILE!" 2>&1
+cd /d "{clean_dest}"
+if exist "{clean_exe}" (
+    start "" /D "{clean_dest}" "{clean_exe}"
+) else (
+    echo [%date% %time%] Executavel {clean_exe} nao encontrado para iniciar. >> "!LOG_FILE!" 2>&1
+)
 
 exit /b 0
 """
@@ -209,10 +227,17 @@ exit /b 0
         source_dir: Path,
         dest_dir: Path | None = None,
         exe_path: Path | None = None,
+        exit_callback: Callable[[], None] | None = None,
     ) -> None:
-        """Launches the external updater script and requests immediate application exit."""
+        """Launches the external updater script and terminates the application."""
         target_dest = dest_dir or get_app_root()
-        target_exe = exe_path or (target_dest / "Jarvis.exe")
+        if exe_path:
+            target_exe = exe_path
+        elif getattr(sys, "frozen", False):
+            target_exe = target_dest / Path(sys.executable).name
+        else:
+            target_exe = target_dest / "Jarvis.exe"
+
         current_pid = os.getpid()
 
         script_path = self.generate_batch_script(
@@ -224,13 +249,21 @@ exit /b 0
 
         creation_flags = 0
         if sys.platform == "win32":
-            creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | getattr(
-                subprocess, "DETACHED_PROCESS", 0x00000008
+            creation_flags = (
+                subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
             )
 
+        comspec = os.environ.get("COMSPEC", "cmd.exe")
         subprocess.Popen(
-            [str(script_path)],
+            [comspec, "/c", str(script_path)],
             creationflags=creation_flags,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             close_fds=True,
-            shell=True,
         )
+
+        if exit_callback is not None:
+            exit_callback()
+        else:
+            os._exit(0)

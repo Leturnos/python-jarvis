@@ -32,9 +32,11 @@ class SettingsTab(QWidget):
     """Tab widget for managing LLM providers, API keys, performance, and updates."""
 
     restart_requested = Signal()
+    update_restart_requested = Signal(object)
     provider_changed = Signal(str)
     update_checked = Signal(object)
     update_progress = Signal(int, int)
+    update_extracting = Signal()
     update_download_finished = Signal(object)
     update_failed = Signal(str)
 
@@ -134,6 +136,7 @@ class SettingsTab(QWidget):
 
         self.update_checked.connect(self._on_update_check_finished)
         self.update_progress.connect(self._on_update_progress)
+        self.update_extracting.connect(self._on_update_extracting)
         self.update_download_finished.connect(self._on_download_finished)
         self.update_failed.connect(self._on_update_failed)
 
@@ -379,7 +382,7 @@ class SettingsTab(QWidget):
                     self._latest_release.download_url,
                     progress_callback=_prog,
                 )
-                self.update_status_label.setText("Extraindo arquivos...")
+                self.update_extracting.emit()
                 extracted = self.update_mgr.extract_archive(zip_path)
                 self.update_download_finished.emit(extracted)
             except Exception as exc:
@@ -396,10 +399,15 @@ class SettingsTab(QWidget):
             f"Baixando: {mb_down:.1f}MB / {mb_total:.1f}MB ({pct}%)"
         )
 
+    def _on_update_extracting(self) -> None:
+        self.update_status_label.setText("Extraindo arquivos...")
+
     def _on_download_finished(self, extracted_dir: object) -> None:
         self.update_status_label.setText("Aplicando atualização e reiniciando...")
         if isinstance(extracted_dir, Path):
-            self.update_mgr.apply_update_and_restart(extracted_dir)
+            self.update_restart_requested.emit(extracted_dir)
+        else:
+            self._on_update_failed("Diretório de arquivos extraídos inválido.")
 
     def _on_update_failed(self, err_msg: str) -> None:
         self.check_update_btn.setEnabled(True)

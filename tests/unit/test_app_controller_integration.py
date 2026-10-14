@@ -195,3 +195,20 @@ def test_boot_update_check_notifies_user_when_allowed():
                 controller._show_update_notification = MagicMock()
                 controller._run_boot_update_check()
                 controller._show_update_notification.assert_called_once_with(info)
+
+
+def test_app_controller_applies_update_and_quits(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    controller = QtAppController(app, MagicMock(), MagicMock())
+
+    extracted_dir = tmp_path / "extracted_update"
+    extracted_dir.mkdir()
+
+    with patch(
+        "core.infra.updater.UpdateManager.apply_update_and_restart"
+    ) as mock_apply:
+        controller.apply_update_and_restart(extracted_dir)
+        mock_apply.assert_called_once_with(
+            source_dir=extracted_dir,
+            exit_callback=controller.quit_app,
+        )

@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
@@ -53,6 +54,9 @@ class QtAppController(QObject):
         self.main_window = MainWindow(ui_adapter)
         self.main_window.settings_tab.restart_requested.connect(
             self.restart_application
+        )
+        self.main_window.settings_tab.update_restart_requested.connect(
+            self.apply_update_and_restart
         )
         self.main_window.settings_tab.provider_changed.connect(
             lambda _: self._update_menu_states()
@@ -404,6 +408,19 @@ class QtAppController(QObject):
             pass
 
         os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    def apply_update_and_restart(self, extracted_dir: Path) -> None:
+        """Applies a downloaded binary update via UpdateManager and exits cleanly."""
+        logger.info(f"Applying binary update from {extracted_dir} and exiting...")
+        app = QApplication.instance()
+        if app:
+            app.processEvents()
+
+        updater = UpdateManager()
+        updater.apply_update_and_restart(
+            source_dir=extracted_dir,
+            exit_callback=self.quit_app,
+        )
 
     def _start_boot_update_check(self) -> None:
         """Starts a background thread to check for updates on startup if enabled."""

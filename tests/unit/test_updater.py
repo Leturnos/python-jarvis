@@ -165,9 +165,75 @@ def test_generate_updater_script(tmp_path):
 
     assert bat_path.exists()
     content = bat_path.read_text(encoding="utf-8")
-    assert "PID eq 1234" in content
+    assert "PID alvo: 1234" in content
     assert "robocopy" in content
     assert str(source_dir) in content
     assert str(dest_dir) in content
     assert str(exe_path) in content
     assert "/XD data logs" in content
+
+
+def test_generate_updater_script_hardening(tmp_path):
+    updater = UpdateManager(current_version="0.2.1", temp_dir=tmp_path)
+    source_dir = tmp_path / "source"
+    dest_dir = tmp_path / "app"
+    exe_path = dest_dir / "Jarvis.exe"
+
+    source_dir.mkdir()
+    dest_dir.mkdir()
+    exe_path.touch()
+
+    bat_path = updater.generate_batch_script(
+        pid=5678,
+        source_dir=source_dir,
+        dest_dir=dest_dir,
+        exe_path=exe_path,
+    )
+
+    content = bat_path.read_text(encoding="utf-8")
+    assert "PID alvo: 5678" in content
+    assert "/R:5 /W:1" in content
+    assert "LOG_FILE=" in content
+    assert 'start "" /D' in content
+    assert "tasklist" not in content  # Avoids WMI/RPC hanging on Windows
+
+
+def test_apply_update_and_restart_with_custom_exit_callback(tmp_path):
+    updater = UpdateManager(current_version="0.2.1", temp_dir=tmp_path)
+    source_dir = tmp_path / "extracted_dir"
+    source_dir.mkdir()
+    mock_exit = MagicMock()
+
+    with patch("subprocess.Popen") as mock_popen:
+        updater.apply_update_and_restart(
+            source_dir=source_dir,
+            dest_dir=tmp_path / "app",
+            exe_path=tmp_path / "app" / "Jarvis.exe",
+            exit_callback=mock_exit,
+        )
+
+        mock_popen.assert_called_once()
+        cmd_args = mock_popen.call_args[0][0]
+        assert "cmd" in cmd_args[0].lower()
+        assert "/c" in cmd_args[1]
+        assert "updater.bat" in cmd_args[2]
+        kwargs = mock_popen.call_args[1]
+        assert kwargs.get("creationflags") & 0x08000000  # CREATE_NO_WINDOW
+        assert kwargs.get("stdin") is not None  # DEVNULL
+        mock_exit.assert_called_once()
+
+
+def test_apply_update_and_restart_defaults_to_os_exit(tmp_path):
+    updater = UpdateManager(current_version="0.2.1", temp_dir=tmp_path)
+    source_dir = tmp_path / "extracted_dir"
+    source_dir.mkdir()
+
+    with patch("subprocess.Popen") as mock_popen, patch("os._exit") as mock_exit:
+        updater.apply_update_and_restart(
+            source_dir=source_dir,
+            dest_dir=tmp_path / "app",
+            exe_path=tmp_path / "app" / "Jarvis.exe",
+        )
+
+        mock_popen.assert_called_once()
+        mock_exit.assert_called_once_with(0)
