@@ -43,24 +43,62 @@ def test_command_palette_qt_categories_ordering():
             "label": "🕒 abrir spotify",
             "action_type": "history",
             "command_text": "abrir spotify",
+            "category": "Histórico",
         },
         {
-            "label": "🔌 media_control",
+            "label": "🎵 Media Control [Mídia] — Control Media",
             "action_type": "plugin",
             "intent": "media_control",
+            "category": "Mídia",
             "risk_level": "safe",
         },
     ]
     palette.filtered_commands = palette.all_commands.copy()
+    palette.current_query = ""
 
     dialog = QtCommandPaletteDialog(palette)
     dialog._refresh_list()
 
-    # Plugins section should be added first
-    assert dialog.list_widget.item(0).text() == "── PLUGINS E INTENTS ──"
-    assert "media_control" in dialog.list_widget.item(1).text()
-    assert dialog.list_widget.item(2).text() == "── HISTÓRICO RECENTE ──"
-    assert "abrir spotify" in dialog.list_widget.item(3).text()
+    # History section should be at top when search is empty
+    assert dialog.list_widget.item(0).text() == "── 🕒 HISTÓRICO RECENTE ──"
+    assert "abrir spotify" in dialog.list_widget.item(1).text()
+    # Categorized plugin section follows
+    assert dialog.list_widget.item(2).text() == "── 🎵 MÍDIA & ÁUDIO ──"
+    assert "Media Control" in dialog.list_widget.item(3).text()
+
+
+def test_command_palette_tag_filtering():
+    _ = QApplication.instance() or QApplication([])
+    dispatcher = MagicMock()
+    palette = QtCommandPalette(dispatcher)
+
+    palette.all_commands = [
+        {
+            "label": "💻 Iniciar Backend [Desenvolvimento]",
+            "category": "Desenvolvimento",
+            "action_type": "plugin",
+            "intent": "iniciar_backend",
+            "description": "Ligar servidor",
+        },
+        {
+            "label": "🖥️ Calculadora [Sistema]",
+            "category": "Sistema",
+            "action_type": "plugin",
+            "intent": "abrir_calculadora",
+            "description": "Calculadora",
+        },
+    ]
+
+    palette._filter_commands("@dev")
+    assert len(palette.filtered_commands) == 1
+    assert palette.filtered_commands[0]["intent"] == "iniciar_backend"
+
+    palette._filter_commands("@sys calc")
+    assert len(palette.filtered_commands) == 1
+    assert palette.filtered_commands[0]["intent"] == "abrir_calculadora"
+
+    palette._filter_commands("@dev calc")
+    assert len(palette.filtered_commands) == 0
 
 
 def test_command_palette_run_action_resets_state_to_idle() -> None:

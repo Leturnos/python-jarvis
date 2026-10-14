@@ -475,6 +475,10 @@ class ActionDispatcher:
             logger.error(f"Failed to build plan for static action: {e}")
             self.tts_engine.speak(str(e))
 
+    def dispatch_dynamic_action(self, action_config: dict[str, Any]) -> None:
+        """Dispatches a dynamic action config by delegating to handle_dynamic."""
+        self.handle_dynamic(action_config)
+
     def handle_dynamic(self, action_config: dict[str, Any]) -> None:
         """Handles a dynamic action by building its plan and executing."""
         logger.info(f"Dispatching dynamic action: {action_config}")

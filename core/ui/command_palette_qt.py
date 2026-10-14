@@ -20,9 +20,59 @@ from core.persistence.history_db import history_manager
 from core.plugins.plugin_manager import plugin_manager
 from core.runtime.state import JarvisState, state_manager
 
+CATEGORY_ORDER = [
+    "Sistema",
+    "Desenvolvimento",
+    "Internet",
+    "Mídia",
+    "Produtividade",
+    "Jogos",
+    "Geral",
+]
+
+CATEGORY_HEADERS = {
+    "Sistema": "── 🖥️ SISTEMA WINDOWS ──",
+    "Desenvolvimento": "── 💻 DESENVOLVIMENTO & TERMINAIS ──",
+    "Internet": "── 🌐 NAVEGAÇÃO & WEB ──",
+    "Mídia": "── 🎵 MÍDIA & ÁUDIO ──",
+    "Produtividade": "── 📋 PRODUTIVIDADE & NOTAS ──",
+    "Jogos": "── 🎮 JOGOS & LAUNCHERS ──",
+    "Geral": "── ⚡ OUTROS COMANDOS ──",
+}
+
+CATEGORY_ICONS = {
+    "Sistema": "🖥️",
+    "Desenvolvimento": "💻",
+    "Internet": "🌐",
+    "Mídia": "🎵",
+    "Produtividade": "📋",
+    "Jogos": "🎮",
+    "Geral": "⚡",
+}
+
+CATEGORY_TAGS = {
+    "@dev": "Desenvolvimento",
+    "@codigo": "Desenvolvimento",
+    "@code": "Desenvolvimento",
+    "@sys": "Sistema",
+    "@sistema": "Sistema",
+    "@win": "Sistema",
+    "@web": "Internet",
+    "@net": "Internet",
+    "@midia": "Mídia",
+    "@media": "Mídia",
+    "@som": "Mídia",
+    "@prod": "Produtividade",
+    "@game": "Jogos",
+    "@jogos": "Jogos",
+    "@games": "Jogos",
+    "@hist": "Histórico",
+    "@historico": "Histórico",
+}
+
 
 class QtCommandPaletteDialog(QDialog):
-    """PySide6 Frameless Fluent Command Palette Dialog with Grouped Categories."""
+    """PySide6 Frameless Fluent Command Palette Dialog with Categorized Grouping."""
 
     def __init__(self, palette_manager: Any, parent: QDialog | None = None) -> None:
         super().__init__(parent)
@@ -36,7 +86,7 @@ class QtCommandPaletteDialog(QDialog):
             | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.resize(640, 440)
+        self.resize(680, 460)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 14, 14, 14)
@@ -46,7 +96,7 @@ class QtCommandPaletteDialog(QDialog):
 
         self.search_bar = LineEdit(self)
         self.search_bar.setPlaceholderText(
-            "Digite uma instrução para a IA ou busque um comando..."
+            "Buscar comando ou usar @dev, @sys, @web, @midia, @prod..."
         )
         self.search_bar.textChanged.connect(self._on_text_changed)
         search_layout.addWidget(self.search_bar, stretch=1)
@@ -140,45 +190,25 @@ class QtCommandPaletteDialog(QDialog):
         self.palette_manager._filter_commands(text)
         self._refresh_list()
 
-    def _refresh_list(self) -> None:
-        self.list_widget.clear()
+    def _append_header(self, text: str) -> None:
+        header = QListWidgetItem(text)
+        header.setFlags(Qt.ItemFlag.NoItemFlags)
+        header.setForeground(Qt.GlobalColor.gray)
+        self.list_widget.addItem(header)
 
-        # 1. Section: PLUGINS E INTENTS at top
-        plugin_items = [
-            c
-            for c in self.palette_manager.filtered_commands
-            if c["action_type"] == "plugin"
-        ]
-        if plugin_items:
-            header = QListWidgetItem("── PLUGINS E INTENTS ──")
-            header.setFlags(Qt.ItemFlag.NoItemFlags)
-            header.setForeground(Qt.GlobalColor.gray)
-            self.list_widget.addItem(header)
-            for cmd in plugin_items:
-                item = QListWidgetItem(cmd["label"])
-                item.setData(Qt.ItemDataRole.UserRole, cmd)
-                self.list_widget.addItem(item)
+    def _append_history_section(
+        self, history_all: list[dict[str, Any]], limit: int | None = None
+    ) -> None:
+        if not history_all:
+            return
+        history_items = history_all[:limit] if limit else history_all
+        self._append_header("── 🕒 HISTÓRICO RECENTE ──")
+        for cmd in history_items:
+            item = QListWidgetItem(cmd["label"])
+            item.setData(Qt.ItemDataRole.UserRole, cmd)
+            self.list_widget.addItem(item)
 
-        # 2. Section: HISTÓRICO RECENTE at bottom
-        history_all = [
-            c
-            for c in self.palette_manager.filtered_commands
-            if c["action_type"] == "history"
-        ]
-        history_limit = 15 if self.show_more_history else 5
-        history_items = history_all[:history_limit]
-
-        if history_all:
-            header = QListWidgetItem("── HISTÓRICO RECENTE ──")
-            header.setFlags(Qt.ItemFlag.NoItemFlags)
-            header.setForeground(Qt.GlobalColor.gray)
-            self.list_widget.addItem(header)
-            for cmd in history_items:
-                item = QListWidgetItem(cmd["label"])
-                item.setData(Qt.ItemDataRole.UserRole, cmd)
-                self.list_widget.addItem(item)
-
-            # Button item for "Mostrar Mais / Mostrar Menos"
+        if limit and len(history_all) > 5:
             more_label = (
                 "➖  Mostrar menos histórico"
                 if self.show_more_history
@@ -193,6 +223,56 @@ class QtCommandPaletteDialog(QDialog):
             more_item.setForeground(Qt.GlobalColor.cyan)
             self.list_widget.addItem(more_item)
 
+    def _append_plugins_by_category(self, plugin_items: list[dict[str, Any]]) -> None:
+        for cat in CATEGORY_ORDER:
+            cat_cmds = [c for c in plugin_items if c.get("category") == cat]
+            if cat_cmds:
+                header_text = CATEGORY_HEADERS.get(cat, f"── 🔌 {cat.upper()} ──")
+                self._append_header(header_text)
+                for cmd in cat_cmds:
+                    item = QListWidgetItem(cmd["label"])
+                    item.setData(Qt.ItemDataRole.UserRole, cmd)
+                    self.list_widget.addItem(item)
+
+        # Catch-all for any other categories
+        other_cmds = [
+            c for c in plugin_items if c.get("category") not in CATEGORY_ORDER
+        ]
+        if other_cmds:
+            self._append_header("── 🔌 OUTROS COMANDOS ──")
+            for cmd in other_cmds:
+                item = QListWidgetItem(cmd["label"])
+                item.setData(Qt.ItemDataRole.UserRole, cmd)
+                self.list_widget.addItem(item)
+
+    def _refresh_list(self) -> None:
+        self.list_widget.clear()
+
+        is_search_empty = not getattr(self.palette_manager, "current_query", "")
+
+        history_items = [
+            c
+            for c in self.palette_manager.filtered_commands
+            if c["action_type"] == "history"
+        ]
+        plugin_items = [
+            c
+            for c in self.palette_manager.filtered_commands
+            if c["action_type"] == "plugin"
+        ]
+
+        # Case 1: Empty Search (Opening State) -> History at Top, followed by Categorized Plugins
+        if is_search_empty:
+            history_limit = 15 if self.show_more_history else 5
+            self._append_history_section(history_items, limit=history_limit)
+            self._append_plugins_by_category(plugin_items)
+
+        # Case 2: Searching / Filtering State -> Show matched history if any, then matched categorized plugins
+        else:
+            self._append_history_section(history_items, limit=None)
+            self._append_plugins_by_category(plugin_items)
+
+        # Auto-select first selectable item
         for i in range(self.list_widget.count()):
             if self.list_widget.item(i).flags() & Qt.ItemFlag.ItemIsSelectable:
                 self.list_widget.setCurrentRow(i)
@@ -230,7 +310,7 @@ class QtCommandPaletteDialog(QDialog):
 
 
 class QtCommandPalette(QObject):
-    """Manager for QtCommandPalette interacting with hotkeys and dispatcher."""
+    """Manager for QtCommandPalette interacting with hotkeys, fuzzy search, and dispatcher."""
 
     trigger_show = Signal()
 
@@ -239,6 +319,7 @@ class QtCommandPalette(QObject):
         self.dispatcher = dispatcher
         self.all_commands: list[dict[str, Any]] = []
         self.filtered_commands: list[dict[str, Any]] = []
+        self.current_query: str = ""
         self.dialog: QtCommandPaletteDialog | None = None
         self.trigger_show.connect(self._on_trigger_show)
 
@@ -247,12 +328,20 @@ class QtCommandPalette(QObject):
 
         intents = plugin_manager.get_intents()
         for i in intents:
+            category = i.get("category", "Geral")
+            cat_icon = CATEGORY_ICONS.get(category, "⚡")
+            friendly_name = i["intent"].replace("_", " ").title()
             self.all_commands.append(
                 {
-                    "label": f"🔌  {i['intent']} — {i['description']}",
+                    "label": f"{cat_icon}  {friendly_name}  [{category}] — {i['description']}",
+                    "raw_name": friendly_name,
                     "action_type": "plugin",
                     "intent": i["intent"],
-                    "risk_level": i["risk_level"],
+                    "description": i.get("description", ""),
+                    "category": category,
+                    "plugin_name": i.get("plugin_name", ""),
+                    "phrases": i.get("phrases", []),
+                    "risk_level": i.get("risk_level", "safe"),
                 }
             )
 
@@ -265,24 +354,55 @@ class QtCommandPalette(QObject):
                         "action_type": "history",
                         "command_text": cmd_str,
                         "intent": "system_cmd",
+                        "category": "Histórico",
                         "risk_level": "safe",
                     }
                 )
         except Exception as e:
             logger.warning(f"Failed to fetch history for command palette: {e}")
 
+        self.current_query = ""
         self.filtered_commands = self.all_commands.copy()
 
     def _filter_commands(self, query: str) -> None:
         q = query.lower().strip()
+        self.current_query = q
         if not q:
             self.filtered_commands = self.all_commands.copy()
-        else:
-            self.filtered_commands = [
-                c
-                for c in self.all_commands
-                if q in c["label"].lower() or q in c.get("command_text", "").lower()
-            ]
+            return
+
+        target_category = None
+        search_term = q
+
+        for tag, cat_name in CATEGORY_TAGS.items():
+            if q == tag or q.startswith(tag + " ") or q.startswith(tag + ":"):
+                target_category = cat_name
+                search_term = q[len(tag) :].lstrip(" :").strip()
+                break
+
+        matched = []
+        for c in self.all_commands:
+            if target_category and c.get("category") != target_category:
+                continue
+
+            if search_term:
+                searchable_text = " ".join(
+                    [
+                        c.get("label", ""),
+                        c.get("intent", ""),
+                        c.get("raw_name", ""),
+                        c.get("description", ""),
+                        c.get("category", ""),
+                        c.get("command_text", ""),
+                        " ".join(c.get("phrases", [])),
+                    ]
+                ).lower()
+                if search_term in searchable_text:
+                    matched.append(c)
+            else:
+                matched.append(c)
+
+        self.filtered_commands = matched
 
     def _run_command_action(self, selected_cmd: dict[str, Any]) -> None:
         def run_action() -> None:
@@ -298,29 +418,28 @@ class QtCommandPalette(QObject):
                     )
                     self.dispatcher.dispatch(cmd_text)
                 elif selected_cmd["action_type"] == "plugin":
-                    action_config = {
+                    intent_name = selected_cmd["intent"]
+                    risk_level = selected_cmd.get("risk_level", "safe")
+                    logger.info(
+                        f"Command Palette dispatching plugin intent: '{intent_name}' (risk: {risk_level})"
+                    )
+                    action_payload = {
                         "action": "plugin",
-                        "intent": selected_cmd["intent"],
-                        "risk_level": selected_cmd["risk_level"],
+                        "intent": intent_name,
+                        "risk_level": risk_level,
                     }
-                    self.dispatcher.last_input_text = selected_cmd["label"]
-                    self.dispatcher.last_input_source = "command_palette"
-                    self.dispatcher.last_confidence = 1.0
-                    self.dispatcher.handle_dynamic(action_config)
+                    self.dispatcher.handle_dynamic(action_payload)
             except Exception as e:
-                logger.error(f"Error executing command palette action: {e}")
+                logger.error(
+                    f"Command Palette background execution failed: {e}",
+                    exc_info=True,
+                )
             finally:
-                if state_manager.get_state() in (
-                    JarvisState.THINKING,
-                    JarvisState.EXECUTING,
-                    JarvisState.CONFIRMING_DRY_RUN,
-                    JarvisState.ERROR,
-                ):
+                if state_manager.get_state() != JarvisState.IDLE:
+                    logger.warning(
+                        f"State was {state_manager.get_state()} after Command Palette execution. Resetting to IDLE."
+                    )
                     state_manager.set_state(JarvisState.IDLE)
-                try:
-                    pythoncom.CoUninitialize()
-                except Exception:
-                    pass
 
         threading.Thread(target=run_action, daemon=True).start()
 
@@ -328,30 +447,25 @@ class QtCommandPalette(QObject):
         self.trigger_show.emit()
 
     def _on_trigger_show(self) -> None:
-        self._fetch_commands()
         if not self.dialog:
             self.dialog = QtCommandPaletteDialog(self)
+
+        self._fetch_commands()
+        self.dialog.search_bar.clear()
         self.dialog._refresh_list()
 
-        # Center on active display where cursor is located (upper third for modern spotlight experience)
-        screen = QGuiApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
+        cursor_pos = QCursor.pos()
+        screen = QGuiApplication.screenAt(cursor_pos)
+        if not screen:
+            screen = QApplication.primaryScreen()
+
         if screen:
-            geo = screen.availableGeometry()
-            x = geo.x() + (geo.width() - self.dialog.width()) // 2
-            y = geo.y() + (geo.height() - self.dialog.height()) // 3
+            screen_geo = screen.geometry()
+            x = screen_geo.x() + (screen_geo.width() - self.dialog.width()) // 2
+            y = screen_geo.y() + (screen_geo.height() - self.dialog.height()) // 3
             self.dialog.move(x, y)
 
-        self.dialog._is_active = False
         self.dialog.show()
         self.dialog.raise_()
         self.dialog.activateWindow()
-
-        try:
-            import win32gui
-
-            win32gui.SetForegroundWindow(int(self.dialog.winId()))
-        except Exception as e:
-            logger.debug(f"Could not SetForegroundWindow on Command Palette: {e}")
-
-        self.dialog.search_bar.clear()
         self.dialog.search_bar.setFocus()

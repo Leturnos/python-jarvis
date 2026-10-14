@@ -102,7 +102,7 @@ class CommandResolver:
     ) -> ResolutionResult | None:
         if threshold is None:
             threshold = (
-                config.get("ai", {}).get("nlp", {}).get("fuzzy_match_threshold", 0.7)
+                config.get("ai", {}).get("nlp", {}).get("fuzzy_match_threshold", 0.75)
             )
 
         available_commands_map = self.get_available_commands_map()
