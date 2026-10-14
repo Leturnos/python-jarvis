@@ -1,0 +1,62 @@
+id: "media_entertainment"
+name: "Mídia & Entretenimento"
+description: "Controle de volume do sistema Windows e plataformas de streaming de vídeo"
+category: "Mídia"
+version: "1.0.0"
+
+commands:
+  - intent: "mutar_som"
+    phrases:
+      - "mutar som do windows"
+      - "mutar áudio do computador"
+      - "tirar som do sistema"
+      - "desativar som do windows"
+    description: "Ativa ou desativa o mudo geral de áudio do Windows"
+    risk_level: "safe"
+    actions:
+      - type: "keyboard_shortcut"
+        keys: ["volumemute"]
+
+  - intent: "aumentar_volume"
+    phrases:
+      - "aumentar volume do som"
+      - "aumentar volume do windows"
+      - "aumentar o volume"
+    description: "Aumenta o volume de som do Windows"
+    risk_level: "safe"
+    actions:
+      - type: "keyboard_shortcut"
+        keys: ["volumeup", "volumeup", "volumeup"]
+
+  - intent: "diminuir_volume"
+    phrases:
+      - "diminuir volume do som"
+      - "diminuir volume do windows"
+      - "abaixar o volume"
+    description: "Diminui o volume de som do Windows"
+    risk_level: "safe"
+    actions:
+      - type: "keyboard_shortcut"
+        keys: ["volumedown", "volumedown", "volumedown"]
+
+  - intent: "abrir_netflix"
+    phrases:
+      - "abrir netflix"
+      - "abrir a netflix"
+      - "assistir netflix"
+    description: "Abre o portal da Netflix no navegador padrão"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://www.netflix.com"
+
+  - intent: "abrir_twitch"
+    phrases:
+      - "abrir twitch"
+      - "abrir a twitch"
+      - "ir para o twitch"
+    description: "Abre a plataforma de transmissões Twitch no navegador padrão"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://www.twitch.tv"

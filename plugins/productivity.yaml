@@ -1,0 +1,40 @@
+id: "productivity"
+name: "Produtividade & Organização"
+description: "Ferramentas de notas, gestão de tarefas e agenda de compromissos"
+category: "Produtividade"
+version: "1.0.0"
+
+commands:
+  - intent: "abrir_notion"
+    phrases:
+      - "abrir notion"
+      - "abrir o notion"
+      - "abrir minhas anotações"
+    description: "Abre o Notion no navegador padrão ou aplicativo"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://www.notion.so"
+
+  - intent: "abrir_trello"
+    phrases:
+      - "abrir trello"
+      - "abrir o trello"
+      - "abrir quadros do trello"
+    description: "Abre o Trello para gestão de tarefas"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://trello.com"
+
+  - intent: "abrir_calendario"
+    phrases:
+      - "abrir calendário"
+      - "abrir o calendário"
+      - "abrir google agenda"
+      - "abrir minha agenda"
+    description: "Abre o Google Agenda no navegador"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://calendar.google.com"

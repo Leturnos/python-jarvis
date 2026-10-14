@@ -1,0 +1,28 @@
+id: "gaming"
+name: "Jogos & Launchers"
+description: "Inicialização rápida de plataformas e gerenciadores de jogos"
+category: "Jogos"
+version: "1.0.0"
+
+commands:
+  - intent: "abrir_steam"
+    phrases:
+      - "abrir steam"
+      - "abrir a steam"
+      - "iniciar steam"
+    description: "Abre a plataforma Steam no Windows"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "steam://open/main"
+
+  - intent: "abrir_epic_games"
+    phrases:
+      - "abrir epic games"
+      - "abrir a epic games"
+      - "iniciar epic games"
+    description: "Abre o inicializador da Epic Games Launcher"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "com.epicgames.launcher:"

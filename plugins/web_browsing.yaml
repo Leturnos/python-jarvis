@@ -1,0 +1,61 @@
+id: "web_browsing"
+name: "Navegação Web & Portais"
+description: "Acesso rápido a portais da internet, e-mail e mensageiros web"
+category: "Internet"
+version: "1.0.0"
+
+commands:
+  - intent: "abrir_youtube"
+    phrases:
+      - "abrir youtube"
+      - "abrir o youtube"
+      - "ir para o youtube"
+    description: "Abre o YouTube no navegador padrão"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://www.youtube.com"
+
+  - intent: "abrir_gmail"
+    phrases:
+      - "abrir gmail"
+      - "abrir o gmail"
+      - "abrir meus emails"
+    description: "Abre o Google Gmail no navegador padrão"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://mail.google.com"
+
+  - intent: "abrir_github"
+    phrases:
+      - "abrir github"
+      - "abrir o github"
+      - "ir para o github"
+    description: "Abre a página inicial do GitHub no navegador padrão"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://github.com"
+
+  - intent: "abrir_google"
+    phrases:
+      - "abrir google"
+      - "abrir o google"
+      - "abrir buscador google"
+    description: "Abre a página inicial do buscador Google no navegador"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://www.google.com"
+
+  - intent: "abrir_whatsapp_web"
+    phrases:
+      - "abrir whatsapp"
+      - "abrir o whatsapp"
+      - "abrir whatsapp web"
+    description: "Abre o WhatsApp Web no navegador padrão"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "https://web.whatsapp.com"

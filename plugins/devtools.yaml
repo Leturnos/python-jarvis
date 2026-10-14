@@ -1,6 +1,8 @@
-name: "DevTools Automations"
-description: "Automações para ferramentas de desenvolvimento"
-version: "1.0.0"
+id: "devtools"
+name: "DevTools & Programação"
+description: "Automações para fluxo de trabalho de desenvolvedores, terminais e editores"
+category: "Desenvolvimento"
+version: "1.1.0"
 
 shared_actions:
   preparar_ambiente:
@@ -22,8 +24,8 @@ commands:
     phrases: 
       - "ligar o servidor"
       - "rodar o backend"
-      - "iniciar projeto"
-      - "subir o sistema"
+      - "iniciar o backend"
+      - "subir o backend"
     description: "Abre o terminal na pasta do projeto e roda o servidor Node/Python"
     risk_level: "safe"
     actions:
@@ -34,7 +36,7 @@ commands:
 
   - intent: "programar"
     phrases:
-      - "hora de trabalhar"
+      - "hora de programar"
       - "preparar ambiente de código"
       - "abrir vscode e terminal"
     description: "Prepara o ambiente de trabalho: abre o terminal e o VS Code"
@@ -49,13 +51,38 @@ commands:
       - type: "type_and_enter"
         text: "agy"
 
-  - intent: "fechar_tudo"
+  - intent: "abrir_terminal"
     phrases:
-      - "encerrar expediente"
-      - "fechar programas"
-      - "modo descanso"
-    description: "Simula o encerramento do ambiente"
-    risk_level: "dangerous"
+      - "abrir terminal"
+      - "abrir o terminal"
+      - "abrir terminal warp"
+      - "abrir terminal de comando"
+      - "abrir console"
+    description: "Abre o terminal configurado (Warp ou padrão do sistema)"
+    risk_level: "safe"
     actions:
-      - type: "system_exec"
-        command: 'echo "Simulating close all..."'
+      - type: "system_open"
+        target: "${WARP_PATH}"
+
+  - intent: "abrir_vscode"
+    phrases:
+      - "abrir vscode"
+      - "abrir o vscode"
+      - "abrir visual studio code"
+      - "abrir editor de código"
+    description: "Abre o Visual Studio Code"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "code"
+
+  - intent: "git_status"
+    phrases:
+      - "ver git status"
+      - "como está o git"
+      - "ver status do git"
+    description: "Digita git status no terminal ativo"
+    risk_level: "safe"
+    actions:
+      - type: "type_and_enter"
+        text: "git status"

@@ -1,0 +1,98 @@
+id: "windows_system"
+name: "Sistema & Utilitários Windows"
+description: "Atalhos nativos, utilitários rápidos e gerenciamento do sistema Windows"
+category: "Sistema"
+version: "1.0.0"
+
+commands:
+  - intent: "gerenciador_tarefas"
+    phrases:
+      - "abrir gerenciador de tarefas"
+      - "abrir o gerenciador de tarefas"
+      - "abrir task manager"
+    description: "Abre o Gerenciador de Tarefas do Windows"
+    risk_level: "safe"
+    actions:
+      - type: "keyboard_shortcut"
+        keys: ["ctrl", "shift", "esc"]
+
+  - intent: "bloquear_computador"
+    phrases:
+      - "bloquear o computador"
+      - "bloquear o windows"
+      - "bloquear estação de trabalho"
+    description: "Bloqueia a sessão do Windows exigindo autenticação para retornar"
+    risk_level: "dangerous"
+    actions:
+      - type: "system_exec"
+        command: "rundll32.exe user32.dll,LockWorkStation"
+
+  - intent: "mostrar_area_trabalho"
+    phrases:
+      - "mostrar área de trabalho"
+      - "mostrar a área de trabalho"
+      - "minimizar todas as janelas"
+      - "mostrar meu desktop"
+    description: "Minimiza todas as janelas para exibir a Área de Trabalho"
+    risk_level: "safe"
+    actions:
+      - type: "keyboard_shortcut"
+        keys: ["win", "d"]
+
+  - intent: "abrir_calculadora"
+    phrases:
+      - "abrir calculadora"
+      - "abrir a calculadora"
+      - "iniciar calculadora"
+    description: "Abre o aplicativo de Calculadora do Windows"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "calc:"
+
+  - intent: "abrir_configuracoes"
+    phrases:
+      - "abrir configurações"
+      - "abrir as configurações"
+      - "abrir configurações do windows"
+      - "abrir painel de configurações"
+    description: "Abre o painel de Configurações do Windows"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "ms-settings:"
+
+  - intent: "tirar_print_tela"
+    phrases:
+      - "tirar print da tela"
+      - "fazer captura de tela"
+      - "capturar a tela"
+      - "tirar foto da tela"
+    description: "Abre a ferramenta de captura e recorte de tela do Windows"
+    risk_level: "safe"
+    actions:
+      - type: "keyboard_shortcut"
+        keys: ["win", "shift", "s"]
+
+  - intent: "abrir_explorador"
+    phrases:
+      - "abrir explorador de arquivos"
+      - "abrir o explorador de arquivos"
+      - "abrir o windows explorer"
+      - "abrir explorador"
+    description: "Abre o Explorador de Arquivos do Windows"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "explorer"
+
+  - intent: "abrir_pasta_downloads"
+    phrases:
+      - "abrir pasta de downloads"
+      - "abrir a pasta de downloads"
+      - "abrir pasta downloads"
+    description: "Abre a pasta de Downloads do usuário no Windows Explorer"
+    risk_level: "safe"
+    actions:
+      - type: "system_open"
+        target: "%USERPROFILE%\\Downloads"
