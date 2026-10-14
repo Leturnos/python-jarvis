@@ -126,7 +126,7 @@ def load_config() -> dict[str, Any]:
         },
         "ai": {
             "nlp": {
-                "fuzzy_match_threshold": 0.7,
+                "fuzzy_match_threshold": 0.75,
             }
         },
         "automation": {
@@ -159,6 +159,16 @@ def load_config() -> dict[str, Any]:
                 "command_recognized": [1000, 60],
                 "action_completed": [1200, 100],
             },
+        },
+        "plugins": {
+            "enabled_presets": [
+                "devtools",
+                "windows_system",
+                "web_browsing",
+                "productivity",
+                "media_entertainment",
+                "gaming",
+            ]
         },
     }
 
@@ -204,3 +214,92 @@ def update_yaml_active_provider(provider_name: str) -> None:
 
     with open(yaml_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
+
+
+def update_yaml_plugin_preset(preset_id: str, enabled: bool) -> None:
+    """Updates the enabled_presets entry in config.yaml while preserving comments and structure."""
+    yaml_path = get_app_root() / "config.yaml"
+    if not yaml_path.exists():
+        return
+    try:
+        with open(yaml_path, encoding="utf-8") as f:
+            lines = f.readlines()
+
+        in_plugins_block = False
+        in_enabled_presets_block = False
+        preset_line_idx = -1
+        presets_start_idx = -1
+        last_item_idx = -1
+        indent_str = "    - "
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("plugins:"):
+                in_plugins_block = True
+                continue
+            elif in_plugins_block and (
+                stripped
+                and not line.startswith(" ")
+                and not line.startswith("\t")
+                and not stripped.startswith("#")
+            ):
+                in_plugins_block = False
+                in_enabled_presets_block = False
+
+            if in_plugins_block:
+                if stripped.startswith("enabled_presets:"):
+                    in_enabled_presets_block = True
+                    presets_start_idx = i
+                    rest = stripped[len("enabled_presets:") :].strip()
+                    if rest.startswith("[") and rest.endswith("]"):
+                        items = [
+                            x.strip().strip("'\"")
+                            for x in rest[1:-1].split(",")
+                            if x.strip()
+                        ]
+                        if enabled and preset_id not in items:
+                            items.append(preset_id)
+                        elif not enabled and preset_id in items:
+                            items.remove(preset_id)
+                        indent = line[: len(line) - len(line.lstrip())]
+                        lines[i] = (
+                            f"{indent}enabled_presets: [{', '.join(repr(x) for x in items)}]\n"
+                        )
+                        with open(yaml_path, "w", encoding="utf-8") as f:
+                            f.writelines(lines)
+                        return
+                    continue
+                elif in_enabled_presets_block:
+                    if stripped.startswith("-"):
+                        last_item_idx = i
+                        indent_str = line[: line.index("-") + 2]
+                        val = stripped.lstrip("-").strip().strip('"').strip("'")
+                        if val == preset_id:
+                            preset_line_idx = i
+                    elif stripped and not stripped.startswith("#"):
+                        in_enabled_presets_block = False
+
+        if not enabled and preset_line_idx != -1:
+            lines.pop(preset_line_idx)
+        elif enabled and preset_line_idx == -1:
+            if not indent_str.endswith(" "):
+                indent_str += " "
+            new_line = f'{indent_str}"{preset_id}"\n'
+            if last_item_idx != -1:
+                if not lines[last_item_idx].endswith("\n"):
+                    lines[last_item_idx] += "\n"
+                lines.insert(last_item_idx + 1, new_line)
+            elif presets_start_idx != -1:
+                if not lines[presets_start_idx].endswith("\n"):
+                    lines[presets_start_idx] += "\n"
+                lines.insert(presets_start_idx + 1, new_line)
+            else:
+                lines.append("\nplugins:\n  enabled_presets:\n")
+                lines.append(new_line)
+
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception as e:
+        logger.error(
+            f"Failed to update plugin preset '{preset_id}' in config.yaml: {e}"
+        )

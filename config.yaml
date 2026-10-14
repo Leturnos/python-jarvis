@@ -45,6 +45,8 @@ audio_cues:
 ai:
   proactivity: "objective"            # "objective" (direto e conciso) ou "proactive" (sugere recomendações práticas)
   max_conversation_turns: 5           # Número de interações recentes mantidas na memória de diálogo
+  nlp:
+    fuzzy_match_threshold: 0.75       # Limiar mínimo de similaridade para comandos de voz locais
 
 # Provedores de Inteligência Artificial (LLM)
 llm:
@@ -125,3 +127,14 @@ updates:
   check_interval_hours: 24.0
   github_repo: "Leturnos/python-jarvis"
 
+# ==============================================================================
+# PLUGINS E PRESETS DE AUTOMAÇÃO
+# ==============================================================================
+plugins:
+  enabled_presets:
+    - "devtools"
+    - "windows_system"
+    - "web_browsing"
+    - "productivity"
+    - "media_entertainment"
+    - "gaming"
