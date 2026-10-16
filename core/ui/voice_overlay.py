@@ -106,7 +106,7 @@ class VoiceOverlayHUD(QWidget):
                 self.show()
         elif state == JarvisState.IDLE:
             if self.isVisible() and not self.hide_timer.isActive():
-                self.hide_timer.start(3000)
+                self.hide_timer.start(1200)
         else:
             self.hide_timer.stop()
             if self.isVisible():

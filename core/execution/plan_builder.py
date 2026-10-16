@@ -192,6 +192,10 @@ class PlanBuilder:
                 payload = {"target": action.get("target")}
                 if "window_state" in action:
                     payload["window_state"] = action.get("window_state")
+                if "window_title_pattern" in action:
+                    payload["window_title_pattern"] = action.get("window_title_pattern")
+                if "process_name" in action:
+                    payload["process_name"] = action.get("process_name")
                 steps.append(ExecutionStep(type=StepType.OPEN_APP, payload=payload))
             elif a_type == "wait":
                 steps.append(

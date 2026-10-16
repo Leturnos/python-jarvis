@@ -48,7 +48,8 @@ commands:
     risk_level: "safe"
     actions:
       - type: "system_open"
-        target: "calc:"
+        target: "calc.exe"
+        window_title_pattern: "Calculadora|Calculator"
 
   - intent: "abrir_configuracoes"
     phrases:

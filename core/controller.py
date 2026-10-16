@@ -275,13 +275,23 @@ class JarvisController:
             logger.info("Entering Confirmation: Listening immediately.")
 
         if (
-            old_state == JarvisState.EXECUTING
-            or old_state == JarvisState.CONFIRMING_DRY_RUN
-        ) and new_state == JarvisState.IDLE:
-            logger.info(f"Transition {old_state.name} -> IDLE. Resetting buffers.")
+            old_state
+            in (
+                JarvisState.EXECUTING,
+                JarvisState.THINKING,
+                JarvisState.CONFIRMING_DRY_RUN,
+                JarvisState.ERROR,
+            )
+            and new_state == JarvisState.IDLE
+        ):
+            logger.info(
+                f"Transition {old_state.name} -> IDLE. Resetting buffers and applying cooldown."
+            )
             try:
                 self.model.reset()
-                self.ignore_audio_until = time.time() + 0.4
+                now = time.time()
+                self.ignore_audio_until = now + 0.8
+                self.cooldown = now + self.cooldown_seconds
             except Exception as e:
                 logger.error(f"Error during post-execution reset: {e}")
 
@@ -412,7 +422,7 @@ class JarvisController:
         self, pcm: np.ndarray, rms: float, context: ActivationContext
     ) -> None:
         self.ui.update(
-            status="Listening" if context.timestamp > self.cooldown else "Cooldown"
+            status="Pronto" if context.timestamp > self.cooldown else "Cooldown"
         )
 
         highest_score = 0.0

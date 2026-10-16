@@ -31,6 +31,19 @@ class WindowInfo:
         return self.executable
 
 
+def is_uri_or_url(target: str) -> bool:
+    """Checks if a target string is a web URL or custom URI protocol scheme."""
+    if target.startswith(("http://", "https://", "ftp://", "mailto:")):
+        return True
+    # Custom URI schemes (e.g. calc:, ms-settings:, steam://, com.epicgames.launcher:)
+    # Must have a colon, but exclude Windows drive paths like C:\ or C:/
+    if ":" in target and not re.match(r"^[a-zA-Z]:[\\/]", target):
+        scheme = target.split(":", 1)[0]
+        if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*$", scheme):
+            return True
+    return False
+
+
 class WindowLayoutManager:
     """Manages deterministic DPI-aware window positioning on Windows monitors."""
 
@@ -139,6 +152,28 @@ class WindowManager:
         """Convenience method to retrieve the current active foreground window."""
         return cls().get_foreground_window_info()
 
+    PROCESS_ALIASES: dict[str, set[str]] = {
+        "calc": {"calc", "calculatorapp", "calculator", "applicationframehost"},
+        "calculatorapp": {
+            "calc",
+            "calculatorapp",
+            "calculator",
+            "applicationframehost",
+        },
+        "calculator": {"calc", "calculatorapp", "calculator", "applicationframehost"},
+    }
+
+    @classmethod
+    def _matches_process(cls, executable: str, target_executable: str) -> bool:
+        if not executable or not target_executable:
+            return False
+        p_name = executable.lower().removesuffix(".exe")
+        target_p = target_executable.lower().removesuffix(".exe")
+        if p_name == target_p:
+            return True
+        allowed = cls.PROCESS_ALIASES.get(target_p)
+        return bool(allowed and p_name in allowed)
+
     def check_focus_match(
         self,
         active_win: WindowInfo | None,
@@ -154,8 +189,7 @@ class WindowManager:
         if (
             active_win.executable
             and target_win.executable
-            and active_win.executable.lower().removesuffix(".exe")
-            == target_win.executable.lower().removesuffix(".exe")
+            and self._matches_process(active_win.executable, target_win.executable)
             and (
                 not window_title_pattern
                 or re.search(window_title_pattern, active_win.title, re.IGNORECASE)
@@ -196,11 +230,15 @@ class WindowManager:
                         )
                         is_match = False
                         if candidate_pids and pid in candidate_pids:
-                            is_match = True
+                            if window_title_pattern:
+                                if re.search(
+                                    window_title_pattern, title, re.IGNORECASE
+                                ):
+                                    is_match = True
+                            else:
+                                is_match = True
                         elif executable_name:
-                            p_name = executable.lower().removesuffix(".exe")
-                            target_p = executable_name.lower().removesuffix(".exe")
-                            if p_name == target_p:
+                            if self._matches_process(executable, executable_name):
                                 if window_title_pattern:
                                     if re.search(
                                         window_title_pattern, title, re.IGNORECASE
@@ -256,46 +294,86 @@ class WindowManager:
         window_title_pattern: str | None = None,
         process_name: str | None = None,
         timeouts: dict[str, Any] | None = None,
-    ) -> WindowInfo:
+    ) -> WindowInfo | None:
         t_out = timeouts or {}
         proc_start_timeout = t_out.get("process_start", 5.0)
         win_timeout = t_out.get("window_appear", 10.0)
         focus_timeout = t_out.get("focus", 3.0)
         focus_retries = t_out.get("focus_retries", 3)
 
-        is_url = target.startswith(("http://", "https://"))
-        pids_before = self.find_processes()
+        expanded_target = os.path.expandvars(target)
+        if expanded_target.lower() == "calc:":
+            expanded_target = "calc.exe"
+        if expanded_target.lower() in ("calc", "calc.exe") and not window_title_pattern:
+            window_title_pattern = "Calculadora|Calculator"
 
-        if (
-            not is_url
-            and os.path.exists(target)
-            and target.endswith((".exe", ".bat", ".cmd"))
-        ):
-            subprocess.Popen(target)
+        is_url = is_uri_or_url(expanded_target)
+
+        # 1. URL or URI protocol scheme handling (e.g. https://..., calc:, ms-settings:)
+        if is_url:
+            os.startfile(expanded_target)
+            if not window_title_pattern:
+                time.sleep(Timing.UI_STABILIZATION_SHORT)
+                return self.get_foreground_window_info()
+
+            window = self.wait_for_window(
+                window_title_pattern=window_title_pattern,
+                timeout=win_timeout,
+            )
+            if not window:
+                raise TimeoutError(f"Window for '{target}' not found.")
+
+        # 2. Directory path handling (e.g. %USERPROFILE%\Downloads)
+        elif os.path.isdir(expanded_target):
+            os.startfile(expanded_target)
+            if not window_title_pattern:
+                time.sleep(Timing.UI_STABILIZATION_SHORT)
+                return self.get_foreground_window_info()
+
+            window = self.wait_for_window(
+                window_title_pattern=window_title_pattern,
+                timeout=win_timeout,
+            )
+            if not window:
+                raise TimeoutError(f"Window for '{target}' not found.")
+
+        # 3. Executable / Application handling
         else:
-            os.startfile(target)
+            pids_before = self.find_processes()
 
-        candidate_pids = set()
-        start_proc = time.time()
-        while time.time() - start_proc < proc_start_timeout:
-            current_pids = self.find_processes()
-            candidate_pids = current_pids - pids_before
-            if candidate_pids:
-                break
-            time.sleep(Timing.UI_STABILIZATION_SHORT)
+            if os.path.exists(expanded_target) and expanded_target.endswith(
+                (".exe", ".bat", ".cmd")
+            ):
+                subprocess.Popen(expanded_target)
+            else:
+                os.startfile(expanded_target)
 
-        if not process_name and not is_url and target.lower().endswith(".exe"):
-            process_name = os.path.basename(target)
+            candidate_pids = set()
+            if not window_title_pattern:
+                start_proc = time.time()
+                while time.time() - start_proc < proc_start_timeout:
+                    current_pids = self.find_processes()
+                    candidate_pids = current_pids - pids_before
+                    if candidate_pids:
+                        break
+                    time.sleep(Timing.UI_STABILIZATION_SHORT)
 
-        window = self.wait_for_window(
-            candidate_pids=candidate_pids,
-            executable_name=process_name,
-            window_title_pattern=window_title_pattern,
-            timeout=win_timeout,
-        )
+            if not process_name and expanded_target.lower().endswith(".exe"):
+                process_name = os.path.basename(expanded_target)
 
-        if not window:
-            raise TimeoutError(f"Window for '{target}' not found.")
+            if not candidate_pids and not process_name and not window_title_pattern:
+                time.sleep(Timing.UI_STABILIZATION_SHORT)
+                return self.get_foreground_window_info()
+
+            window = self.wait_for_window(
+                candidate_pids=candidate_pids,
+                executable_name=process_name,
+                window_title_pattern=window_title_pattern,
+                timeout=win_timeout,
+            )
+
+            if not window:
+                raise TimeoutError(f"Window for '{target}' not found.")
 
         for _ in range(focus_retries):
             self.activate_window_by_hwnd(window.hwnd)

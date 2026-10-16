@@ -225,3 +225,46 @@ def test_lock_screen_cancels_confirming_dry_run(mock_deps):
     assert state_manager.get_state() == JarvisState.SUSPENDED
     assert controller._pending_plan is None
     assert controller.confirmation_frames == []
+
+
+def test_post_execution_transition_resets_model_and_applies_cooldown(mock_deps):
+    controller = JarvisController(**mock_deps)
+    controller.cooldown = 0
+    controller.ignore_audio_until = 0
+
+    # Test EXECUTING -> IDLE
+    controller._on_state_change(JarvisState.EXECUTING, JarvisState.IDLE, None)
+    mock_deps["model"].reset.assert_called()
+    assert controller.cooldown > time.time()
+    assert controller.ignore_audio_until > time.time()
+
+    # Reset mocks
+    mock_deps["model"].reset.reset_mock()
+    controller.cooldown = 0
+    controller.ignore_audio_until = 0
+
+    # Test THINKING -> IDLE
+    controller._on_state_change(JarvisState.THINKING, JarvisState.IDLE, None)
+    mock_deps["model"].reset.assert_called_once()
+    assert controller.cooldown > time.time()
+    assert controller.ignore_audio_until > time.time()
+
+
+def test_handle_idle_updates_ui_status_to_pronto(mock_deps):
+    from core.activation import ActivationContext
+
+    controller = JarvisController(**mock_deps)
+    controller.cooldown = 0  # Cooldown passed
+
+    pcm = np.zeros(1280, dtype=np.int16)
+    context = ActivationContext(
+        wakeword_score=0.0,
+        wakeword_detected=None,
+        is_fullscreen=False,
+        is_hotkey_pressed=False,
+        current_state=JarvisState.IDLE,
+        timestamp=time.time() + 10.0,
+    )
+
+    controller._handle_idle(pcm, rms=5.0, context=context)
+    mock_deps["ui"].update.assert_any_call(status="Pronto")
