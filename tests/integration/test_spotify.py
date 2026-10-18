@@ -691,3 +691,21 @@ def test_spotify_click_play_aborts_when_foreground_is_not_spotify():
     # Should abort and return False without clicking
     res = automator.spotify_click_play(click_type="search")
     assert res is False
+
+
+def test_spotify_provider_auto_creates_missing_playlists_file(tmp_path):
+    with patch("core.media.providers.spotify.get_app_root", return_value=tmp_path):
+        expected_file = tmp_path / "data" / "media" / "playlists.json"
+        assert not expected_file.exists()
+
+        provider = SpotifyProvider()
+        assert expected_file.exists()
+
+        intent = MediaIntent(
+            action=MediaAction.PLAY_QUERY,
+            query="música de jogo",
+            query_type=QueryType.MIXED,
+        )
+        plan = provider.resolve(intent)
+        assert plan is not None
+        assert plan.playlist_key == "gaming"

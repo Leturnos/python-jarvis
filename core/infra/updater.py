@@ -199,9 +199,14 @@ echo [%date% %time%] Aguardando encerramento do processo e liberacao de handles.
 ping 127.0.0.1 -n 3 >nul 2>&1
 
 echo [%date% %time%] Copiando novos arquivos para {clean_dest}... >> "!LOG_FILE!" 2>&1
-robocopy "{clean_source}" "{clean_dest}" /E /XD data logs .git /XF .env config.yaml portable.flag /R:5 /W:1 /NFL /NDL /NJH /NJS /nc /ns /np >> "!LOG_FILE!" 2>&1
+robocopy "{clean_source}" "{clean_dest}" /E /XD data logs .git /XF .env config.yaml portable.flag /R:5 /W:1 /NFL /NDL /NJS /NJH /nc /ns /np >> "!LOG_FILE!" 2>&1
 set "RC=!ERRORLEVEL!"
 echo [%date% %time%] Codigo de retorno do robocopy: !RC! >> "!LOG_FILE!" 2>&1
+
+if exist "{clean_source}\\data\\media" (
+    echo [%date% %time%] Sincronizando catalogo de midia em {clean_dest}\\data\\media... >> "!LOG_FILE!" 2>&1
+    robocopy "{clean_source}\\data\\media" "{clean_dest}\\data\\media" /E /R:5 /W:1 /NFL /NDL /NJH /NJS /nc /ns /np >> "!LOG_FILE!" 2>&1
+)
 
 if !RC! LEQ 7 (
     echo [%date% %time%] Atualizacao concluida com sucesso! >> "!LOG_FILE!" 2>&1

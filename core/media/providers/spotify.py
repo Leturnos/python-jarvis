@@ -15,24 +15,103 @@ from core.media.nlp import NLPProcessor
 from core.shared.constants import Timing
 from core.shared.paths import get_app_root
 
+DEFAULT_PLAYLISTS_CATALOG: dict[str, Any] = {
+    "intents": {
+        "happy_hits": "spotify:playlist:37i9dQZF1DXdPec7aLTmlC",
+        "focus": "spotify:playlist:37i9dQZF1DWZeKCadgRdKQ",
+        "workout": "spotify:playlist:37i9dQZF1DXe6bgV3TmZOL",
+        "chill": "spotify:playlist:37i9dQZF1EVHGWrwldPRtj",
+        "sad_songs": "spotify:playlist:2pnoYeER1oat11B3Vkpnm7",
+        "party": "spotify:playlist:37i9dQZF1DXaXB8fQg7xif",
+        "gaming": "spotify:playlist:37i9dQZF1DWTyiBJ6yEqeu",
+        "fallback_playlist": "spotify:user:spotify:collection",
+    },
+    "keywords": {
+        "happy_hits": [
+            "alegre",
+            "feliz",
+            "animad",
+            "pra cima",
+            "bom humor",
+            "radiante",
+        ],
+        "focus": [
+            "focar",
+            "concentrar",
+            "estudar",
+            "trabalhar",
+            "foco",
+            "produtividade",
+            "ler",
+        ],
+        "workout": [
+            "treinar",
+            "malhar",
+            "academia",
+            "correr",
+            "exercicio",
+            "treino",
+            "peso",
+        ],
+        "chill": [
+            "relaxar",
+            "calma",
+            "dormir",
+            "tranquil",
+            "paz",
+            "suave",
+            "descansar",
+        ],
+        "sad_songs": ["triste", "bad", "melancolic", "chorar", "depre", "fossa"],
+        "party": ["festa", "curtir", "comemorar", "dancar", "balada", "agito"],
+        "gaming": [
+            "jogar",
+            "jogo",
+            "jogos",
+            "gamer",
+            "game",
+            "partida",
+            "play",
+            "lol",
+            "cs",
+            "valorant",
+        ],
+    },
+}
+
 
 class SpotifyProvider:
     def __init__(self, playlists_path: str | Path | None = None) -> None:
         if playlists_path is None:
-            self.playlists_path = str(
-                get_app_root() / "data" / "media" / "playlists.json"
-            )
+            target_path = get_app_root() / "data" / "media" / "playlists.json"
+            self._ensure_playlists_file(target_path)
+            self.playlists_path = str(target_path)
         else:
             p = Path(playlists_path)
-            self.playlists_path = str(p if p.is_absolute() else get_app_root() / p)
+            resolved = p if p.is_absolute() else get_app_root() / p
+            if playlists_path == "data/media/playlists.json":
+                self._ensure_playlists_file(resolved)
+            self.playlists_path = str(resolved)
         self.nlp = NLPProcessor(self.playlists_path)
+
+    @staticmethod
+    def _ensure_playlists_file(target_path: Path) -> None:
+        """Creates data/media/playlists.json with default catalog if missing (e.g. after legacy updater /XD data)."""
+        if target_path.exists():
+            return
+        try:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(target_path, "w", encoding="utf-8") as f:
+                json.dump(DEFAULT_PLAYLISTS_CATALOG, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
 
     def _load_intents(self) -> dict[str, Any]:
         try:
             with open(self.playlists_path, encoding="utf-8") as f:
                 return cast(dict[str, Any], json.load(f).get("intents", {}))
         except Exception:
-            return {}
+            return dict(DEFAULT_PLAYLISTS_CATALOG["intents"])
 
     @staticmethod
     def _encode_search_uri(query: str) -> str:
