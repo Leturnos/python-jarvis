@@ -240,10 +240,46 @@ class SpotifyAutomator:
             logger.debug(f"Error checking for Spotify popup: {e}")
         return None
 
+    def _wait_for_spotify_ui_ready(
+        self, region: tuple[int, int, int, int], max_wait: float = 8.0
+    ) -> Any:
+        """Polls screenshot until Spotify's central content area is no longer a blank/black loading screen."""
+        start_t = time.time()
+        last_haystack = None
+        while True:
+            screenshot = pyautogui.screenshot(region=region)
+            is_mock = hasattr(screenshot, "_spec_class") or type(
+                screenshot
+            ).__name__ in (
+                "MagicMock",
+                "Mock",
+            )
+            if is_mock:
+                return screenshot
+
+            arr = np.array(screenshot)
+            last_haystack = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+            try:
+                h, w, _ = last_haystack.shape
+                if h > 160 and w > 200:
+                    content_slice = last_haystack[
+                        int(h * 0.18) : int(h * 0.75), int(w * 0.15) : int(w * 0.85)
+                    ]
+                    if float(np.std(content_slice)) > 12.0:
+                        return last_haystack
+                else:
+                    return last_haystack
+            except Exception:
+                return last_haystack
+
+            if (time.time() - start_t) >= max_wait:
+                return last_haystack
+            time.sleep(0.4)
+
     def spotify_click_play(
         self, click_type: str = "search", uri: str | None = None
     ) -> bool:
-        win = self.find_spotify_window(timeout=3.0)
+        win = self.find_spotify_window(timeout=8.0)
         if not win:
             logger.warning("Spotify window not found.")
             return False
@@ -301,13 +337,11 @@ class SpotifyAutomator:
                         int(height * scale_factor),
                     )
 
-                    screenshot = pyautogui.screenshot(region=region)
-                    is_mock = hasattr(screenshot, "_spec_class") or type(
-                        screenshot
+                    ready_img = self._wait_for_spotify_ui_ready(region)
+                    is_mock = hasattr(ready_img, "_spec_class") or type(
+                        ready_img
                     ).__name__ in ("MagicMock", "Mock")
-                    haystack = None
-                    if not is_mock:
-                        haystack = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+                    haystack = None if is_mock else ready_img
 
                     pos = None
                     if haystack is not None:
@@ -382,14 +416,10 @@ class SpotifyAutomator:
                 # 1. Fast-path: Check if green play button is ALREADY visible on screen
                 haystack = None
                 try:
-                    screenshot = pyautogui.screenshot(region=region)
-                    is_mock = hasattr(screenshot, "_spec_class") or type(
-                        screenshot
+                    haystack = self._wait_for_spotify_ui_ready(region)
+                    is_mock = hasattr(haystack, "_spec_class") or type(
+                        haystack
                     ).__name__ in ("MagicMock", "Mock")
-                    if not is_mock:
-                        haystack = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-                    else:
-                        haystack = screenshot
 
                     if haystack is not None:
                         # 1.1 Dismiss upsell modal popup if present (e.g. 'Ignorar')

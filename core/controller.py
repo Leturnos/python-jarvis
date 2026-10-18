@@ -131,6 +131,10 @@ class JarvisController:
                     if pcm is None:
                         continue
 
+                    # Re-read state after blocking audio read to avoid race conditions with UI/Command Palette
+                    current_state = state_manager.get_state()
+                    now = time.time()
+
                     self.ui.update(volume=pcm)
 
                     # Update ignore window if Jarvis is speaking
@@ -414,7 +418,19 @@ class JarvisController:
         else:
             self.ui.update(status="SUSPENDED (Fullscreen)")
         action_obj = self.activation_manager.evaluate(context)
-        if action_obj.action_type == ActivationActionType.RESUME:
+        if action_obj.action_type == ActivationActionType.TRIGGER_PTT_START:
+            logger.info("Waking up from Suspended via PTT!")
+            stt_engine.load()
+            if self.audio_cue_manager:
+                self.audio_cue_manager.play_cue(CueType.WAKE)
+            self.tts_engine.speak(self.response_phrase)
+            state_manager.set_state(JarvisState.LISTENING)
+            self.command_frames = []
+            self.confirmation_frames = []
+            self.silence_start = None
+            self.command_start_time = context.timestamp
+            self.cooldown = context.timestamp + self.cooldown_seconds
+        elif action_obj.action_type == ActivationActionType.RESUME:
             logger.info("Resuming from suspend to IDLE.")
             state_manager.set_state(JarvisState.IDLE)
 
@@ -461,7 +477,8 @@ class JarvisController:
         action_obj = self.activation_manager.evaluate(context)
 
         if action_obj.action_type == ActivationActionType.SUSPEND:
-            state_manager.set_state(JarvisState.SUSPENDED)
+            if state_manager.get_state() == JarvisState.IDLE:
+                state_manager.set_state(JarvisState.SUSPENDED)
             return
 
         if action_obj.action_type in (

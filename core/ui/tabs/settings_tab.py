@@ -1,7 +1,6 @@
 import threading
 from pathlib import Path
 
-import yaml
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
@@ -18,14 +17,18 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import InfoBar, LineEdit
 
-from core.infra.config import config, update_yaml_active_provider
+from core.infra.config import (
+    config,
+    update_yaml_active_provider,
+    update_yaml_performance_profile,
+)
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
 from core.infra.presets import detect_recommended_preset, get_system_hardware_info
 from core.infra.update_preferences import UpdatePreferenceManager
 from core.infra.updater import ReleaseInfo, UpdateManager
 from core.shared.constants import DEFAULT_PROVIDER
-from core.shared.paths import get_app_root, get_app_version
+from core.shared.paths import get_app_version
 
 
 class SettingsTab(QWidget):
@@ -207,12 +210,8 @@ class SettingsTab(QWidget):
     def _apply_and_restart(self) -> None:
         new_prof = self.PROFILES_ORDER[self.slider.value()]
         try:
-            yaml_path = get_app_root() / "config.yaml"
-            with open(yaml_path, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            data["performance_profile"] = new_prof
-            with open(yaml_path, "w", encoding="utf-8") as f:
-                yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+            update_yaml_performance_profile(new_prof)
+            config["performance_profile"] = new_prof
 
             InfoBar.success(
                 "Configuração Salva", "Reiniciando o Jarvis...", parent=self

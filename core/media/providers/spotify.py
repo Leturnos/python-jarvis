@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import quote
 
 from core.execution.execution_plan import ExecutionStep, StepType
 from core.media.models import (
@@ -33,6 +34,12 @@ class SpotifyProvider:
         except Exception:
             return {}
 
+    @staticmethod
+    def _encode_search_uri(query: str) -> str:
+        """Encodes non-ASCII characters in Spotify search query while preserving '+' for spaces."""
+        parts = [quote(part, safe="") for part in query.split(" ")]
+        return f"spotify:search:{'+'.join(parts)}"
+
     def resolve(self, intent: MediaIntent) -> ResolvedMediaPlan | None:
         if intent.action == MediaAction.PLAY_QUERY:
             intents_dict = self._load_intents()
@@ -45,7 +52,7 @@ class SpotifyProvider:
             playlist_key = None
 
             if q_type == QueryType.ENTITY:
-                uri = f"spotify:search:{query.replace(' ', '+')}"
+                uri = self._encode_search_uri(query)
                 strategy = AutoplayStrategy.TAB_ENTER
             else:
                 # MOOD or MIXED
@@ -63,7 +70,7 @@ class SpotifyProvider:
 
             # Absolute fallback if json is broken
             if not uri:
-                uri = f"spotify:search:{query.replace(' ', '+')}"
+                uri = self._encode_search_uri(query)
                 strategy = AutoplayStrategy.TAB_ENTER
 
             steps = [

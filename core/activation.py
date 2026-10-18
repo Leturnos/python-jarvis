@@ -5,9 +5,11 @@ from enum import Enum, auto
 from typing import Any
 
 import keyboard
+import psutil
 import win32api
 import win32con
 import win32gui
+import win32process
 
 from core.runtime.state import JarvisState
 
@@ -134,6 +136,17 @@ class ActivationManager:
                 return ActivationAction(ActivationActionType.SUSPEND, "FULLSCREEN_APP")
 
         if context.current_state == JarvisState.SUSPENDED:
+            # Allow Push-To-Talk to wake up immediately from fullscreen suspension (if screen is not locked)
+            if (
+                not context.is_screen_locked
+                and self.mode in ("hybrid", "push_to_talk")
+                and context.is_hotkey_pressed
+                and not self.is_ptt_active
+            ):
+                self.is_ptt_active = True
+                self._update_metric("activation_ptt")
+                return ActivationAction(ActivationActionType.TRIGGER_PTT_START, "PTT")
+
             # Hysteresis: Don't resume too quickly, and only if NOT fullscreen and NOT locked
             if (
                 not context.is_fullscreen
@@ -192,13 +205,26 @@ class ActivationManager:
             if not hwnd:
                 return False
 
-            # Skip desktop/taskbar
-            if win32gui.GetClassName(hwnd) in ("Progman", "WorkerW", "Shell_TrayWnd"):
+            # Skip desktop, shell, taskbar, and wallpaper host classes
+            cls_name = win32gui.GetClassName(hwnd)
+            if cls_name in (
+                "Progman",
+                "WorkerW",
+                "Shell_TrayWnd",
+                "Shell_SecondaryTrayWnd",
+                "XamlExplorerHostIslandWindow",
+                "Windows.UI.Core.CoreWindow",
+            ):
                 return False
 
-            # Standard windows (like Warp, Chrome, VS Code) have WS_CAPTION even when maximized
+            # Standard or maximized/resizable desktop windows have WS_CAPTION, WS_THICKFRAME, or WS_MAXIMIZE
             style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
             if (style & win32con.WS_CAPTION) == win32con.WS_CAPTION:
+                return False
+            if isinstance(style, int) and (
+                (style & win32con.WS_THICKFRAME) != 0
+                or (style & win32con.WS_MAXIMIZE) != 0
+            ):
                 return False
 
             rect = win32gui.GetWindowRect(hwnd)
@@ -208,7 +234,39 @@ class ActivationManager:
             screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
             screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
 
-            return bool(width >= screen_width and height >= screen_height)
+            if not (width >= screen_width and height >= screen_height):
+                return False
+
+            # Exclude known non-game background/wallpaper/IDE/shell processes
+            try:
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                if isinstance(pid, int) and pid > 0:
+                    proc_name = psutil.Process(pid).name().lower().removesuffix(".exe")
+                    non_game_procs = (
+                        "explorer",
+                        "lively",
+                        "livelywpf",
+                        "livelycefsharp",
+                        "mpv",
+                        "wallpaper32",
+                        "wallpaper64",
+                        "webwallpaper32",
+                        "warp",
+                        "code",
+                        "jarvis",
+                        "searchhost",
+                        "shellexperiencehost",
+                        "startmenuexperiencehost",
+                        "applicationframehost",
+                        "textinputhost",
+                        "lockapp",
+                    )
+                    if proc_name in non_game_procs or proc_name.startswith("lively"):
+                        return False
+            except Exception:
+                pass
+
+            return True
         except Exception as e:
             logger.error(f"Error detecting fullscreen window: {e}")
             return False

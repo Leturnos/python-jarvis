@@ -1,10 +1,11 @@
 from typing import Any
 
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QIcon
 from PySide6.QtWidgets import QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 from qfluentwidgets import SegmentedWidget
 
+from core.shared.utils import get_resources_dir
 from core.ui.tabs.history_tab import HistoryTab
 from core.ui.tabs.plugins_tab import PluginsTab
 from core.ui.tabs.settings_tab import SettingsTab
@@ -18,6 +19,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Painel do Jarvis")
         self.resize(640, 480)
+
+        icon_path = get_resources_dir() / "icon.ico"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)

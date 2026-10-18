@@ -1,10 +1,13 @@
 from typing import Any
 
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
 from qfluentwidgets import BodyLabel, ProgressBar, SimpleCardWidget, TitleLabel
 
 from core.infra.config import config
 from core.runtime.state import JarvisState
+from core.shared.utils import get_resources_dir
 
 STATE_DISPLAY_NAMES_PT: dict[JarvisState, str] = {
     JarvisState.IDLE: "Pronto (Em espera)",
@@ -75,8 +78,21 @@ class StatusCardWidget(SimpleCardWidget):
         self.layout.setContentsMargins(20, 20, 20, 20)
         self.layout.setSpacing(10)
 
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
+        self.logo_label = QLabel(self)
+        icon_path = get_resources_dir() / "icon.ico"
+        if icon_path.exists():
+            pixmap = QIcon(str(icon_path)).pixmap(32, 32)
+            if not pixmap.isNull():
+                self.logo_label.setPixmap(pixmap)
+                header_layout.addWidget(
+                    self.logo_label, 0, Qt.AlignmentFlag.AlignVCenter
+                )
+
         self.title = TitleLabel("Status do Jarvis")
-        self.layout.addWidget(self.title)
+        header_layout.addWidget(self.title, 1, Qt.AlignmentFlag.AlignVCenter)
+        self.layout.addLayout(header_layout)
 
         self.wakeword_label = BodyLabel(f"Palavra de ativação: {wakeword_name}")
         self.wakeword_label.setObjectName("WakeWordLabel")

@@ -216,6 +216,36 @@ def update_yaml_active_provider(provider_name: str) -> None:
         f.writelines(lines)
 
 
+def update_yaml_performance_profile(profile_name: str) -> None:
+    """Updates the performance_profile entry in config.yaml while preserving comments and structure."""
+    yaml_path = get_app_root() / "config.yaml"
+    if not yaml_path.exists():
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.write(f'performance_profile: "{profile_name}"\n')
+        return
+
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    updated = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if (
+            stripped.startswith("performance_profile:")
+            and not line.startswith(" ")
+            and not line.startswith("\t")
+        ):
+            lines[i] = f'performance_profile: "{profile_name}"\n'
+            updated = True
+            break
+
+    if not updated:
+        lines.insert(0, f'performance_profile: "{profile_name}"\n')
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
 def update_yaml_plugin_preset(preset_id: str, enabled: bool) -> None:
     """Updates the enabled_presets entry in config.yaml while preserving comments and structure."""
     yaml_path = get_app_root() / "config.yaml"

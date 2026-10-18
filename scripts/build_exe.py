@@ -242,6 +242,14 @@ def copy_user_facing_assets(dist_dir: Path | None = None) -> None:
         for f in resources_src.glob("*.*"):
             shutil.copy2(f, resources_target / f.name)
 
+    # 5. data/media/
+    media_src = ROOT_DIR / "data" / "media"
+    media_target = target / "data" / "media"
+    media_target.mkdir(parents=True, exist_ok=True)
+    if media_src.exists():
+        for f in media_src.glob("*.json"):
+            shutil.copy2(f, media_target / f.name)
+
     logger.info("User-facing assets successfully copied to bundle root.")
 
 

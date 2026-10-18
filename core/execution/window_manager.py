@@ -309,19 +309,28 @@ class WindowManager:
 
         is_url = is_uri_or_url(expanded_target)
 
-        # 1. URL or URI protocol scheme handling (e.g. https://..., calc:, ms-settings:)
+        # 1. URL or URI protocol scheme handling (e.g. https://..., calc:, ms-settings:, spotify:)
         if is_url:
             os.startfile(expanded_target)
-            if not window_title_pattern:
+            if expanded_target.lower().startswith("spotify:"):
+                window = self.wait_for_window(
+                    executable_name=process_name or "Spotify.exe",
+                    window_title_pattern=window_title_pattern,
+                    timeout=win_timeout,
+                )
+                if not window:
+                    time.sleep(Timing.UI_STABILIZATION_SHORT)
+                    return self.get_foreground_window_info()
+            elif not window_title_pattern:
                 time.sleep(Timing.UI_STABILIZATION_SHORT)
                 return self.get_foreground_window_info()
-
-            window = self.wait_for_window(
-                window_title_pattern=window_title_pattern,
-                timeout=win_timeout,
-            )
-            if not window:
-                raise TimeoutError(f"Window for '{target}' not found.")
+            else:
+                window = self.wait_for_window(
+                    window_title_pattern=window_title_pattern,
+                    timeout=win_timeout,
+                )
+                if not window:
+                    raise TimeoutError(f"Window for '{target}' not found.")
 
         # 2. Directory path handling (e.g. %USERPROFILE%\Downloads)
         elif os.path.isdir(expanded_target):

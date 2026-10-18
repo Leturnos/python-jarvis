@@ -62,6 +62,14 @@ def main() -> None:
     # Anchor working directory to application root immediately on bootstrap
     os.chdir(get_app_root())
 
+    # Set explicit Windows AppUserModelID so Taskbar displays Jarvis custom icon
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "JarvisAI.Assistant.1"
+        )
+    except Exception:
+        pass
+
     app_title = "Jarvis AI Assistant"
     ctypes.windll.kernel32.SetConsoleTitleW(app_title)
 
@@ -92,16 +100,30 @@ def main() -> None:
         onboarding_mode = True
 
     mutex_name = r"Global\JarvisAI_SingleInstance_Mutex"
-    mutex = CreateMutex(None, False, mutex_name)
-    if GetLastError() == ERROR_ALREADY_EXISTS:
-        hwnd = win32gui.FindWindow(None, app_title)
-        if hwnd:
-            win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-            win32gui.SetForegroundWindow(hwnd)
+    is_restarting = "--restart" in sys.argv
+    mutex = None
+    max_attempts = 25 if is_restarting else 1
+    for attempt in range(max_attempts):
+        mutex = CreateMutex(None, False, mutex_name)
+        if GetLastError() != ERROR_ALREADY_EXISTS:
+            break
+        if is_restarting and attempt < max_attempts - 1:
+            try:
+                ctypes.windll.kernel32.CloseHandle(int(mutex))
+            except Exception:
+                pass
+            time.sleep(0.2)
+        else:
+            hwnd = win32gui.FindWindow(None, "Painel do Jarvis") or win32gui.FindWindow(
+                None, app_title
+            )
+            if hwnd:
+                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+                win32gui.SetForegroundWindow(hwnd)
 
-        logger.info("Jarvis is already running. Bringing it to foreground.")
-        time.sleep(1)
-        sys.exit(0)
+            logger.info("Jarvis is already running. Bringing it to foreground.")
+            time.sleep(1)
+            sys.exit(0)
 
     is_minimized = "--minimized" in sys.argv or "--hidden" in sys.argv
 

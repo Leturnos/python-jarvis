@@ -39,14 +39,16 @@ def test_stt_transcription_success(mock_whisper):
     mock_model_instance.transcribe.return_value = ([segment_mock], MagicMock())
 
     engine = STTEngine(model_size="tiny")
+    try:
+        # Dummy audio (1 second of silence at 16k)
+        audio_bytes = np.zeros(16000, dtype=np.int16).tobytes()
 
-    # Dummy audio (1 second of silence at 16k)
-    audio_bytes = np.zeros(16000, dtype=np.int16).tobytes()
+        result = engine.transcribe(audio_bytes)
 
-    result = engine.transcribe(audio_bytes)
-
-    assert result == "Olá mundo"
-    mock_model_instance.transcribe.assert_called()
+        assert result == "Olá mundo"
+        mock_model_instance.transcribe.assert_called()
+    finally:
+        engine.unload()
 
 
 def test_stt_transcription_empty_audio(mock_whisper):
@@ -54,10 +56,12 @@ def test_stt_transcription_empty_audio(mock_whisper):
     mock_model_instance.transcribe.return_value = ([], MagicMock())
 
     engine = STTEngine(model_size="tiny")
+    try:
+        result = engine.transcribe(b"")
 
-    result = engine.transcribe(b"")
-
-    assert result == ""
+        assert result == ""
+    finally:
+        engine.unload()
 
 
 def test_stt_transcription_error(mock_whisper):
@@ -65,11 +69,13 @@ def test_stt_transcription_error(mock_whisper):
     mock_model_instance.transcribe.side_effect = Exception("Model crash")
 
     engine = STTEngine(model_size="tiny")
+    try:
+        with pytest.raises(Exception) as excinfo:
+            engine.transcribe(b"some audio data")
 
-    with pytest.raises(Exception) as excinfo:
-        engine.transcribe(b"some audio data")
-
-    assert "STT processing failed" in str(excinfo.value)
+        assert "STT processing failed" in str(excinfo.value)
+    finally:
+        engine.unload()
 
 
 def test_stt_engine_initialization_with_config(mock_whisper):

@@ -52,8 +52,30 @@ def test_spotify_provider_resolve():
     )
     plan_search = provider.resolve(intent_search)
     assert plan_search.strategy == AutoplayStrategy.TAB_ENTER
+    assert plan_search.steps[0].payload["target"] == "spotify:search:linkin+park"
     has_focus = any(s.type == StepType.FOCUS_WINDOW for s in plan_search.steps)
     assert has_focus
+
+    # Test Entity mapping with accented characters (prevents truncation at 'm' in 'música')
+    intent_accented = MediaIntent(
+        action=MediaAction.PLAY_QUERY,
+        query="música de jogo",
+        query_type=QueryType.ENTITY,
+    )
+    plan_accented = provider.resolve(intent_accented)
+    assert (
+        plan_accented.steps[0].payload["target"] == "spotify:search:m%C3%BAsica+de+jogo"
+    )
+
+    # Test Mixed/Mood 'música de jogo' matches gaming playlist
+    intent_gaming = MediaIntent(
+        action=MediaAction.PLAY_QUERY,
+        query="música de jogo",
+        query_type=QueryType.MIXED,
+    )
+    plan_gaming = provider.resolve(intent_gaming)
+    assert plan_gaming.playlist_key == "gaming"
+    assert plan_gaming.strategy == AutoplayStrategy.MEDIA_KEY
 
 
 def test_step_executor_executes_click_play_with_payload():

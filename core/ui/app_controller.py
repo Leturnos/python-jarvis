@@ -1,10 +1,14 @@
 import os
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+import win32api
+import win32con
+from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
 from qfluentwidgets import InfoBar, Theme, setTheme
@@ -51,7 +55,17 @@ class QtAppController(QObject):
 
         setTheme(Theme.DARK)
 
+        resources_dir = get_resources_dir()
+        icon_path = resources_dir / "icon.ico"
+        if icon_path.exists():
+            app_icon = QIcon(str(icon_path))
+            self.app.setWindowIcon(app_icon)
+        else:
+            app_icon = None
+
         self.main_window = MainWindow(ui_adapter)
+        if app_icon is not None:
+            self.main_window.setWindowIcon(app_icon)
         self.main_window.settings_tab.restart_requested.connect(
             self.restart_application
         )
@@ -63,13 +77,15 @@ class QtAppController(QObject):
         )
         self.voice_overlay = VoiceOverlayHUD()
         self.command_palette: QtCommandPalette | None = None
+        self._cp_hotkey: str = "ctrl+shift+p"
+        self._cp_was_pressed: bool = False
+        self._cp_poll_timer: QTimer | None = None
         ui_adapter.visual_state_updated.connect(self.voice_overlay.update_from_snapshot)
 
         self._has_shown_tray_message = False
         self.main_window.minimized_to_tray.connect(self._show_minimized_message)
 
         # Load Stylesheet only on MainWindow to avoid breaking Fluent UI styles globally
-        resources_dir = get_resources_dir()
         qss_path = resources_dir / "styles.qss"
         if qss_path.exists():
             with open(qss_path, encoding="utf-8") as f:
@@ -108,9 +124,72 @@ class QtAppController(QObject):
 
         cp_config = config.get("command_palette", {})
         hotkey = cp_config.get("key", "ctrl+shift+p")
-        keyboard.add_hotkey(hotkey, self.command_palette.show)
+        self._cp_hotkey = hotkey
+        try:
+            keyboard.add_hotkey(hotkey, self.command_palette.show)
+        except Exception as e:
+            logger.warning(f"Failed to register keyboard hook for {hotkey}: {e}")
+
+        # Poll physical key state as a resilient fallback when Windows drops WH_KEYBOARD_LL hooks on boot
+        self._cp_poll_timer = QTimer(self)
+        self._cp_poll_timer.setInterval(60)
+        self._cp_poll_timer.timeout.connect(self._poll_command_palette_hotkey)
+        self._cp_poll_timer.start()
+
         logger.info(f"Qt Command Palette initialized. Hotkey: {hotkey}")
         return self.command_palette
+
+    def _is_physical_hotkey_pressed(self, hotkey_str: str) -> bool:
+        """Checks if a key combination (e.g., ctrl+shift+p) is physically held down via Win32 API."""
+        try:
+            vk_map = {
+                "ctrl": win32con.VK_CONTROL,
+                "control": win32con.VK_CONTROL,
+                "lctrl": win32con.VK_LCONTROL,
+                "rctrl": win32con.VK_RCONTROL,
+                "alt": win32con.VK_MENU,
+                "menu": win32con.VK_MENU,
+                "lalt": win32con.VK_LMENU,
+                "ralt": win32con.VK_RMENU,
+                "shift": win32con.VK_SHIFT,
+                "lshift": win32con.VK_LSHIFT,
+                "rshift": win32con.VK_RSHIFT,
+                "win": win32con.VK_LWIN,
+                "windows": win32con.VK_LWIN,
+                "space": win32con.VK_SPACE,
+                "tab": win32con.VK_TAB,
+                "enter": win32con.VK_RETURN,
+                "esc": win32con.VK_ESCAPE,
+                "escape": win32con.VK_ESCAPE,
+            }
+            parts = [p.strip().lower() for p in hotkey_str.split("+") if p.strip()]
+            if not parts:
+                return False
+
+            for part in parts:
+                vk = vk_map.get(part)
+                if vk is None and len(part) == 1:
+                    vk = ord(part.upper())
+                if vk is None:
+                    return False
+                if not (win32api.GetAsyncKeyState(vk) & 0x8000):
+                    return False
+            return True
+        except Exception:
+            return False
+
+    def _poll_command_palette_hotkey(self) -> None:
+        if not self.command_palette:
+            return
+        pressed = self._is_physical_hotkey_pressed(self._cp_hotkey)
+        if pressed and not self._cp_was_pressed:
+            self._cp_was_pressed = True
+            if not (
+                self.command_palette.dialog and self.command_palette.dialog.isVisible()
+            ):
+                self.command_palette.show()
+        elif not pressed:
+            self._cp_was_pressed = False
 
     def _setup_tray(self) -> None:
         self.tray_icon = QSystemTrayIcon(self)
@@ -385,9 +464,13 @@ class QtAppController(QObject):
 
     def restart_application(self) -> None:
         """Safely restarts the current Jarvis application process."""
-        import sys
-
         logger.info("Restarting Jarvis application process...")
+        try:
+            if hasattr(self, "tray_icon") and self.tray_icon:
+                self.tray_icon.hide()
+        except Exception:
+            pass
+
         try:
             if self.stop_event:
                 self.stop_event.set()
@@ -402,12 +485,25 @@ class QtAppController(QObject):
             pass
 
         try:
-            if hasattr(self, "tray_icon") and self.tray_icon:
-                self.tray_icon.hide()
+            if hasattr(self, "_cp_poll_timer") and self._cp_poll_timer:
+                self._cp_poll_timer.stop()
         except Exception:
             pass
 
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        args = [a for a in sys.argv if a != "--restart"]
+        if getattr(sys, "frozen", False):
+            cmd = [sys.executable, *args[1:], "--restart"]
+        else:
+            cmd = [sys.executable, *args, "--restart"]
+
+        try:
+            subprocess.Popen(cmd, close_fds=True)
+        except Exception as e:
+            logger.error(f"Failed to spawn restarted process: {e}")
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+            return
+
+        os._exit(0)
 
     def apply_update_and_restart(self, extracted_dir: Path) -> None:
         """Applies a downloaded binary update via UpdateManager and exits cleanly."""

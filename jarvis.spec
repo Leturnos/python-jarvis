@@ -17,6 +17,7 @@ from PyInstaller.utils.hooks import collect_data_files
 datas = [
     ('plugins/*.yaml', 'plugins'),
     ('resources/*', 'resources'),
+    ('data/media/*.json', 'data/media'),
     ('config.yaml', '.'),
     ('pyproject.toml', '.'),
 ]
