@@ -188,3 +188,111 @@ def test_weather_tool_with_daily_forecast_and_rain(mock_urlopen: MagicMock) -> N
     assert forecast["rain_expected"] is True
     assert forecast["precipitation_sum_mm"] == 4.2
     assert "chuva" in forecast["condition_summary"].lower()
+
+
+@patch("urllib.request.urlopen")
+def test_weather_tool_sanitizes_brazilian_state_suffix(mock_urlopen: MagicMock) -> None:
+    geo_response = MagicMock()
+    geo_response.read.return_value = json.dumps(
+        {
+            "results": [
+                {
+                    "name": "São Paulo",
+                    "admin1": "São Paulo",
+                    "country": "Brasil",
+                    "latitude": -23.55,
+                    "longitude": -46.63,
+                }
+            ]
+        }
+    ).encode("utf-8")
+
+    forecast_response = MagicMock()
+    forecast_response.read.return_value = json.dumps(
+        {
+            "current": {
+                "temperature_2m": 19.0,
+                "relative_humidity_2m": 70,
+                "apparent_temperature": 19.2,
+                "precipitation": 0.0,
+                "weather_code": 0,
+                "wind_speed_10m": 5.0,
+            }
+        }
+    ).encode("utf-8")
+
+    mock_urlopen.side_effect = [
+        MagicMock(__enter__=MagicMock(return_value=geo_response)),
+        MagicMock(__enter__=MagicMock(return_value=forecast_response)),
+    ]
+
+    tool = WeatherTool()
+    result = tool.execute(city="São Paulo-SP")
+
+    assert result["success"] is True
+    assert "São Paulo" in result["city"]
+    # Check that geocoding called with sanitized name
+    called_url = mock_urlopen.call_args_list[0][0][0].full_url
+    assert "name=S%C3%A3o%20Paulo" in called_url
+    assert "São Paulo-SP" not in called_url
+
+
+@patch("urllib.request.urlopen")
+def test_weather_tool_fallback_when_default_city_not_found(
+    mock_urlopen: MagicMock,
+) -> None:
+    empty_geo = MagicMock()
+    empty_geo.read.return_value = json.dumps({}).encode("utf-8")
+
+    sp_geo = MagicMock()
+    sp_geo.read.return_value = json.dumps(
+        {
+            "results": [
+                {
+                    "name": "São Paulo",
+                    "admin1": "São Paulo",
+                    "country": "Brasil",
+                    "latitude": -23.55,
+                    "longitude": -46.63,
+                }
+            ]
+        }
+    ).encode("utf-8")
+
+    forecast_response = MagicMock()
+    forecast_response.read.return_value = json.dumps(
+        {
+            "current": {
+                "temperature_2m": 22.0,
+                "relative_humidity_2m": 60,
+                "apparent_temperature": 22.0,
+                "precipitation": 0.0,
+                "weather_code": 0,
+                "wind_speed_10m": 10.0,
+            }
+        }
+    ).encode("utf-8")
+
+    mock_urlopen.side_effect = [
+        MagicMock(__enter__=MagicMock(return_value=empty_geo)),
+        MagicMock(__enter__=MagicMock(return_value=sp_geo)),
+        MagicMock(__enter__=MagicMock(return_value=forecast_response)),
+    ]
+
+    tool = WeatherTool(default_city="CidadeInexistenteQualquer")
+    result = tool.execute(city=None)
+
+    assert result["success"] is True
+    assert "São Paulo" in result["city"]
+
+
+def test_weather_tool_sanitizer_variations() -> None:
+    tool = WeatherTool()
+    assert tool._sanitize_city_name("São Paulo-SP") == "São Paulo"
+    assert tool._sanitize_city_name("São Paulo - SP") == "São Paulo"
+    assert tool._sanitize_city_name("São Paulo, SP") == "São Paulo"
+    assert tool._sanitize_city_name("São Paulo / SP") == "São Paulo"
+    assert tool._sanitize_city_name("Belo Horizonte, MG, Brasil") == "Belo Horizonte"
+    assert tool._sanitize_city_name("Curitiba/PR") == "Curitiba"
+    assert tool._sanitize_city_name("Rio de Janeiro - RJ - Brasil") == "Rio de Janeiro"
+    assert tool._sanitize_city_name("Paris") == "Paris"

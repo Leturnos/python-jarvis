@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -44,11 +45,42 @@ class WeatherTool(BaseTool):
         99: "Tempestade com granizo forte",
     }
 
+    BRAZILIAN_STATES = {
+        "AC",
+        "AL",
+        "AP",
+        "AM",
+        "BA",
+        "CE",
+        "DF",
+        "ES",
+        "GO",
+        "MA",
+        "MT",
+        "MS",
+        "MG",
+        "PA",
+        "PB",
+        "PR",
+        "PE",
+        "PI",
+        "RJ",
+        "RN",
+        "RS",
+        "RO",
+        "RR",
+        "SC",
+        "SP",
+        "SE",
+        "TO",
+    }
+
     def __init__(
         self,
         default_city: str | None = None,
         timeout_seconds: float | None = None,
     ) -> None:
+        self._custom_default_city = default_city
         cfg = config.get("tools", {}).get("weather", {})
         self.default_city = (
             default_city
@@ -60,6 +92,26 @@ class WeatherTool(BaseTool):
             if timeout_seconds is not None
             else cfg.get("timeout_seconds", 5.0)
         )
+
+    @property
+    def configured_city(self) -> str:
+        if self._custom_default_city:
+            return self._custom_default_city
+        cfg = config.get("tools", {}).get("weather", {})
+        val = cfg.get("default_city")
+        if val and str(val).strip():
+            return str(val).strip()
+        return self.default_city or "São Paulo"
+
+    def _sanitize_city_name(self, city: str) -> str:
+        clean = city.strip()
+        # Remove country suffixes like ', Brasil', ', Brazil', '- BR'
+        clean = re.sub(r"[\s,\-/]+(Brasil|Brazil|BR)\b", "", clean, flags=re.IGNORECASE)
+        # Remove Brazilian state suffixes like '-MG', ' - MG', ', MG', '/MG'
+        pattern = r"[\s,\-/]+(" + "|".join(self.BRAZILIAN_STATES) + r")\b"
+        clean = re.sub(pattern, "", clean, flags=re.IGNORECASE)
+        clean = clean.strip(" ,.-/")
+        return clean or city.strip()
 
     def get_parameters_schema(self) -> dict[str, Any]:
         return {
@@ -76,12 +128,23 @@ class WeatherTool(BaseTool):
         }
 
     def execute(self, city: str | None = None, **kwargs: Any) -> dict[str, Any]:
-        target_city = (city or "").strip() or self.default_city
+        target_city = city.strip() if city and city.strip() else self.configured_city
+        is_explicit_city = bool(city and city.strip())
         logger.info(f"WeatherTool: Querying weather for '{target_city}'")
 
         try:
             # 1. Geocoding
             coords = self._geocode(target_city)
+            if (
+                not coords
+                and not is_explicit_city
+                and target_city.lower() != "são paulo"
+            ):
+                logger.warning(
+                    f"WeatherTool: Configured default city '{target_city}' not found. Falling back to 'São Paulo'."
+                )
+                coords = self._geocode("São Paulo")
+
             if not coords:
                 return {
                     "success": False,
@@ -154,7 +217,7 @@ class WeatherTool(BaseTool):
             logger.error(f"WeatherTool error: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
-    def _geocode(self, city: str) -> tuple[float, float, str] | None:
+    def _query_geocoding(self, city: str) -> tuple[float, float, str] | None:
         encoded = urllib.parse.quote(city)
         url = f"https://geocoding-api.open-meteo.com/v1/search?name={encoded}&count=1&language=pt&format=json"
         req = urllib.request.Request(
@@ -175,6 +238,19 @@ class WeatherTool(BaseTool):
         display = ", ".join(part for part in [name, admin1, country] if part)
 
         return float(first["latitude"]), float(first["longitude"]), display
+
+    def _geocode(self, city: str) -> tuple[float, float, str] | None:
+        candidate = self._sanitize_city_name(city)
+        coords = self._query_geocoding(candidate)
+        if coords:
+            return coords
+
+        if candidate != city.strip():
+            coords = self._query_geocoding(city.strip())
+            if coords:
+                return coords
+
+        return None
 
     def _fetch_weather(self, lat: float, lon: float) -> dict[str, Any]:
         url = (
