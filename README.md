@@ -9,9 +9,11 @@ Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", p
 
 ## ✨ O que ele faz?
 
-- **Interface e Menus em Português (Novo! 🇧🇷):** Toda a experiência de uso (menu da bandeja, painel de status, histórico e notificações) foi desenhada em português brasileiro fluído e natural.
-- **Onboarding Gráfico Sem Atrito (Novo! 🔑):** Se for sua primeira vez e ainda não houver chave de API configurada, o Jarvis não quebra silenciosamente: ele abre a tela de Configurações com orientações claras para você salvar sua chave direto no Gerenciador de Credenciais do Windows (Keyring).
+- **Interface e Menus em Português (🇧🇷):** Toda a experiência de uso (menu da bandeja, painel de status, histórico e notificações) foi desenhada em português brasileiro fluído e natural.
+- **Onboarding Gráfico Sem Atrito (🔑):** Se for sua primeira vez e ainda não houver chave de API configurada, o Jarvis não quebra silenciosamente: ele abre a tela de Configurações com orientações claras para você salvar sua chave direto no Gerenciador de Credenciais do Windows (Keyring).
 - **Ativação Inteligente (🎙️):** Você escolhe como o Jarvis deve te ouvir. Ele pode ficar sempre atento à frase "Hey Jarvis", funcionar apenas quando você aperta uma tecla (Push-to-Talk), ou ambos!
+- **Reconhecimento de Voz com Filtro VAD (🛡️):** O motor de Speech-to-Text (`faster-whisper`) utiliza filtragem Silero VAD integrada, eliminando alucinações e palavras fantasmas geradas por ruídos de fundo, cliques ou respiração.
+- **Resposta por Voz Instantânea e Interrompível (⚡):** O sintetizador de fala (TTS) processa o texto oração por oração em tempo real e interrompe a fala imediatamente se você acionar a palavra de ativação ou o Push-to-Talk.
 - **Controle de Mídia Inteligente (Spotify 🎵):** Diga ao Jarvis para tocar um artista, música ou playlist. Ele trará o Spotify para o primeiro plano e usará inteligência visual (OpenCV) para localizar e clicar nos botões corretos na tela, iniciando a música instantaneamente. Veja o [Guia de Configuração de Mídia](./data/media/README.md) para aprender a cadastrar suas playlists favoritas.
 - **Respostas Diretas e Ferramentas Dinâmicas (🌦️ 📈):** Pergunte sobre o tempo ("vai chover hoje em Itamonte?") ou sobre ações e mercado ("como está a cotação de PETR4?"). O Jarvis consulta ferramentas especializadas e responde de forma objetiva e inteligente.
 - **Modo Gamer e Reunião (Auto-Suspend):** O Jarvis é educado. Se ele perceber que você está jogando ou em uma apresentação (tela cheia), ele entra em suspensão automaticamente para não te interromper.
@@ -78,8 +80,9 @@ uv run python scripts/build_exe.py
 O bundle completo será gerado em `dist/Jarvis/Jarvis.exe` e o pacote compactado em `dist/Jarvis-windows-x64.zip`.
 
 #### 💾 Persistência de Dados e Modo Portátil (`portable.flag`)
-- **Padrão (%APPDATA%):** Para que você possa atualizar de versão sem nunca perder seus bancos de dados, o executável do Jarvis armazena seu histórico de comandos (`history.db`), cache de IA (`llm_cache.db`) e preferências em `%APPDATA%\Jarvis\data`.
-- **Modo Portátil (`portable.flag`):** Se você prefere rodar o Jarvis de forma 100% isolada e autocontida (ex: em um pendrive ou pasta dedicada) sem gravar nada no seu Windows, basta criar um arquivo vazio chamado `portable.flag` dentro da pasta `dist/Jarvis/`. O Jarvis identificará a flag no boot e manterá todos os bancos na pasta local `dist/Jarvis/data/`.
+- **Padrão (%APPDATA%):** Para que você possa atualizar o executável para novas versões sem nunca perder seus dados ou ter que reconfigurar caminhos, o Jarvis armazena seu `config.yaml`, bancos de dados (`history.db`, `llm_cache.db`), preferências e logs em `%APPDATA%\Jarvis`. No primeiro boot, o `config.yaml` de fábrica é semeado automaticamente para o seu perfil.
+- **Acesso Rápido:** Você pode abrir o `config.yaml` diretamente no seu editor padrão ou navegar até a pasta de configuração clicando nos botões de documento e pasta no canto superior da aba **Configurações**.
+- **Modo Portátil (`portable.flag`):** Se você prefere rodar o Jarvis de forma 100% isolada e autocontida (ex: em um pendrive ou pasta dedicada) sem gravar nada no seu Windows, basta criar um arquivo vazio chamado `portable.flag` na mesma pasta do executável `Jarvis.exe`. O Jarvis identificará a flag no boot e manterá todas as configurações, bancos e logs na própria pasta local.
 
 #### 🔄 Atualizações Automáticas (Auto-Updater)
 O Jarvis possui um sistema de atualização integrado com o GitHub Releases:
@@ -93,9 +96,11 @@ Nós separamos as coisas para facilitar sua vida. Existem três formas principai
 
 1. **Pela Própria Interface Gráfica (Recomendado):**
    Abra o **Painel do Jarvis** clicando com o botão direito no ícone da bandeja e escolhendo **Mostrar Painel** (ou dois cliques no ícone). Na aba **Configurações**:
-   - Escolha o provedor de IA ativo.
+   - Escolha o provedor de IA ativo (`Gemini`, `OpenAI`, `Anthropic`, `DeepSeek` ou `OpenRouter`).
    - Digite ou cole sua chave de API e clique em **Salvar Chave** (ela será guardada criptografada no Windows Credential Manager / Keyring).
-   - Ative a inicialização com o Windows com um clique.
+   - Ajuste o perfil de desempenho de acordo com seu hardware.
+   - Configure sua **Localização** (cidade padrão para previsão do tempo) com atualização em tempo real.
+   - Abra o arquivo `config.yaml` no seu editor ou abra a pasta no Explorer com um clique nos botões do cabeçalho.
 
 2. **Arquivo `.env` (Opcional - Migração Automática):**
    Se preferir variáveis de ambiente, copie `.env.example` para `.env` e defina suas chaves (ex: `GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.). Ao iniciar, o Jarvis detecta a chave e a migra automaticamente para o Keyring seguro do Windows, permitindo que você remova o segredo do arquivo de texto por segurança.

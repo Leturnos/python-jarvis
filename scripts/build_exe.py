@@ -196,7 +196,10 @@ def print_report(dist_dir: Path, exe_file: Path) -> None:
  Instructions:
  1. Copy the entire '{dist_dir.name}' folder to any destination on Windows.
  2. Run '{exe_file.name}' to start the Jarvis Assistant.
- 3. Ensure your API keys are configured in '{dist_dir / "config.yaml"}' or .env.
+ 3. User configuration and logs are safely stored in '%APPDATA%\\Jarvis'
+    (seeded from this folder on first boot so updates never overwrite them).
+    - To edit settings: use the Settings Tab in the app or open config.yaml directly.
+    - To run fully portable (no APPDATA): create an empty 'portable.flag' next to '{exe_file.name}'.
 ======================================================================
 """
     print(report)
