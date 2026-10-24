@@ -1,5 +1,6 @@
 import gc
 import threading
+from typing import Any
 
 import numpy as np
 from faster_whisper import WhisperModel
@@ -31,6 +32,10 @@ class STTEngine:
         self.language = stt_conf.get("language", "pt") or "pt"
         self.lazy_load = bool(stt_conf.get("lazy_load", True))
         self.auto_unload_seconds = int(stt_conf.get("auto_unload_seconds", 180))
+        self.vad_filter = bool(stt_conf.get("vad_filter", True))
+        self.vad_min_silence_duration_ms = int(
+            stt_conf.get("vad_min_silence_duration_ms", 500)
+        )
 
         self._lock = threading.RLock()
         self._unload_timer: threading.Timer | None = None
@@ -127,7 +132,15 @@ class STTEngine:
             )
 
             logger.info("Transcribing audio with faster-whisper...")
-            kwargs = {"beam_size": 1, "language": self.language}
+            kwargs: dict[str, Any] = {
+                "beam_size": 1,
+                "language": self.language,
+                "vad_filter": self.vad_filter,
+            }
+            if self.vad_filter:
+                kwargs["vad_parameters"] = {
+                    "min_silence_duration_ms": self.vad_min_silence_duration_ms
+                }
             if initial_prompt:
                 kwargs["initial_prompt"] = initial_prompt
 

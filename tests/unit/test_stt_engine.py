@@ -173,3 +173,28 @@ def test_stt_engine_auto_unload_disabled_when_zero(mock_whisper):
         assert engine.model is not None
     finally:
         engine.unload()
+
+
+def test_stt_transcription_with_vad_filter(mock_whisper):
+    mock_model_instance = mock_whisper.return_value
+    segment_mock = MagicMock()
+    segment_mock.text = "Comando de voz"
+    mock_model_instance.transcribe.return_value = ([segment_mock], MagicMock())
+
+    config_dict = {
+        "stt": {
+            "vad_filter": True,
+            "vad_min_silence_duration_ms": 400,
+        }
+    }
+    engine = STTEngine(config_dict=config_dict)
+    try:
+        audio_bytes = np.zeros(16000, dtype=np.int16).tobytes()
+        res = engine.transcribe(audio_bytes)
+        assert res == "Comando de voz"
+
+        called_kwargs = mock_model_instance.transcribe.call_args[1]
+        assert called_kwargs.get("vad_filter") is True
+        assert called_kwargs.get("vad_parameters") == {"min_silence_duration_ms": 400}
+    finally:
+        engine.unload()
