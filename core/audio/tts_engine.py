@@ -1,4 +1,5 @@
 import queue
+import re
 import threading
 import time
 from typing import Any
@@ -21,6 +22,7 @@ class TTSEngine:
         self.config = config
         self.last_spoken_text = ""
         self.last_spoken_time = 0.0
+        self.last_enqueued_time = 0.0
         self.is_speaking = False
         self._speech_queue: queue.Queue[str] = queue.Queue()
         self._stop_tts = threading.Event()
@@ -83,14 +85,43 @@ class TTSEngine:
             pythoncom.CoUninitialize()
             logger.info("TTS Worker thread finishing.")
 
+    @staticmethod
+    def split_into_sentences(text: str) -> list[str]:
+        """Splits multi-sentence text into clean speech chunks at punctuation boundaries."""
+        clean = text.strip()
+        if not clean:
+            return []
+        parts = re.split(r"(?<=[.!?\n])\s+", clean)
+        return [p.strip() for p in parts if p.strip()]
+
+    def clear_queue(self) -> None:
+        """Empties pending speech items to allow immediate interruption."""
+        while not self._speech_queue.empty():
+            try:
+                self._speech_queue.get_nowait()
+                self._speech_queue.task_done()
+            except (queue.Empty, ValueError):
+                break
+
     def speak(self, text: str) -> None:
         now = time.time()
         cooldown = self.config.get("tts", {}).get("cooldown_seconds", 2.0)
-        if text == self.last_spoken_text and (now - self.last_spoken_time) < cooldown:
+        if text == self.last_spoken_text and (
+            self.is_speaking
+            or (now - self.last_spoken_time) < cooldown
+            or (now - self.last_enqueued_time) < cooldown
+        ):
             logger.debug(f"Skipping duplicate speech: {text}")
             return
         self.last_spoken_text = text
-        self._speech_queue.put(text)
+        self.last_enqueued_time = now
+
+        sentences = self.split_into_sentences(text)
+        if not sentences:
+            return
+
+        for s in sentences:
+            self._speech_queue.put(s)
 
     def stop(self) -> None:
         self._stop_tts.set()

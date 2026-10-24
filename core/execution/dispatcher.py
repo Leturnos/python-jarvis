@@ -656,6 +656,8 @@ class ActionDispatcher:
 
     def dispatch(self, text: str) -> bool:
         """Processes a natural language text instruction through local resolver -> LLM pipeline."""
+        if hasattr(self.tts_engine, "clear_queue"):
+            self.tts_engine.clear_queue()
         logger.info(f"Dispatching text instruction: '{text}'")
         self.last_input_text = text
         self.last_input_source = "command_palette"

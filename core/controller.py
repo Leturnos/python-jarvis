@@ -182,6 +182,8 @@ class JarvisController:
                                 stt_engine.load()  # Preload model before listening
                                 if self.audio_cue_manager:
                                     self.audio_cue_manager.play_cue(CueType.WAKE)
+                                if hasattr(self.tts_engine, "clear_queue"):
+                                    self.tts_engine.clear_queue()
                                 self.tts_engine.speak(self.response_phrase)
                                 state_manager.set_state(JarvisState.LISTENING)
                                 self.command_frames = []
@@ -423,6 +425,8 @@ class JarvisController:
             stt_engine.load()
             if self.audio_cue_manager:
                 self.audio_cue_manager.play_cue(CueType.WAKE)
+            if hasattr(self.tts_engine, "clear_queue"):
+                self.tts_engine.clear_queue()
             self.tts_engine.speak(self.response_phrase)
             state_manager.set_state(JarvisState.LISTENING)
             self.command_frames = []
@@ -485,6 +489,8 @@ class JarvisController:
             ActivationActionType.TRIGGER_WAKE,
             ActivationActionType.TRIGGER_PTT_START,
         ):
+            if hasattr(self.tts_engine, "clear_queue"):
+                self.tts_engine.clear_queue()
             source = action_obj.source
             if source == "WAKE_WORD":
                 ww_name_clean = context.wakeword_detected
