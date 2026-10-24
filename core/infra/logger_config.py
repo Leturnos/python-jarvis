@@ -3,7 +3,7 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from core.shared.paths import get_app_root
+from core.shared.paths import get_app_root, get_log_dir
 
 
 def setup_logger(log_dir: str | None = None) -> logging.Logger:
@@ -11,16 +11,15 @@ def setup_logger(log_dir: str | None = None) -> logging.Logger:
 
     Args:
         log_dir (str | None): Custom directory path for logs. If None, resolves to
-            the 'logs' directory under the project root.
+            the persistent 'logs' directory (in %APPDATA%/Jarvis/logs for installed
+            binaries, or project root 'logs' in development/portable mode).
     """
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     formatter = logging.Formatter(log_format)
 
-    project_root = get_app_root()
-
     # Resolve log directory
     if log_dir is None:
-        resolved_log_dir = project_root / "logs"
+        resolved_log_dir = get_log_dir(get_app_root())
     else:
         resolved_log_dir = Path(log_dir)
 
@@ -42,26 +41,31 @@ def setup_logger(log_dir: str | None = None) -> logging.Logger:
         h.close()
 
     # Create rotating file handler
-    rotating_handler = RotatingFileHandler(
-        log_path,
-        maxBytes=5_000_000,  # 5 MB
-        backupCount=3,
-        encoding="utf-8",
-    )
-    rotating_handler.setFormatter(formatter)
+    try:
+        rotating_handler = RotatingFileHandler(
+            log_path,
+            maxBytes=5_000_000,  # 5 MB
+            backupCount=3,
+            encoding="utf-8",
+            delay=True,
+        )
+        rotating_handler.setFormatter(formatter)
+        jarvis_logger.addHandler(rotating_handler)
+    except (OSError, PermissionError) as e:
+        jarvis_logger.warning(f"Could not open log file handler ({log_path}): {e}")
 
     # Create stream handler
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
 
-    # Add handlers
-    jarvis_logger.addHandler(rotating_handler)
+    # Add stream handler
     jarvis_logger.addHandler(stream_handler)
 
     # Legacy migration: clean old log file in project root if it exists
     # ONLY perform migration when log_dir is None (production path)
     # Perform this after handlers are ready so we can log warnings directly to Jarvis logger
     if log_dir is None:
+        project_root = get_app_root()
         legacy_log_path = project_root / "jarvis.log"
         if legacy_log_path.exists():
             try:

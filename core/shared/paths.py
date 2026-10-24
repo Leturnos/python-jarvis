@@ -83,3 +83,79 @@ def _migrate_legacy_data(legacy_dir: Path, target_dir: Path) -> None:
                 shutil.copy2(source_file, target_file)
             except OSError:
                 pass
+
+
+def get_user_config_path(app_root: Path | None = None) -> Path:
+    """Returns the path to config.yaml.
+
+    - In frozen mode without 'portable.flag', resolves to %APPDATA%/Jarvis/config.yaml.
+      If missing in APPDATA, automatically seeds it from app_root/config.yaml.
+    - In development mode or with 'portable.flag', resolves to app_root/config.yaml.
+    """
+    base_root = app_root or get_app_root()
+    is_frozen = getattr(sys, "frozen", False)
+    is_portable = (base_root / "portable.flag").exists()
+
+    if is_frozen and not is_portable and "APPDATA" in os.environ:
+        target_dir = Path(os.environ["APPDATA"]) / "Jarvis"
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        target_config = target_dir / "config.yaml"
+        source_config = base_root / "config.yaml"
+        if not target_config.exists() and source_config.exists():
+            try:
+                shutil.copy2(source_config, target_config)
+            except OSError:
+                pass
+        if target_config.exists():
+            return target_config
+        if source_config.exists():
+            return source_config
+        return target_config
+
+    return base_root / "config.yaml"
+
+
+def get_log_dir(app_root: Path | None = None) -> Path:
+    """Returns the directory for application logs.
+
+    - In frozen mode without 'portable.flag', resolves to %APPDATA%/Jarvis/logs.
+      Automatically migrates legacy log files from app_root/logs if present.
+    - In development mode or with 'portable.flag', resolves to app_root/logs.
+    """
+    base_root = app_root or get_app_root()
+    is_frozen = getattr(sys, "frozen", False)
+    is_portable = (base_root / "portable.flag").exists()
+
+    if is_frozen and not is_portable and "APPDATA" in os.environ:
+        target_dir = Path(os.environ["APPDATA"]) / "Jarvis" / "logs"
+    else:
+        target_dir = base_root / "logs"
+
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+    # Automatic migration from legacy local logs folder if running in APPDATA mode
+    legacy_dir = base_root / "logs"
+    if target_dir != legacy_dir and legacy_dir.exists():
+        _migrate_legacy_logs(legacy_dir, target_dir)
+
+    return target_dir
+
+
+def _migrate_legacy_logs(legacy_dir: Path, target_dir: Path) -> None:
+    """Safely copies legacy log files without overwriting existing target log files."""
+    try:
+        for log_file in legacy_dir.glob("*.log*"):
+            target_file = target_dir / log_file.name
+            if not target_file.exists():
+                try:
+                    shutil.copy2(log_file, target_file)
+                except OSError:
+                    pass
+    except OSError:
+        pass

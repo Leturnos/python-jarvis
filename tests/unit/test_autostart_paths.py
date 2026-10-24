@@ -134,3 +134,65 @@ def test_spotify_provider_resolves_against_app_root_when_cwd_is_arbitrary(
     expected_playlists_path = str(get_app_root() / "data" / "media" / "playlists.json")
     assert sp.playlists_path == expected_playlists_path
     assert not (fake_system32 / "data").exists()
+
+
+def test_get_user_config_path_and_log_dir_dev_mode():
+    from core.shared.paths import get_app_root, get_log_dir, get_user_config_path
+
+    # In non-frozen (dev) mode, resolves to project root
+    assert get_user_config_path() == get_app_root() / "config.yaml"
+    assert get_log_dir() == get_app_root() / "logs"
+
+
+def test_get_user_config_path_and_log_dir_frozen_mode(tmp_path, monkeypatch):
+    import sys
+
+    from core.shared.paths import get_log_dir, get_user_config_path
+
+    fake_appdata = tmp_path / "AppData" / "Roaming"
+    fake_appdata.mkdir(parents=True)
+    monkeypatch.setenv("APPDATA", str(fake_appdata))
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+
+    fake_app_root = tmp_path / "JarvisApp"
+    fake_app_root.mkdir()
+    template_config = fake_app_root / "config.yaml"
+    template_config.write_text("template: true", encoding="utf-8")
+    legacy_logs = fake_app_root / "logs"
+    legacy_logs.mkdir()
+    (legacy_logs / "jarvis.log").write_text("legacy log line", encoding="utf-8")
+
+    with patch("core.shared.paths.get_app_root", return_value=fake_app_root):
+        config_path = get_user_config_path()
+        assert config_path == fake_appdata / "Jarvis" / "config.yaml"
+        assert config_path.exists()
+        assert config_path.read_text(encoding="utf-8") == "template: true"
+
+        log_dir = get_log_dir()
+        assert log_dir == fake_appdata / "Jarvis" / "logs"
+        assert log_dir.exists()
+        assert (log_dir / "jarvis.log").exists()
+        assert (log_dir / "jarvis.log").read_text(encoding="utf-8") == "legacy log line"
+
+
+def test_get_user_config_path_and_log_dir_portable_mode(tmp_path, monkeypatch):
+    import sys
+
+    from core.shared.paths import get_log_dir, get_user_config_path
+
+    fake_appdata = tmp_path / "AppData" / "Roaming"
+    fake_appdata.mkdir(parents=True)
+    monkeypatch.setenv("APPDATA", str(fake_appdata))
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+
+    fake_app_root = tmp_path / "JarvisApp"
+    fake_app_root.mkdir()
+    (fake_app_root / "portable.flag").touch()
+    (fake_app_root / "config.yaml").write_text("portable: true", encoding="utf-8")
+
+    with patch("core.shared.paths.get_app_root", return_value=fake_app_root):
+        config_path = get_user_config_path()
+        assert config_path == fake_app_root / "config.yaml"
+
+        log_dir = get_log_dir()
+        assert log_dir == fake_app_root / "logs"
