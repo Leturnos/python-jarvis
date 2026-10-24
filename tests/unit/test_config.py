@@ -3,7 +3,11 @@ from unittest.mock import mock_open, patch
 
 import yaml
 
-from core.infra.config import deep_merge, load_config
+from core.infra.config import (
+    deep_merge,
+    load_config,
+    update_yaml_weather_city,
+)
 
 
 def test_deep_merge():
@@ -57,16 +61,44 @@ def test_command_palette_config_defaults():
         assert cfg["command_palette"]["key"] == "ctrl+shift+p"
 
 
-def test_load_config_uses_get_app_root():
+def test_load_config_uses_get_user_config_path():
     with (
         patch(
-            "core.infra.config.get_app_root",
-            return_value=Path("/test/app/root"),
-        ) as mock_root,
+            "core.infra.config.get_user_config_path",
+            return_value=Path("/test/app/root/config.yaml"),
+        ) as mock_cfg_path,
         patch("builtins.open", mock_open(read_data="{}")) as mock_file,
     ):
         load_config()
-        mock_root.assert_called()
+        mock_cfg_path.assert_called()
         mock_file.assert_called_with(
             Path("/test/app/root/config.yaml"), encoding="utf-8"
         )
+
+
+def test_update_yaml_weather_city(tmp_path: Path):
+    config_file = tmp_path / "config.yaml"
+    initial_yaml = """# Config
+tools:
+  weather:
+    enabled: true
+    default_city: "Curitiba"
+    timeout_seconds: 5.0
+"""
+    config_file.write_text(initial_yaml, encoding="utf-8")
+
+    with patch("core.infra.config.get_user_config_path", return_value=config_file):
+        update_yaml_weather_city("São Paulo")
+
+    updated = config_file.read_text(encoding="utf-8")
+    assert 'default_city: "São Paulo"' in updated
+    assert "timeout_seconds: 5.0" in updated
+
+    # Test that surrounding or internal quotes are sanitized and do not corrupt YAML
+    with patch("core.infra.config.get_user_config_path", return_value=config_file):
+        update_yaml_weather_city('"Rio de Janeiro"')
+
+    updated_quoted = config_file.read_text(encoding="utf-8")
+    assert 'default_city: "Rio de Janeiro"' in updated_quoted
+    parsed = yaml.safe_load(updated_quoted)
+    assert parsed["tools"]["weather"]["default_city"] == "Rio de Janeiro"

@@ -1,26 +1,40 @@
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QComboBox,
-    QFormLayout,
-    QGroupBox,
+    QFrame,
     QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QProgressBar,
-    QPushButton,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import InfoBar, LineEdit
+from qfluentwidgets import (
+    BodyLabel,
+    CaptionLabel,
+    ComboBox,
+    FluentIcon,
+    InfoBar,
+    PasswordLineEdit,
+    PrimaryPushButton,
+    ProgressBar,
+    PushButton,
+    SimpleCardWidget,
+    SmoothScrollArea,
+    StrongBodyLabel,
+    SubtitleLabel,
+    TransparentToolButton,
+)
+from qfluentwidgets import (
+    LineEdit as FluentLineEdit,
+)
 
 from core.infra.config import (
     config,
     update_yaml_active_provider,
     update_yaml_performance_profile,
+    update_yaml_weather_city,
 )
 from core.infra.keyring_manager import KeyringManager
 from core.infra.logger_config import logger
@@ -28,7 +42,7 @@ from core.infra.presets import detect_recommended_preset, get_system_hardware_in
 from core.infra.update_preferences import UpdatePreferenceManager
 from core.infra.updater import ReleaseInfo, UpdateManager
 from core.shared.constants import DEFAULT_PROVIDER
-from core.shared.paths import get_app_version
+from core.shared.paths import get_app_version, get_user_config_path
 
 
 class SettingsTab(QWidget):
@@ -60,12 +74,82 @@ class SettingsTab(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(10)
 
-        # Provider Group
-        provider_group = QGroupBox("Provedor LLM", self)
-        form = QFormLayout(provider_group)
-        self.provider_combo = QComboBox(self)
+        # ----------------------------------------------------------------------
+        # Header Row: Title, Subtitle, and Direct Config File/Folder Openers
+        # ----------------------------------------------------------------------
+        header_widget = QWidget(self)
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(2)
+        self.title_label = SubtitleLabel("Configurações do Sistema", self)
+        title_box.addWidget(self.title_label)
+
+        self.subtitle_label = CaptionLabel(
+            "Gerencie provedores de IA, chaves, perfil de hardware, localização e atualizações.",
+            self,
+        )
+        self.subtitle_label.setWordWrap(True)
+        title_box.addWidget(self.subtitle_label)
+        header_layout.addLayout(title_box)
+
+        header_layout.addStretch(1)
+
+        self.open_config_btn = TransparentToolButton(FluentIcon.DOCUMENT, self)
+        self.open_config_btn.setToolTip("Abrir config.yaml no editor padrão")
+        self.open_config_btn.clicked.connect(self._open_config_file)
+        header_layout.addWidget(self.open_config_btn)
+
+        self.open_folder_btn = TransparentToolButton(FluentIcon.FOLDER, self)
+        self.open_folder_btn.setToolTip(
+            "Abrir pasta de configuração no Windows Explorer"
+        )
+        self.open_folder_btn.clicked.connect(self._open_config_folder)
+        header_layout.addWidget(self.open_folder_btn)
+
+        main_layout.addWidget(header_widget)
+
+        # ----------------------------------------------------------------------
+        # Smooth Scroll Area for Settings Cards
+        # ----------------------------------------------------------------------
+        self.scroll_area = SmoothScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+
+        self.cards_container = QWidget()
+        self.cards_layout = QVBoxLayout(self.cards_container)
+        self.cards_layout.setContentsMargins(0, 0, 8, 0)
+        self.cards_layout.setSpacing(12)
+        self.cards_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # ----------------------------------------------------------------------
+        # Card 1: AI / LLM Provider & Key Management
+        # ----------------------------------------------------------------------
+        provider_card = SimpleCardWidget(self.cards_container)
+        provider_layout = QVBoxLayout(provider_card)
+        provider_layout.setContentsMargins(16, 14, 16, 14)
+        provider_layout.setSpacing(10)
+
+        provider_title = StrongBodyLabel(
+            "Provedor de Inteligência Artificial", provider_card
+        )
+        provider_layout.addWidget(provider_title)
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        prov_lbl = BodyLabel("Provedor:", provider_card)
+        prov_lbl.setFixedWidth(75)
+        row1.addWidget(prov_lbl)
+
+        self.provider_combo = ComboBox(provider_card)
         self.providers = [
             "gemini",
             "openai",
@@ -77,34 +161,69 @@ class SettingsTab(QWidget):
         active = config.get("llm", {}).get("active_provider", DEFAULT_PROVIDER)
         if active in self.providers:
             self.provider_combo.setCurrentIndex(self.providers.index(active))
-        form.addRow(QLabel("Provedor LLM:"), self.provider_combo)
+        self.provider_combo.setMinimumWidth(150)
+        self.provider_combo.setMaximumWidth(200)
+        row1.addWidget(self.provider_combo)
 
-        self.api_key_input = LineEdit(self)
-        self.api_key_input.setPlaceholderText("Cole sua chave de API aqui...")
-        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        form.addRow(QLabel("Nova Chave:"), self.api_key_input)
-
-        self.save_key_btn = QPushButton("Salvar Chave", self)
-        self.save_key_btn.clicked.connect(self._save_key)
-        form.addRow(self.save_key_btn)
-
-        self.set_active_btn = QPushButton("Definir como Provedor Ativo", self)
+        self.set_active_btn = PrimaryPushButton(
+            "Definir como Provedor Ativo", provider_card
+        )
         self.set_active_btn.clicked.connect(self._set_active_provider)
-        form.addRow(self.set_active_btn)
+        row1.addWidget(self.set_active_btn)
+        row1.addStretch(1)
+        provider_layout.addLayout(row1)
 
-        self.check_key_btn = QPushButton("Validar Chave do Provedor", self)
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+        key_lbl = BodyLabel("Nova Chave:", provider_card)
+        key_lbl.setFixedWidth(75)
+        row2.addWidget(key_lbl)
+
+        self.api_key_input = PasswordLineEdit(provider_card)
+        self.api_key_input.setPlaceholderText("Cole sua chave de API aqui...")
+        self.api_key_input.setClearButtonEnabled(True)
+        row2.addWidget(self.api_key_input, 1)
+        provider_layout.addLayout(row2)
+
+        key_btn_row = QHBoxLayout()
+        key_btn_row.setSpacing(10)
+        key_btn_row.addSpacing(85)
+
+        self.save_key_btn = PushButton("Salvar Chave", provider_card)
+        self.save_key_btn.clicked.connect(self._save_key)
+        key_btn_row.addWidget(self.save_key_btn)
+
+        self.check_key_btn = PushButton("Validar Chave do Provedor", provider_card)
         self.check_key_btn.clicked.connect(self._validate_key)
-        form.addRow(self.check_key_btn)
-        layout.addWidget(provider_group)
+        key_btn_row.addWidget(self.check_key_btn)
+        key_btn_row.addStretch(1)
+        provider_layout.addLayout(key_btn_row)
 
-        # Performance Profile Group
-        perf_group = QGroupBox("Perfil de Desempenho do Sistema", self)
-        perf_layout = QVBoxLayout(perf_group)
+        key_info = CaptionLabel(
+            "🔒 As chaves são armazenadas com criptografia segura no Gerenciador de Credenciais do Windows (Keyring).",
+            provider_card,
+        )
+        key_info.setWordWrap(True)
+        key_info.setStyleSheet("color: rgba(200, 200, 200, 0.7);")
+        provider_layout.addWidget(key_info)
 
-        self.slider_label = QLabel(self)
+        self.cards_layout.addWidget(provider_card)
+
+        # ----------------------------------------------------------------------
+        # Card 2: Performance Profile
+        # ----------------------------------------------------------------------
+        perf_card = SimpleCardWidget(self.cards_container)
+        perf_layout = QVBoxLayout(perf_card)
+        perf_layout.setContentsMargins(16, 14, 16, 14)
+        perf_layout.setSpacing(10)
+
+        perf_title = StrongBodyLabel("Perfil de Desempenho do Sistema", perf_card)
+        perf_layout.addWidget(perf_title)
+
+        self.slider_label = BodyLabel(perf_card)
         perf_layout.addWidget(self.slider_label)
 
-        self.slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.slider = QSlider(Qt.Orientation.Horizontal, perf_card)
         self.slider.setRange(0, 4)
         self.slider.setSingleStep(1)
         self.slider.setPageStep(1)
@@ -118,11 +237,11 @@ class SettingsTab(QWidget):
 
         perf_layout.addWidget(self.slider)
 
-        self.desc_label = QLabel(self)
+        self.desc_label = CaptionLabel(perf_card)
         self.desc_label.setWordWrap(True)
         perf_layout.addWidget(self.desc_label)
 
-        self.apply_btn = QPushButton("Aplicar e Reiniciar Jarvis", self)
+        self.apply_btn = PrimaryPushButton("Aplicar e Reiniciar Jarvis", perf_card)
         self.apply_btn.setVisible(False)
         self.apply_btn.clicked.connect(self._apply_and_restart)
         perf_layout.addWidget(self.apply_btn)
@@ -130,9 +249,55 @@ class SettingsTab(QWidget):
         self.slider.valueChanged.connect(self._on_slider_changed)
         self._update_slider_text(self.slider.value())
 
-        layout.addWidget(perf_group)
+        self.cards_layout.addWidget(perf_card)
 
-        # Updates Group
+        # ----------------------------------------------------------------------
+        # Card 3: Location (Sem o "Preferências", conforme solicitado)
+        # ----------------------------------------------------------------------
+        loc_card = SimpleCardWidget(self.cards_container)
+        loc_layout = QVBoxLayout(loc_card)
+        loc_layout.setContentsMargins(16, 14, 16, 14)
+        loc_layout.setSpacing(10)
+
+        loc_title = StrongBodyLabel("Localização", loc_card)
+        loc_layout.addWidget(loc_title)
+
+        loc_row = QHBoxLayout()
+        loc_row.setSpacing(8)
+        loc_lbl = BodyLabel("Cidade Padrão (Clima):", loc_card)
+        loc_lbl.setFixedWidth(145)
+        loc_row.addWidget(loc_lbl)
+
+        self.city_input = FluentLineEdit(loc_card)
+        self.city_input.setPlaceholderText("Ex: Itamonte, São Paulo, Curitiba...")
+        self.city_input.setClearButtonEnabled(True)
+        self.city_input.setMinimumWidth(180)
+        self.city_input.setMaximumWidth(260)
+        current_city = (
+            config.get("tools", {}).get("weather", {}).get("default_city", "São Paulo")
+        )
+        self.city_input.setText(str(current_city))
+        loc_row.addWidget(self.city_input)
+
+        self.save_city_btn = PrimaryPushButton("Salvar Cidade", loc_card)
+        self.save_city_btn.clicked.connect(self._save_city)
+        loc_row.addWidget(self.save_city_btn)
+        loc_row.addStretch(1)
+        loc_layout.addLayout(loc_row)
+
+        loc_info = CaptionLabel(
+            "💡 Usada automaticamente em consultas de previsão do tempo ('como tá o tempo?') quando nenhuma cidade for especificada.",
+            loc_card,
+        )
+        loc_info.setWordWrap(True)
+        loc_info.setStyleSheet("color: rgba(200, 200, 200, 0.7);")
+        loc_layout.addWidget(loc_info)
+
+        self.cards_layout.addWidget(loc_card)
+
+        # ----------------------------------------------------------------------
+        # Card 4: System Updates
+        # ----------------------------------------------------------------------
         self.update_mgr = UpdateManager()
         self.pref_mgr = UpdatePreferenceManager()
         self._latest_release: ReleaseInfo | None = None
@@ -143,43 +308,87 @@ class SettingsTab(QWidget):
         self.update_download_finished.connect(self._on_download_finished)
         self.update_failed.connect(self._on_update_failed)
 
-        update_group = QGroupBox("Atualizações do Sistema", self)
-        update_layout = QVBoxLayout(update_group)
+        update_card = SimpleCardWidget(self.cards_container)
+        update_layout = QVBoxLayout(update_card)
+        update_layout.setContentsMargins(16, 14, 16, 14)
+        update_layout.setSpacing(10)
 
-        self.version_label = QLabel(
-            f"<b>Versão Instalada:</b> v{get_app_version()}", self
+        update_title = StrongBodyLabel("Atualizações do Sistema", update_card)
+        update_layout.addWidget(update_title)
+
+        self.version_label = BodyLabel(
+            f"<b>Versão Instalada:</b> v{get_app_version()}", update_card
         )
         update_layout.addWidget(self.version_label)
 
-        self.update_status_label = QLabel(
-            "Nenhuma verificação recente realizada.", self
+        self.update_status_label = CaptionLabel(
+            "Nenhuma verificação recente realizada.", update_card
         )
         self.update_status_label.setWordWrap(True)
         update_layout.addWidget(self.update_status_label)
 
         btn_row = QHBoxLayout()
-        self.check_update_btn = QPushButton("Verificar Atualizações", self)
+        btn_row.setSpacing(8)
+        self.check_update_btn = PushButton("Verificar Atualizações", update_card)
         self.check_update_btn.clicked.connect(self._on_check_update_clicked)
         btn_row.addWidget(self.check_update_btn)
 
-        self.apply_update_btn = QPushButton("Baixar e Atualizar", self)
+        self.apply_update_btn = PrimaryPushButton("Baixar e Atualizar", update_card)
         self.apply_update_btn.setVisible(False)
         self.apply_update_btn.clicked.connect(self._download_and_apply_update)
         btn_row.addWidget(self.apply_update_btn)
 
-        self.snooze_btn = QPushButton("Lembrar Mais Tarde", self)
+        self.snooze_btn = PushButton("Lembrar Mais Tarde", update_card)
         self.snooze_btn.setVisible(False)
         self.snooze_btn.clicked.connect(self._on_snooze_clicked)
         btn_row.addWidget(self.snooze_btn)
-
+        btn_row.addStretch(1)
         update_layout.addLayout(btn_row)
 
-        self.update_progress_bar = QProgressBar(self)
+        self.update_progress_bar = ProgressBar(update_card)
         self.update_progress_bar.setVisible(False)
         update_layout.addWidget(self.update_progress_bar)
 
-        layout.addWidget(update_group)
-        layout.addStretch(1)
+        self.cards_layout.addWidget(update_card)
+
+        self.scroll_area.setWidget(self.cards_container)
+        main_layout.addWidget(self.scroll_area)
+
+    def _open_config_file(self) -> None:
+        """Opens the active config.yaml file in the default text editor."""
+        try:
+            cfg_path = get_user_config_path()
+            if cfg_path.exists():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(cfg_path.resolve())))
+                logger.info(f"Opening config file: {cfg_path}")
+            else:
+                InfoBar.warning(
+                    "Arquivo não encontrado",
+                    f"O arquivo {cfg_path.name} não foi encontrado.",
+                    parent=self.window(),
+                )
+        except Exception as e:
+            logger.error(f"Failed to open config file: {e}")
+            InfoBar.error(
+                "Erro",
+                f"Não foi possível abrir o arquivo: {e}",
+                parent=self.window(),
+            )
+
+    def _open_config_folder(self) -> None:
+        """Opens the directory containing config.yaml in Windows Explorer."""
+        try:
+            folder = get_user_config_path().parent.resolve()
+            folder.mkdir(parents=True, exist_ok=True)
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+            logger.info(f"Opening config folder: {folder}")
+        except Exception as e:
+            logger.error(f"Failed to open config folder: {e}")
+            InfoBar.error(
+                "Erro",
+                f"Não foi possível abrir a pasta: {e}",
+                parent=self.window(),
+            )
 
     def _update_slider_text(self, value: int) -> None:
         prof_key = self.PROFILES_ORDER[value]
@@ -239,6 +448,7 @@ class SettingsTab(QWidget):
             f"A chave para {prov.capitalize()} foi salva no Keyring com sucesso!",
             parent=self,
         )
+
         active_prov = config.get("llm", {}).get("active_provider", DEFAULT_PROVIDER)
         if prov == active_prov:
             try:
@@ -300,6 +510,36 @@ class SettingsTab(QWidget):
             f"Provedor alterado para {prov.capitalize()}.",
             parent=self,
         )
+
+    def _save_city(self) -> None:
+        city = self.city_input.text().strip()
+        if not city:
+            InfoBar.warning(
+                title="Atenção",
+                content="Por favor, informe um nome de cidade válido.",
+                parent=self,
+                duration=3000,
+            )
+            return
+
+        if "tools" not in config:
+            config["tools"] = {}
+        if "weather" not in config["tools"]:
+            config["tools"]["weather"] = {}
+
+        config["tools"]["weather"]["default_city"] = city
+        try:
+            update_yaml_weather_city(city)
+        except Exception as e:
+            logger.warning(f"Could not persist default city to yaml: {e}")
+
+        InfoBar.success(
+            title="Sucesso",
+            content=f"Cidade padrão atualizada para '{city}'.",
+            parent=self,
+            duration=3000,
+        )
+        logger.info(f"Updated default weather city to '{city}' via SettingsTab.")
 
     def _on_check_update_clicked(self) -> None:
         self.check_update_btn.setEnabled(False)

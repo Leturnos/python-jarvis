@@ -340,3 +340,48 @@ def test_settings_tab_on_download_finished_non_path_fallback():
     with patch.object(tab, "_on_update_failed") as mock_failed:
         tab._on_download_finished("not-a-path-object")
         mock_failed.assert_called_once_with("Diretório de arquivos extraídos inválido.")
+
+
+def test_settings_tab_save_weather_city():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    with patch(
+        "core.ui.tabs.settings_tab.update_yaml_weather_city"
+    ) as mock_update_yaml:
+        tab.city_input.setText("São Paulo")
+        tab.save_city_btn.click()
+
+        mock_update_yaml.assert_called_once_with("São Paulo")
+        from core.infra.config import config
+
+        assert config["tools"]["weather"]["default_city"] == "São Paulo"
+
+
+def test_settings_tab_open_config_actions_and_labels():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    assert hasattr(tab, "open_config_btn")
+    assert hasattr(tab, "open_folder_btn")
+    assert tab.open_config_btn.toolTip() == "Abrir config.yaml no editor padrão"
+    assert (
+        tab.open_folder_btn.toolTip()
+        == "Abrir pasta de configuração no Windows Explorer"
+    )
+
+    with patch("PySide6.QtGui.QDesktopServices.openUrl") as mock_open:
+        tab.open_config_btn.click()
+        assert mock_open.called
+
+    with patch("PySide6.QtGui.QDesktopServices.openUrl") as mock_open:
+        tab.open_folder_btn.click()
+        assert mock_open.called

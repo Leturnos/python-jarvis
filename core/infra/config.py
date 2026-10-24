@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from core.infra.logger_config import logger
 from core.infra.presets import PRESETS, detect_recommended_preset
 from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
-from core.shared.paths import get_app_root
+from core.shared.paths import get_app_root, get_user_config_path
 
 load_dotenv(get_app_root() / ".env")
 
@@ -38,7 +38,7 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
 
 def load_config() -> dict[str, Any]:
     """Loads application configuration, applying performance presets and config.yaml overrides."""
-    yaml_path = get_app_root() / "config.yaml"
+    yaml_path = get_user_config_path(get_app_root())
     try:
         with open(yaml_path, encoding="utf-8") as f:
             config_raw = yaml.safe_load(f) or {}
@@ -192,7 +192,7 @@ def reload_config() -> dict[str, Any]:
 
 def update_yaml_active_provider(provider_name: str) -> None:
     """Updates the active_provider entry in config.yaml while preserving file structure."""
-    yaml_path = get_app_root() / "config.yaml"
+    yaml_path = get_user_config_path(get_app_root())
     if not yaml_path.exists():
         return
     with open(yaml_path, encoding="utf-8") as f:
@@ -216,9 +216,45 @@ def update_yaml_active_provider(provider_name: str) -> None:
         f.writelines(lines)
 
 
+def update_yaml_weather_city(city: str) -> None:
+    """Updates the default_city under tools.weather in config.yaml preserving structure."""
+    clean_city = city.strip().strip("\"'").replace('"', '\\"')
+    yaml_path = get_user_config_path(get_app_root())
+    if not yaml_path.exists():
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_tools_block = False
+    in_weather_block = False
+    updated = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        indent_len = len(line) - len(line.lstrip())
+
+        if stripped.startswith("tools:") and indent_len == 0:
+            in_tools_block = True
+            in_weather_block = False
+        elif in_tools_block and stripped.startswith("weather:") and indent_len > 0:
+            in_weather_block = True
+        elif in_weather_block and stripped.startswith("default_city:"):
+            indent = line[: len(line) - len(line.lstrip())]
+            lines[i] = f'{indent}default_city: "{clean_city}"\n'
+            updated = True
+            break
+        elif in_tools_block and indent_len == 0 and stripped:
+            in_tools_block = False
+            in_weather_block = False
+
+    if updated:
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+
 def update_yaml_performance_profile(profile_name: str) -> None:
     """Updates the performance_profile entry in config.yaml while preserving comments and structure."""
-    yaml_path = get_app_root() / "config.yaml"
+    yaml_path = get_user_config_path(get_app_root())
     if not yaml_path.exists():
         with open(yaml_path, "w", encoding="utf-8") as f:
             f.write(f'performance_profile: "{profile_name}"\n')
@@ -248,7 +284,7 @@ def update_yaml_performance_profile(profile_name: str) -> None:
 
 def update_yaml_plugin_preset(preset_id: str, enabled: bool) -> None:
     """Updates the enabled_presets entry in config.yaml while preserving comments and structure."""
-    yaml_path = get_app_root() / "config.yaml"
+    yaml_path = get_user_config_path(get_app_root())
     if not yaml_path.exists():
         return
     try:
