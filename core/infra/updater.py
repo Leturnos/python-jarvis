@@ -13,6 +13,7 @@ from urllib.error import URLError
 
 from core.infra.config import config
 from core.infra.logger_config import logger
+from core.shared.errors import SecurityError
 from core.shared.paths import get_app_root, get_app_version
 
 
@@ -130,15 +131,20 @@ class UpdateManager:
         dest_path: Path | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
         chunk_size: int = 65536,
+        timeout: float = 30.0,
     ) -> Path:
-        """Downloads release asset file with optional progress reporting."""
+        """Downloads release asset file safely with progress reporting and atomic replace."""
         target = dest_path or (self.temp_dir / "update_package.zip")
+        temp_target = target.with_suffix(".tmp")
         req = urllib.request.Request(
             url,
             headers={"User-Agent": f"Jarvis-App-Updater/{self.current_version}"},
         )
 
-        with urllib.request.urlopen(req) as resp, open(target, "wb") as out_file:
+        with (
+            urllib.request.urlopen(req, timeout=timeout) as resp,
+            open(temp_target, "wb") as out_file,
+        ):
             total_size = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
             while True:
@@ -150,14 +156,22 @@ class UpdateManager:
                 if progress_callback:
                     progress_callback(downloaded, total_size)
 
+        if temp_target.exists():
+            os.replace(temp_target, target)
+
         return target
 
     def extract_archive(self, zip_path: Path, extract_dir: Path | None = None) -> Path:
-        """Extracts ZIP release package and returns the directory containing updated files."""
+        """Extracts ZIP release package safely and returns the directory containing updated files."""
         target_dir = extract_dir or (self.temp_dir / "extracted")
         target_dir.mkdir(parents=True, exist_ok=True)
 
         with zipfile.ZipFile(zip_path, "r") as zf:
+            resolved_target = target_dir.resolve()
+            for member in zf.infolist():
+                member_path = (target_dir / member.filename).resolve()
+                if not member_path.is_relative_to(resolved_target):
+                    raise SecurityError(f"Zip traversal detected: {member.filename}")
             zf.extractall(target_dir)
 
         # If zip packaged an inner 'Jarvis' root folder, point directly inside it
@@ -210,16 +224,16 @@ if exist "{clean_source}\\data\\media" (
 
 if !RC! LEQ 7 (
     echo [%date% %time%] Atualizacao concluida com sucesso! >> "!LOG_FILE!" 2>&1
+    echo [%date% %time%] Reiniciando Jarvis em {clean_exe}... >> "!LOG_FILE!" 2>&1
+    cd /d "{clean_dest}"
+    if exist "{clean_exe}" (
+        start "" /D "{clean_dest}" "{clean_exe}"
+    ) else (
+        echo [%date% %time%] Executavel {clean_exe} nao encontrado para iniciar. >> "!LOG_FILE!" 2>&1
+    )
 ) else (
-    echo [%date% %time%] Falha ao copiar arquivos: erro !RC! >> "!LOG_FILE!" 2>&1
-)
-
-echo [%date% %time%] Reiniciando Jarvis em {clean_exe}... >> "!LOG_FILE!" 2>&1
-cd /d "{clean_dest}"
-if exist "{clean_exe}" (
-    start "" /D "{clean_dest}" "{clean_exe}"
-) else (
-    echo [%date% %time%] Executavel {clean_exe} nao encontrado para iniciar. >> "!LOG_FILE!" 2>&1
+    echo [%date% %time%] Falha critica ao copiar arquivos pelo robocopy: erro !RC! >> "!LOG_FILE!" 2>&1
+    echo [%date% %time%] Inicializacao abortada para proteger a instalacao. >> "!LOG_FILE!" 2>&1
 )
 
 exit /b 0

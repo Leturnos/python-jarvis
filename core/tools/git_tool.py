@@ -1,3 +1,4 @@
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -90,14 +91,33 @@ class ScopedGitTool(BaseTool):
                 "error": f"Unsupported git action '{action}'. Allowed: status, diff, commit.",
             }
 
+    def _run_git(
+        self,
+        cmd: list[str],
+        workspace: Path,
+        timeout: float = 15.0,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        return subprocess.run(
+            cmd,
+            cwd=workspace,
+            shell=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=check,
+            env=env,
+        )
+
     def _git_status(self, workspace: Path) -> dict[str, Any]:
         try:
-            proc = subprocess.run(
+            proc = self._run_git(
                 ["git", "status", "--short", "--branch"],
-                cwd=workspace,
-                shell=False,
-                capture_output=True,
-                text=True,
+                workspace=workspace,
+                timeout=15.0,
                 check=True,
             )
             return {
@@ -106,29 +126,30 @@ class ScopedGitTool(BaseTool):
                 "workspace": str(workspace),
                 "output": proc.stdout.strip(),
             }
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "action": "status",
+                "error": "Comando 'git status' expirou após 15s.",
+            }
         except subprocess.CalledProcessError as e:
             err = e.stderr.strip() if e.stderr else str(e)
             return {"success": False, "action": "status", "error": err}
+        except FileNotFoundError:
+            return {
+                "success": False,
+                "action": "status",
+                "error": "Executável do Git não encontrado no PATH.",
+            }
 
     def _git_diff(self, workspace: Path, max_lines: int) -> dict[str, Any]:
         try:
             # Try diff against HEAD first; fallback to unstaged diff
             cmd = ["git", "diff", "HEAD"]
-            proc = subprocess.run(
-                cmd,
-                cwd=workspace,
-                shell=False,
-                capture_output=True,
-                text=True,
-            )
+            proc = self._run_git(cmd, workspace=workspace, timeout=15.0)
             if proc.returncode != 0:
-                proc = subprocess.run(
-                    ["git", "diff"],
-                    cwd=workspace,
-                    shell=False,
-                    capture_output=True,
-                    text=True,
-                    check=True,
+                proc = self._run_git(
+                    ["git", "diff"], workspace=workspace, timeout=15.0, check=True
                 )
 
             lines = proc.stdout.splitlines()
@@ -145,9 +166,21 @@ class ScopedGitTool(BaseTool):
                 "truncated": truncated,
                 "total_lines": len(lines),
             }
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "action": "diff",
+                "error": "Comando 'git diff' expirou após 15s.",
+            }
         except subprocess.CalledProcessError as e:
             err = e.stderr.strip() if e.stderr else str(e)
             return {"success": False, "action": "diff", "error": err}
+        except FileNotFoundError:
+            return {
+                "success": False,
+                "action": "diff",
+                "error": "Executável do Git não encontrado no PATH.",
+            }
 
     def _git_commit(self, workspace: Path, message: str) -> dict[str, Any]:
         if not self.allow_commit:
@@ -166,12 +199,10 @@ class ScopedGitTool(BaseTool):
             }
 
         try:
-            proc = subprocess.run(
+            proc = self._run_git(
                 ["git", "commit", "-m", msg],
-                cwd=workspace,
-                shell=False,
-                capture_output=True,
-                text=True,
+                workspace=workspace,
+                timeout=20.0,
                 check=True,
             )
             return {
@@ -180,6 +211,18 @@ class ScopedGitTool(BaseTool):
                 "workspace": str(workspace),
                 "output": proc.stdout.strip(),
             }
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "action": "commit",
+                "error": "Comando 'git commit' expirou após 20s.",
+            }
         except subprocess.CalledProcessError as e:
             err = e.stderr.strip() if e.stderr else str(e)
             return {"success": False, "action": "commit", "error": err}
+        except FileNotFoundError:
+            return {
+                "success": False,
+                "action": "commit",
+                "error": "Executável do Git não encontrado no PATH.",
+            }

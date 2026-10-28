@@ -77,3 +77,31 @@ def test_project_tool_blocks_traversal_on_read(tmp_path: Path):
     result = tool.execute(action="read_file", file_path=str(outside))
     assert result["success"] is False
     assert "allowed workspace" in result["error"].lower()
+
+
+def test_project_tool_blocks_protected_files(tmp_path: Path):
+    workspace = tmp_path / "my_project"
+    workspace.mkdir()
+    env_file = workspace / ".env"
+    env_file.write_text("OPENAI_API_KEY=sk-test", encoding="utf-8")
+    cfg_file = workspace / "config.yaml"
+    cfg_file.write_text("dry_run: true", encoding="utf-8")
+
+    guard = PathGuard(allowed_workspaces=[str(workspace)])
+    tool = ProjectInspectTool(path_guard=guard)
+
+    # Read .env blocked even if inside workspace
+    res_env = tool.execute(action="read_file", file_path=str(env_file))
+    assert res_env["success"] is False
+    assert "protegido" in res_env["error"].lower()
+
+    # Read config.yaml blocked
+    res_cfg = tool.execute(action="read_file", file_path=str(cfg_file))
+    assert res_cfg["success"] is False
+    assert "protegido" in res_cfg["error"].lower()
+
+    # List files hides protected files
+    res_list = tool.execute(action="list_files", workspace=str(workspace))
+    assert res_list["success"] is True
+    assert ".env" not in res_list["tree"]
+    assert "config.yaml" not in res_list["tree"]

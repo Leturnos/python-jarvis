@@ -3,7 +3,10 @@ import zipfile
 from unittest.mock import MagicMock, patch
 from urllib.error import URLError
 
+import pytest
+
 from core.infra.updater import UpdateManager, normalize_repo, parse_version
+from core.shared.errors import SecurityError
 
 
 def test_normalize_repo():
@@ -144,6 +147,16 @@ def test_extract_and_prepare_update(tmp_path):
     assert extracted_dir.exists()
     assert (extracted_dir / "Jarvis.exe").exists()
     assert (extracted_dir / "resources" / "icon.ico").exists()
+
+
+def test_extract_archive_blocks_zip_slip(tmp_path):
+    updater = UpdateManager(current_version="0.2.1", temp_dir=tmp_path)
+    zip_path = tmp_path / "malicious.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("../../malicious.exe", "evil content")
+
+    with pytest.raises(SecurityError, match="Zip traversal detected"):
+        updater.extract_archive(zip_path)
 
 
 def test_generate_updater_script(tmp_path):

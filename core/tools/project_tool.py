@@ -31,6 +31,27 @@ class ProjectInspectTool(BaseTool):
         "build",
     }
 
+    PROTECTED_FILE_PATTERNS = {
+        ".env",
+        "config.yaml",
+        "portable.flag",
+        "id_rsa",
+        "id_ed25519",
+    }
+
+    PROTECTED_EXTENSIONS = {
+        ".key",
+        ".pem",
+        ".pfx",
+        ".crt",
+        ".cer",
+        ".db",
+        ".db-wal",
+        ".db-shm",
+        ".sqlite",
+        ".sqlite3",
+    }
+
     def __init__(
         self,
         path_guard: PathGuard | None = None,
@@ -86,13 +107,21 @@ class ProjectInspectTool(BaseTool):
         if act == "list_files":
             return self._list_files(workspace, max_depth)
         elif act == "read_file":
-            limit = max_bytes if max_bytes is not None else self.default_max_bytes
+            raw_limit = max_bytes if max_bytes is not None else self.default_max_bytes
+            limit = min(max(1, raw_limit), self.default_max_bytes * 5)
             return self._read_file(file_path, limit)
         else:
             return {
                 "success": False,
                 "error": f"Unsupported action '{action}'. Allowed: 'list_files', 'read_file'.",
             }
+
+    @classmethod
+    def _is_protected_file(cls, path: Path) -> bool:
+        name = path.name.lower()
+        if name in cls.PROTECTED_FILE_PATTERNS or name.startswith(".env"):
+            return True
+        return any(name.endswith(ext) for ext in cls.PROTECTED_EXTENSIONS)
 
     def _list_files(self, workspace: str, max_depth: int) -> dict[str, Any]:
         try:
@@ -107,10 +136,12 @@ class ProjectInspectTool(BaseTool):
                 "error": f"Path '{workspace}' is not a directory.",
             }
 
+        depth_limit = max(1, min(int(max_depth), 5))
         lines: list[str] = [f"📁 {resolved_ws.name}/"]
+        max_items = 250
 
         def _walk(current: Path, depth: int, prefix: str = "") -> None:
-            if depth > max_depth:
+            if depth > depth_limit or len(lines) >= max_items:
                 return
             try:
                 entries = sorted(
@@ -123,6 +154,14 @@ class ProjectInspectTool(BaseTool):
             for i, entry in enumerate(entries):
                 if entry.name in self.IGNORED_DIRS:
                     continue
+                if self._is_protected_file(entry):
+                    continue
+                if len(lines) >= max_items:
+                    lines.append(
+                        f"{prefix}... [Limite de {max_items} itens atingido] ..."
+                    )
+                    return
+
                 is_last = i == len(entries) - 1
                 connector = "└── " if is_last else "├── "
                 sub_prefix = "    " if is_last else "│   "
@@ -161,6 +200,13 @@ class ProjectInspectTool(BaseTool):
                 "success": False,
                 "action": "read_file",
                 "error": f"File '{file_path}' does not exist or is not a file.",
+            }
+
+        if self._is_protected_file(resolved_path):
+            return {
+                "success": False,
+                "action": "read_file",
+                "error": f"Acesso negado: '{resolved_path.name}' é um arquivo protegido de configuração/segurança.",
             }
 
         try:

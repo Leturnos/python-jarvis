@@ -31,14 +31,14 @@ def test_git_status_success(mock_run, tmp_path: Path):
     assert result["success"] is True
     assert result["action"] == "status"
     assert "M core/controller.py" in result["output"]
-    mock_run.assert_called_once_with(
-        ["git", "status", "--short", "--branch"],
-        cwd=workspace.resolve(),
-        shell=False,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    mock_run.assert_called_once()
+    args, kwargs = mock_run.call_args
+    assert args[0] == ["git", "status", "--short", "--branch"]
+    assert kwargs["cwd"] == workspace.resolve()
+    assert kwargs["check"] is True
+    assert kwargs["encoding"] == "utf-8"
+    assert kwargs["timeout"] == 15.0
+    assert kwargs["env"].get("GIT_TERMINAL_PROMPT") == "0"
 
 
 @patch("subprocess.run")
@@ -78,14 +78,14 @@ def test_git_commit_success(mock_run, tmp_path: Path):
 
     assert result["success"] is True
     assert "[main 1234567]" in result["output"]
-    mock_run.assert_called_once_with(
-        ["git", "commit", "-m", "feat: test commit"],
-        cwd=workspace.resolve(),
-        shell=False,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    mock_run.assert_called_once()
+    args, kwargs = mock_run.call_args
+    assert args[0] == ["git", "commit", "-m", "feat: test commit"]
+    assert kwargs["cwd"] == workspace.resolve()
+    assert kwargs["check"] is True
+    assert kwargs["encoding"] == "utf-8"
+    assert kwargs["timeout"] == 20.0
+    assert kwargs["env"].get("GIT_TERMINAL_PROMPT") == "0"
 
 
 def test_git_tool_blocks_unauthorized_workspace(tmp_path: Path):
@@ -112,3 +112,19 @@ def test_git_commit_disallowed_when_config_false(tmp_path: Path):
 
     assert result["success"] is False
     assert "not allowed" in result["error"].lower()
+
+
+@patch("subprocess.run")
+def test_git_timeout_handling(mock_run, tmp_path: Path):
+    import subprocess
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    guard = PathGuard(allowed_workspaces=[str(workspace)])
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=15.0)
+
+    tool = ScopedGitTool(path_guard=guard)
+    result = tool.execute(action="status", workspace=str(workspace))
+
+    assert result["success"] is False
+    assert "expirou" in result["error"].lower()

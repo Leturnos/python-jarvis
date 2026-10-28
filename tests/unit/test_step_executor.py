@@ -117,7 +117,7 @@ def test_step_executor_navigate_types_when_focused():
     with patch("core.execution.step_executor.pyautogui.press") as mock_press:
         success = executor.execute_step(step)
         assert success is True
-        wm.type_text.assert_called_once_with(f"cd /d {target_path}")
+        wm.type_text.assert_called_once_with(f'cd /d "{target_path}"')
         mock_press.assert_called_once_with("enter")
 
 
@@ -190,3 +190,18 @@ def test_step_executor_tool_step_from_dict(mock_execute_tool):
     mock_execute_tool.assert_called_once_with(
         "git", action="commit", message="feat: test"
     )
+
+
+@patch("subprocess.run")
+def test_step_executor_handles_none_tts_engine_gracefully(mock_run):
+    mock_run.side_effect = FileNotFoundError("Executable not found")
+    wm = MagicMock()
+    executor = StepExecutor({}, wm, spotify_automator=None, tts_engine=None)
+
+    step = ExecutionStep(
+        type=StepType.COMMAND,
+        payload={"command": "missing_binary.exe"},
+    )
+    # Should not raise AttributeError when tts_engine is None
+    success = executor.execute_step(step)
+    assert success is False

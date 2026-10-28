@@ -139,9 +139,10 @@ class StepExecutor:
                             logger.error(
                                 f"Focus mismatch: active window '{active_win.title}' does not match expected window '{self._current_plan_window.title}'"
                             )
-                            self.tts_engine.speak(
-                                "Abortado por segurança. O aplicativo alvo perdeu o foco."
-                            )
+                            if self.tts_engine:
+                                self.tts_engine.speak(
+                                    "Abortado por segurança. O aplicativo alvo perdeu o foco."
+                                )
                             return False
 
             if step.type == StepType.COMMAND:
@@ -149,7 +150,21 @@ class StepExecutor:
                 try:
                     is_cmd = self.config.get("integrations", {}).get("use_cmd", False)
                     if is_cmd:
-                        dangerous_chars = [";", "&", "|", "`", "$", "(", ")", "<", ">"]
+                        dangerous_chars = [
+                            ";",
+                            "&",
+                            "|",
+                            "`",
+                            "$",
+                            "(",
+                            ")",
+                            "<",
+                            ">",
+                            "%",
+                            "^",
+                            "\n",
+                            "\r",
+                        ]
                         if any(char in cmd for char in dangerous_chars):
                             logger.error(
                                 "Comando bloqueado por conter caracteres especiais perigosos."
@@ -179,9 +194,10 @@ class StepExecutor:
                     return True
                 except FileNotFoundError as e:
                     logger.error(f"Command executable not found: {e}")
-                    self.tts_engine.speak(
-                        "O sistema não conseguiu encontrar o executável especificado."
-                    )
+                    if self.tts_engine:
+                        self.tts_engine.speak(
+                            "O sistema não conseguiu encontrar o executável especificado."
+                        )
                     return False
                 except subprocess.CalledProcessError as e:
                     logger.error(f"Command failed with exit code {e.returncode}: {e}")
@@ -224,8 +240,8 @@ class StepExecutor:
                 return True
             elif step.type == StepType.NAVIGATE:
                 target = str(step.payload.get("target", ""))
-                clean_target = re.sub(r"[\r\n;&|]", "", target).strip()
-                self.window_manager.type_text(f"cd /d {clean_target}")
+                clean_target = re.sub(r'[\r\n;&|\'"]', "", target).strip()
+                self.window_manager.type_text(f'cd /d "{clean_target}"')
                 pyautogui.press("enter")
                 return True
             elif step.type == StepType.WAIT:
