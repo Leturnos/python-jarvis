@@ -42,6 +42,7 @@ dev = [
 [tool.ruff]
 line-length = 88
 target-version = "py313"
+extend-exclude = ["docs", "dist", "build", "scratch"]
 
 [tool.ruff.lint]
 select = [
