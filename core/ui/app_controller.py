@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import keyboard
 import win32api
 import win32con
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -75,6 +76,9 @@ class QtAppController(QObject):
         self.main_window.settings_tab.provider_changed.connect(
             lambda _: self._update_menu_states()
         )
+        self.main_window.settings_tab.autostart_toggled.connect(
+            self._on_settings_autostart_toggled
+        )
         self.voice_overlay = VoiceOverlayHUD()
         self.command_palette: QtCommandPalette | None = None
         self._cp_hotkey: str = "ctrl+shift+p"
@@ -120,7 +124,6 @@ class QtAppController(QObject):
 
     def start_command_palette(self, dispatcher: Any) -> QtCommandPalette:
         self.command_palette = QtCommandPalette(dispatcher)
-        import keyboard
 
         cp_config = config.get("command_palette", {})
         hotkey = cp_config.get("key", "ctrl+shift+p")
@@ -138,6 +141,25 @@ class QtAppController(QObject):
 
         logger.info(f"Qt Command Palette initialized. Hotkey: {hotkey}")
         return self.command_palette
+
+    def update_command_palette_hotkey(self, new_hotkey: str) -> None:
+        """Dynamically rebinds the command palette global shortcut and polling key."""
+        clean = new_hotkey.strip().lower()
+        if not clean or clean == getattr(self, "_cp_hotkey", ""):
+            return
+
+        old_hotkey = getattr(self, "_cp_hotkey", "")
+        if old_hotkey:
+            try:
+                keyboard.remove_hotkey(old_hotkey)
+            except Exception:
+                pass
+        self._cp_hotkey = clean
+        try:
+            if hasattr(self, "command_palette") and self.command_palette:
+                keyboard.add_hotkey(clean, self.command_palette.show)
+        except Exception as e:
+            logger.warning(f"Failed to rebind hotkey hook for {clean}: {e}")
 
     def _is_physical_hotkey_pressed(self, hotkey_str: str) -> bool:
         """Checks if a key combination (e.g., ctrl+shift+p) is physically held down via Win32 API."""
@@ -292,7 +314,10 @@ class QtAppController(QObject):
         current_state = state_manager.get_state()
 
         # Active vs Suspended
-        is_suspended = current_state in (JarvisState.SLEEPING, JarvisState.SUSPENDED)
+        is_suspended = current_state in (
+            JarvisState.SLEEPING,
+            JarvisState.SUSPENDED,
+        )
         is_muted = current_state == JarvisState.MUTED
 
         self.active_action.setChecked(not is_suspended and not is_muted)
@@ -310,7 +335,10 @@ class QtAppController(QObject):
         self.mute_3h.setChecked(get_mute_checked(180))
 
         # Autostart
-        self.autostart_action.setChecked(is_autostart_enabled_check())
+        is_auto = is_autostart_enabled_check()
+        self.autostart_action.setChecked(is_auto)
+        if hasattr(self, "main_window") and hasattr(self.main_window, "settings_tab"):
+            self.main_window.settings_tab.set_autostart_state(is_auto)
 
         # LLM Provider
         active_provider = config.get("llm", {}).get("active_provider", DEFAULT_PROVIDER)
@@ -332,6 +360,12 @@ class QtAppController(QObject):
     def _toggle_autostart(self) -> None:
         new_state = not is_autostart_enabled_check()
         manage_autostart(enable=new_state)
+        self.autostart_action.setChecked(new_state)
+        if hasattr(self, "main_window") and hasattr(self.main_window, "settings_tab"):
+            self.main_window.settings_tab.set_autostart_state(new_state)
+
+    def _on_settings_autostart_toggled(self, checked: bool) -> None:
+        self.autostart_action.setChecked(checked)
 
     def _switch_provider(self, provider: str) -> None:
         # Pre-check existence
@@ -428,8 +462,6 @@ class QtAppController(QObject):
             pass
 
         try:
-            import keyboard
-
             keyboard.unhook_all()
         except Exception:
             pass
@@ -478,8 +510,6 @@ class QtAppController(QObject):
             pass
 
         try:
-            import keyboard
-
             keyboard.unhook_all()
         except Exception:
             pass

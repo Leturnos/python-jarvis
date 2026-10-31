@@ -43,7 +43,8 @@ def test_history_tab_headers_and_buttons_in_portuguese():
 
 @patch("core.ui.tabs.settings_tab.InfoBar.success")
 @patch(
-    "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key", return_value=True
+    "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key",
+    return_value=True,
 )
 def test_settings_tab_validate_key_success(mock_validate, mock_success):
     _ = QApplication.instance() or QApplication([])
@@ -67,7 +68,8 @@ def test_settings_tab_validate_key_success(mock_validate, mock_success):
 
 @patch("core.ui.tabs.settings_tab.InfoBar.warning")
 @patch(
-    "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key", return_value=False
+    "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key",
+    return_value=False,
 )
 def test_settings_tab_validate_key_missing(mock_validate, mock_warning):
     _ = QApplication.instance() or QApplication([])
@@ -158,7 +160,8 @@ def test_settings_tab_save_key_reinitializes_active_provider(
     mock_set_secret.reset_mock()
 
     with patch(
-        "core.ui.tabs.settings_tab.config", {"llm": {"active_provider": "gemini"}}
+        "core.ui.tabs.settings_tab.config",
+        {"llm": {"active_provider": "gemini"}},
     ):
         tab.provider_combo.setCurrentIndex(tab.providers.index("gemini"))
         tab.api_key_input.setText("gemini-test-key")
@@ -175,7 +178,8 @@ def test_settings_tab_save_key_reinitializes_active_provider(
     mock_reinit.reset_mock()
     mock_set_secret.reset_mock()
     with patch(
-        "core.ui.tabs.settings_tab.config", {"llm": {"active_provider": "gemini"}}
+        "core.ui.tabs.settings_tab.config",
+        {"llm": {"active_provider": "gemini"}},
     ):
         tab.provider_combo.setCurrentIndex(tab.providers.index("openai"))
         tab.api_key_input.setText("openai-test-key")
@@ -193,7 +197,8 @@ def test_settings_tab_save_key_reinitializes_active_provider(
 @patch("core.ai.llm_agent.llm_agent.reinit_provider")
 @patch("core.ui.tabs.settings_tab.InfoBar.success")
 @patch(
-    "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key", return_value=True
+    "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key",
+    return_value=True,
 )
 def test_settings_tab_set_active_provider_success(
     mock_validate, mock_success, mock_reinit, mock_update_yaml
@@ -208,7 +213,8 @@ def test_settings_tab_set_active_provider_success(
     tab.provider_combo.setCurrentIndex(tab.providers.index("openai"))
 
     with patch(
-        "core.ui.tabs.settings_tab.config", {"llm": {"active_provider": "gemini"}}
+        "core.ui.tabs.settings_tab.config",
+        {"llm": {"active_provider": "gemini"}},
     ):
         tab.set_active_btn.click()
 
@@ -296,7 +302,9 @@ def test_settings_tab_check_update_available():
         assert future_ver in tab.apply_update_btn.text()
 
 
-def test_settings_tab_on_download_finished_emits_update_restart_requested(tmp_path):
+def test_settings_tab_on_download_finished_emits_update_restart_requested(
+    tmp_path,
+):
     _ = QApplication.instance() or QApplication([])
     ui_adapter = MagicMock()
     ui_adapter.visual_state_updated.connect = MagicMock()
@@ -385,3 +393,166 @@ def test_settings_tab_open_config_actions_and_labels():
     with patch("PySide6.QtGui.QDesktopServices.openUrl") as mock_open:
         tab.open_folder_btn.click()
         assert mock_open.called
+
+
+def test_main_window_frameless_and_custom_title_bar():
+    from PySide6.QtCore import Qt
+
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    assert bool(window.windowFlags() & Qt.WindowType.FramelessWindowHint)
+    assert window.width() == 640
+    assert window.height() == 500
+    assert hasattr(window, "title_bar")
+    assert window.title_bar.title_label.text() == "Jarvis"
+
+
+def test_settings_tab_subtabs_and_mini_monitor_position_sync():
+    from PySide6.QtCore import QRect
+
+    from core.ui.screen_position import (
+        SCREEN_POSITIONS_ORDER,
+        calculate_screen_position,
+    )
+
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    # Now 3 sub-tabs after merging performance into system
+    assert tab.sub_stack.count() == 3
+    assert "ui_voice" in tab.sub_pivot.items
+    assert "ai_keys" in tab.sub_pivot.items
+    assert "sys_upd" in tab.sub_pivot.items
+    assert "perf_loc" not in tab.sub_pivot.items
+
+    # Verify switches have fixed width for alignment
+    assert tab.audio_cues_switch.width() == 102
+    assert tab.fullscreen_suspend_switch.width() == 102
+    assert tab.dry_run_switch.width() == 102
+    assert tab.autostart_switch.width() == 102
+
+    # Verify MiniMonitorPreview clicking updates combo and config
+    with patch("core.ui.tabs.settings_tab.update_yaml_ui_position") as mock_pos_yaml:
+        tab.mini_monitor.spot_buttons["bottom_right"].click()
+        assert (
+            tab.confirmation_pos_combo.currentIndex()
+            == SCREEN_POSITIONS_ORDER.index("bottom_right")
+        )
+        mock_pos_yaml.assert_called_once_with("confirmation_position", "bottom_right")
+
+    # Verify screen position math across spots
+    screen_geo = QRect(0, 0, 1920, 1080)
+    top_center_pt = calculate_screen_position(screen_geo, 480, 200, "top_center")
+    center_pt = calculate_screen_position(screen_geo, 480, 200, "center")
+    bottom_center_pt = calculate_screen_position(screen_geo, 480, 200, "bottom_center")
+
+    assert top_center_pt.x() == (1920 - 480) // 2
+    assert top_center_pt.y() < center_pt.y() < bottom_center_pt.y()
+
+
+def test_settings_tab_autostart_sync_methods():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    toggled_records = []
+    tab.autostart_toggled.connect(lambda v: toggled_records.append(v))
+
+    with patch("core.ui.tabs.settings_tab.manage_autostart") as mock_manage:
+        tab.autostart_switch.setChecked(True)
+        assert mock_manage.called
+
+    tab.set_autostart_state(False)
+    assert not tab.autostart_switch.isChecked()
+    tab.set_autostart_state(True)
+    assert tab.autostart_switch.isChecked()
+
+
+def test_settings_tab_shortcuts_save():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    assert hasattr(tab, "wake_keyword_combo")
+    assert hasattr(tab, "wake_keyword_input")
+    assert hasattr(tab, "ptt_key_input")
+    assert hasattr(tab, "ptt_behavior_combo")
+    assert hasattr(tab, "command_palette_key_input")
+    assert hasattr(tab, "save_shortcuts_btn")
+
+    # Verify comboboxes have expanded width (190px) to prevent cutting off text
+    assert tab.confirmation_pos_combo.maximumWidth() == 190
+    assert tab.hud_pos_combo.maximumWidth() == 190
+
+    # Verify space to underscore replacement on wake keyword input
+    tab.wake_keyword_input.setText("hey jarvis assistant")
+    assert tab.wake_keyword_input.text() == "hey_jarvis_assistant"
+
+    with patch("core.ui.tabs.settings_tab.update_yaml_str_setting") as mock_str_setting:
+        tab.wake_keyword_input.setText("hey jarvis")
+        tab.ptt_key_input.setText("ctrl+alt")
+        tab.ptt_behavior_combo.setCurrentIndex(0)  # hold
+        tab.command_palette_key_input.setText("ctrl+shift+p")
+
+        tab.save_shortcuts_btn.click()
+
+        # Should have called update_yaml_str_setting for keyword, key, behavior, and command_palette
+        assert mock_str_setting.call_count == 4
+        calls = [c.args for c in mock_str_setting.call_args_list]
+        assert ("voice_activation", "keyword", "hey_jarvis") in calls
+        assert ("voice_activation", "key", "ctrl+alt") in calls
+        assert ("voice_activation", "behavior", "hold") in calls
+        assert ("command_palette", "key", "ctrl+shift+p") in calls
+
+
+def test_settings_tab_ai_preferences_save():
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    window = MainWindow(ui_adapter)
+    tab = window.settings_tab
+
+    assert hasattr(tab, "proactivity_combo")
+    assert hasattr(tab, "response_phrase_input")
+    assert hasattr(tab, "web_search_combo")
+    assert hasattr(tab, "city_input")
+    assert hasattr(tab, "save_city_btn")
+
+    with (
+        patch("core.ui.tabs.settings_tab.update_yaml_str_setting") as mock_str_setting,
+        patch(
+            "core.ui.tabs.settings_tab.update_yaml_weather_city"
+        ) as mock_city_setting,
+    ):
+        tab.proactivity_combo.setCurrentIndex(1)  # proactive
+        tab.response_phrase_input.setText("Às ordens!")
+        tab.web_search_combo.setCurrentIndex(0)  # duckduckgo
+        tab.city_input.setText("Belo Horizonte")
+
+        tab.save_city_btn.click()
+
+        assert mock_str_setting.call_count == 3
+        mock_city_setting.assert_called_once_with("Belo Horizonte")
+        calls = [c.args for c in mock_str_setting.call_args_list]
+        assert ("ai", "proactivity", "proactive") in calls
+        assert ("voice_activation", "response_phrase", "Às ordens!") in calls
+        assert ("tools", "provider", "duckduckgo") in calls
