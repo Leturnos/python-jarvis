@@ -88,6 +88,10 @@ def load_config() -> dict[str, Any]:
         "command_palette": {
             "key": "ctrl+shift+p",
         },
+        "ui": {
+            "confirmation_position": "top_center",
+            "voice_hud_position": "bottom_center",
+        },
         "llm": {
             "active_provider": DEFAULT_PROVIDER,
             "timeout_seconds": 5.0,
@@ -369,3 +373,179 @@ def update_yaml_plugin_preset(preset_id: str, enabled: bool) -> None:
         logger.error(
             f"Failed to update plugin preset '{preset_id}' in config.yaml: {e}"
         )
+
+
+def update_yaml_ui_position(key_name: str, position: str) -> None:
+    """Updates confirmation_position or voice_hud_position under ui in config.yaml."""
+    yaml_path = get_user_config_path(get_app_root())
+    if not yaml_path.exists():
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_ui_block = False
+    updated = False
+    ui_line_idx = -1
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        indent_len = len(line) - len(line.lstrip())
+        if stripped.startswith("ui:") and indent_len == 0:
+            in_ui_block = True
+            ui_line_idx = i
+        elif in_ui_block and stripped.startswith(f"{key_name}:"):
+            indent = line[:indent_len]
+            lines[i] = f'{indent}{key_name}: "{position}"\n'
+            updated = True
+            break
+        elif (
+            in_ui_block
+            and indent_len == 0
+            and stripped
+            and not stripped.startswith("#")
+        ):
+            in_ui_block = False
+
+    if not updated:
+        if ui_line_idx != -1:
+            lines.insert(ui_line_idx + 1, f'  {key_name}: "{position}"\n')
+        else:
+            lines.append(f'\nui:\n  {key_name}: "{position}"\n')
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def update_yaml_voice_mode(mode: str) -> None:
+    """Updates voice_activation.mode in config.yaml while preserving comments."""
+    yaml_path = get_user_config_path(get_app_root())
+    if not yaml_path.exists():
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_voice_block = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        indent_len = len(line) - len(line.lstrip())
+        if stripped.startswith("voice_activation:") and indent_len == 0:
+            in_voice_block = True
+        elif in_voice_block and stripped.startswith("mode:"):
+            indent = line[:indent_len]
+            lines[i] = f'{indent}mode: "{mode}"\n'
+            break
+        elif (
+            in_voice_block
+            and indent_len == 0
+            and stripped
+            and not stripped.startswith("#")
+        ):
+            in_voice_block = False
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def update_yaml_bool_setting(
+    section: str, key: str, value: bool, subsection: str | None = None
+) -> None:
+    """Updates a boolean key inside a section (and optional subsection) in config.yaml."""
+    yaml_path = get_user_config_path(get_app_root())
+    if not yaml_path.exists():
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    bool_str = "true" if value else "false"
+    in_section = False
+    in_subsection = subsection is None
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        indent_len = len(line) - len(line.lstrip())
+
+        if stripped.startswith(f"{section}:") and indent_len == 0:
+            in_section = True
+            in_subsection = subsection is None
+        elif (
+            in_section and indent_len == 0 and stripped and not stripped.startswith("#")
+        ):
+            in_section = False
+            in_subsection = False
+        elif in_section:
+            if subsection and stripped.startswith(f"{subsection}:") and indent_len > 0:
+                in_subsection = True
+            elif in_subsection and stripped.startswith(f"{key}:"):
+                indent = line[:indent_len]
+                lines[i] = f"{indent}{key}: {bool_str}\n"
+                break
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def update_yaml_str_setting(
+    section: str, key: str, value: str, subsection: str | None = None
+) -> None:
+    """Updates a string key inside a section (and optional subsection) in config.yaml preserving comments."""
+    clean_val = value.strip().strip("\"'").replace('"', '\\"')
+    yaml_path = get_user_config_path(get_app_root())
+    if not yaml_path.exists():
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_section = False
+    in_subsection = subsection is None
+    sub_indent = None
+    updated = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        indent_len = len(line) - len(line.lstrip())
+
+        if stripped.startswith(f"{section}:") and indent_len == 0:
+            in_section = True
+            in_subsection = subsection is None
+            sub_indent = None
+        elif (
+            in_section and indent_len == 0 and stripped and not stripped.startswith("#")
+        ):
+            in_section = False
+            in_subsection = False
+        elif in_section:
+            if subsection:
+                if stripped.startswith(f"{subsection}:") and indent_len > 0:
+                    in_subsection = True
+                    sub_indent = indent_len
+                elif (
+                    in_subsection
+                    and sub_indent is not None
+                    and indent_len <= sub_indent
+                    and stripped
+                    and not stripped.startswith("#")
+                ):
+                    in_subsection = False
+
+            if in_subsection and stripped.startswith(f"{key}:"):
+                indent = line[:indent_len]
+                comment = ""
+                if "#" in line:
+                    hash_pos = line.index("#")
+                    comment = "  " + line[hash_pos:].rstrip()
+                lines[i] = f'{indent}{key}: "{clean_val}"{comment}\n'
+                updated = True
+                break
+
+    if updated:
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+    # Update in-memory config dict
+    try:
+        target = config.setdefault(section, {})
+        if subsection:
+            target = target.setdefault(subsection, {})
+        target[key] = clean_val
+    except Exception as e:
+        logger.warning(f"Failed to update in-memory config for {section}.{key}: {e}")

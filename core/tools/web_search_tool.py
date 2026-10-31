@@ -30,7 +30,7 @@ class WebSearchTool(BaseTool):
         max_results: int | None = None,
     ) -> None:
         cfg = config.get("tools", {}).get("web_search", {})
-        self.provider = provider or cfg.get("provider", "duckduckgo")
+        self._provider = provider
         self.timeout = (
             timeout_seconds
             if timeout_seconds is not None
@@ -39,6 +39,18 @@ class WebSearchTool(BaseTool):
         self.default_max_results = (
             max_results if max_results is not None else cfg.get("max_results", 3)
         )
+
+    @property
+    def provider(self) -> str:
+        if self._provider:
+            return self._provider
+        return str(
+            config.get("tools", {}).get("web_search", {}).get("provider", "duckduckgo")
+        )
+
+    @provider.setter
+    def provider(self, val: str) -> None:
+        self._provider = val
 
     def get_parameters_schema(self) -> dict[str, Any]:
         return {

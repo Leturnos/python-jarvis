@@ -103,7 +103,16 @@ class JarvisController:
         self.cooldown_seconds = voice_act.get(
             "cooldown_seconds", config.get("jarvis", {}).get("cooldown_seconds", 2.5)
         )
-        self.response_phrase = voice_act.get("response_phrase", "Sim?")
+
+    @property
+    def response_phrase(self) -> str:
+        return str(
+            self.config.get("voice_activation", {}).get("response_phrase", "Sim?")
+        )
+
+    @response_phrase.setter
+    def response_phrase(self, val: str) -> None:
+        self.config.setdefault("voice_activation", {})["response_phrase"] = val
 
     def start(self) -> None:
         """Starts the main orchestration loop.

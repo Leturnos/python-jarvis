@@ -74,16 +74,8 @@ class ActivationManager:
     def __init__(self, config: dict[str, Any]):
         self.full_config = config  # Keep reference for threshold lookup
         self.config = config.get("voice_activation", {})
-        self.mode = self.config.get("mode", "hybrid")
         self.ptt_config = self.config.get("push_to_talk", {})
         self.ww_config = self.config.get("wake_word", {})
-        self.auto_suspend = self.config.get("auto_suspend", {}).get("fullscreen", True)
-        self.auto_suspend_lock = self.config.get("auto_suspend", {}).get(
-            "lock_screen", True
-        )
-
-        self.ptt_key = self.ptt_config.get("key", "ctrl+alt")
-        self.ptt_behavior = self.ptt_config.get("behavior", "hold")
 
         # State tracking for hysteresis and transitions
         self.last_state_change_time = 0.0
@@ -99,6 +91,57 @@ class ActivationManager:
             "fullscreen_suspend_count": 0,
             "lock_screen_suspend_count": 0,
         }
+
+    @property
+    def ptt_key(self) -> str:
+        return str(self.ptt_config.get("key", "ctrl+alt"))
+
+    @ptt_key.setter
+    def ptt_key(self, val: str) -> None:
+        self.ptt_config["key"] = val
+
+    @property
+    def ptt_behavior(self) -> str:
+        return str(self.ptt_config.get("behavior", "hold"))
+
+    @ptt_behavior.setter
+    def ptt_behavior(self, val: str) -> None:
+        self.ptt_config["behavior"] = val
+
+    @property
+    def wake_keyword(self) -> str:
+        return str(self.ww_config.get("keyword", "hey_jarvis"))
+
+    @wake_keyword.setter
+    def wake_keyword(self, val: str) -> None:
+        self.ww_config["keyword"] = val
+
+    @property
+    def mode(self) -> str:
+        """Dynamic voice activation mode (hybrid, push_to_talk, always_listening, disabled)."""
+        return str(self.config.get("mode", "hybrid"))
+
+    @mode.setter
+    def mode(self, val: str) -> None:
+        self.config["mode"] = val
+
+    @property
+    def auto_suspend(self) -> bool:
+        """Dynamic auto-suspend setting for games and fullscreen windows."""
+        return bool(self.config.get("auto_suspend", {}).get("fullscreen", True))
+
+    @auto_suspend.setter
+    def auto_suspend(self, val: bool) -> None:
+        self.config.setdefault("auto_suspend", {})["fullscreen"] = val
+
+    @property
+    def auto_suspend_lock(self) -> bool:
+        """Dynamic auto-suspend setting for Windows lock screen."""
+        return bool(self.config.get("auto_suspend", {}).get("lock_screen", True))
+
+    @auto_suspend_lock.setter
+    def auto_suspend_lock(self, val: bool) -> None:
+        self.config.setdefault("auto_suspend", {})["lock_screen"] = val
 
     @property
     def should_unload_wakeword(self) -> bool:
