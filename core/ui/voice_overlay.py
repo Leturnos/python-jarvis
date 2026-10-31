@@ -1,9 +1,11 @@
 from typing import Any
 
-from PySide6.QtCore import QPoint, QRect, Qt, QTimer
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QProgressBar, QWidget
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QWidget
 
+from core.infra.config import config
 from core.runtime.state import JarvisState
+from core.ui.screen_position import reposition_on_screen
 
 
 class VoiceOverlayHUD(QWidget):
@@ -69,12 +71,8 @@ class VoiceOverlayHUD(QWidget):
         self.hide_timer.timeout.connect(self.hide)
 
     def _reposition_bottom_center(self) -> None:
-        screen = QApplication.primaryScreen()
-        if screen:
-            geo: QRect = screen.availableGeometry()
-            x = geo.x() + (geo.width() - self.width()) // 2
-            y = geo.y() + geo.height() - self.height() - 40
-            self.move(QPoint(x, y))
+        pos_key = config.get("ui", {}).get("voice_hud_position", "bottom_center")
+        reposition_on_screen(self, pos_key, margin_x=28, margin_y=40)
 
     def update_from_snapshot(self, snapshot: dict[str, Any]) -> None:
         state: JarvisState = snapshot.get("state", JarvisState.IDLE)

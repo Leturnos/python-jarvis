@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
+from core.infra.config import config
 from core.infra.logger_config import logger
 from core.runtime.state import JarvisState, state_manager
 
@@ -12,7 +13,7 @@ from core.runtime.state import JarvisState, state_manager
 class JarvisUIAdapter(QObject):
     """Adapter for JarvisUI that centralizes state and emits Qt Signals."""
 
-    # Unified visual state snapshot: dict containing status, score, volume, and state
+    # Unified visual state snapshot: dict containing status, score, volume, state, and mode
     visual_state_updated = Signal(dict)
 
     def __init__(self, wakeword_name: str | list[str]) -> None:
@@ -27,6 +28,7 @@ class JarvisUIAdapter(QObject):
             "score": 0.0,
             "volume": 0,
             "state": state_manager.get_state(),
+            "mode": config.get("voice_activation", {}).get("mode", "hybrid"),
         }
 
         # Listen to backend state changes instead of polling
@@ -41,8 +43,17 @@ class JarvisUIAdapter(QObject):
         self._visual_state["state"] = new_state
         self.visual_state_updated.emit(self._visual_state.copy())
 
+    def set_mode(self, mode: str) -> None:
+        """Dynamically update active voice mode and notify UI listeners."""
+        self._visual_state["mode"] = mode
+        self.visual_state_updated.emit(self._visual_state.copy())
+
     def update(
-        self, status: str | None = None, score: float | None = None, volume: Any = None
+        self,
+        status: str | None = None,
+        score: float | None = None,
+        volume: Any = None,
+        mode: str | None = None,
     ) -> None:
         updated = False
         if status is not None:
@@ -56,6 +67,10 @@ class JarvisUIAdapter(QObject):
         if volume is not None:
             vol_int = int(np.abs(volume).mean() / 500 * 100)
             self._visual_state["volume"] = min(vol_int, 100)
+            updated = True
+
+        if mode is not None:
+            self._visual_state["mode"] = mode
             updated = True
 
         if updated:

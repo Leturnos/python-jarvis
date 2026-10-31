@@ -28,7 +28,6 @@ class AudioCueManager:
 
     def __init__(self, config: dict) -> None:
         self.config = config.get("audio_cues", {})
-        self.enabled = self.config.get("enabled", True)
         self.debounce_ms = self.config.get("debounce_ms", 200)
         self.last_cue_time = 0.0
 
@@ -47,6 +46,15 @@ class AudioCueManager:
                 freq_config.get("action_completed", [1200, 100])[1],
             ),
         }
+
+    @property
+    def enabled(self) -> bool:
+        """Dynamically check if audio cues are enabled in config."""
+        return bool(self.config.get("enabled", True))
+
+    @enabled.setter
+    def enabled(self, value: bool) -> None:
+        self.config["enabled"] = value
 
     def play_cue(self, cue_type: CueType) -> bool:
         if not self.enabled:
