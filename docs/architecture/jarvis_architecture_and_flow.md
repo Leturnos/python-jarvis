@@ -188,6 +188,17 @@ classDiagram
         +SpotifyAutomator (CV Template Matcher)
     }
 
+    class ToolsAndIntegrations {
+        +ToolRegistry (Central Tool Directory)
+        +DevPortTool (Port Inspection & Process Kill)
+        +NotesTool (Markdown & Obsidian Vault Notes)
+        +CalendarTool (iCal / ICS Calendar Events)
+        +ClipboardTool (Clipboard Inspection & Context)
+        +TimerTool (Timers, Alarms & Pomodoro)
+        +YouTubeTool (YouTube Video Search & Play)
+        +WeatherTool & FinanceTool
+    }
+
     class PersistenceAndPlugins {
         +HistoryManager (SQLite Execution Log)
         +PluginManager (YAML Declarative Actions)
@@ -209,6 +220,8 @@ classDiagram
     AudioAndActivation --> OrchestrationAndExecution
     OrchestrationAndExecution --> IntentAndAI
     OrchestrationAndExecution --> PersistenceAndPlugins
+    OrchestrationAndExecution --> ToolsAndIntegrations
+    IntentAndAI --> ToolsAndIntegrations
     OrchestrationAndExecution --> PresentationAndUI
 ```
 
@@ -234,4 +247,6 @@ classDiagram
 | **Memória Conversacional** | [`core/ai/conversation_memory.py`](../../core/ai/conversation_memory.py) | Janela deslizante de histórico de diálogo multi-turn para manter contexto de perguntas encadeadas. |
 | **Resolução de Caminhos** | [`core/shared/paths.py`](../../core/shared/paths.py) | Resolução portável do diretório raiz (`get_app_root`) compatível com binários congelados (`sys.frozen`). |
 | **Estado Global** | [`core/runtime/state.py`](../../core/runtime/state.py) | Máquina de estados com callbacks para transições seguras e gerenciamento de recursos. |
+| **Registro de Ferramentas** | [`core/tools/tool_registry.py`](../../core/tools/tool_registry.py) | Registro dinâmico e orquestração de ferramentas (`dev_port`, `notes`, `calendar`, `clipboard`, `timer`, `youtube`, etc.). |
+| **Ferramentas Especializadas** | [`core/tools/`](../../core/tools/) | Implementação modular de ferramentas nativas para dev, produtividade, calendário, notas e multimídia. |
 | **Script de Empacotamento** | [`scripts/build_exe.py`](../../scripts/build_exe.py) | Automação de compilação PyInstaller para bundle portátil em `dist/Jarvis/Jarvis.exe`. |

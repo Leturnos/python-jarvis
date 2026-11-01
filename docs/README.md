@@ -38,6 +38,7 @@ Documentação técnica viva sobre o funcionamento interno do Jarvis:
   Detalhes sobre a implementação em PySide6 e PyQt-Fluent-Widgets, desacoplamento por Qt Signals e controle de ciclo de vida em background.
 - ⚡ **[Cache de Respostas LLM](./architecture/llm-cache.md)**  
   Estratégia de persistência SQLite, hash SHA-256 de instruções, TTL e planos de evolução para cache semântico vetorial.
+- 🛠️ **[Ferramentas Dinâmicas & Integrações](../core/tools/)**: Subsistema modular de ferramentas do Jarvis (`ToolRegistry`) para portas locais (`dev_port`), notas/Obsidian (`notes`), agenda (`calendar`), clipboard (`clipboard`), timers/pomodoro (`timer`), YouTube (`youtube`), clima e finanças.
 - 📂 **[Índice Completo da Pasta de Arquitetura](./architecture/README.md)**
 
 ---

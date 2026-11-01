@@ -15,7 +15,7 @@ Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", p
 - **Reconhecimento de Voz com Filtro VAD (🛡️):** O motor de Speech-to-Text (`faster-whisper`) utiliza filtragem Silero VAD integrada, eliminando alucinações e palavras fantasmas geradas por ruídos de fundo, cliques ou respiração.
 - **Resposta por Voz Instantânea e Interrompível (⚡):** O sintetizador de fala (TTS) processa o texto oração por oração em tempo real e interrompe a fala imediatamente se você acionar a palavra de ativação ou o Push-to-Talk.
 - **Controle de Mídia Inteligente (Spotify 🎵):** Diga ao Jarvis para tocar um artista, música ou playlist. Ele trará o Spotify para o primeiro plano e usará inteligência visual (OpenCV) para localizar e clicar nos botões corretos na tela, iniciando a música instantaneamente. Veja o [Guia de Configuração de Mídia](./data/media/README.md) para aprender a cadastrar suas playlists favoritas.
-- **Respostas Diretas e Ferramentas Dinâmicas (🌦️ 📈):** Pergunte sobre o tempo ("vai chover hoje em Itamonte?") ou sobre ações e mercado ("como está a cotação de PETR4?"). O Jarvis consulta ferramentas especializadas e responde de forma objetiva e inteligente.
+- **Respostas Diretas e Ferramentas Dinâmicas (🌦️ 📈 🛠️):** Pergunte sobre o tempo ("vai chover hoje em Itamonte?"), cotações ("como está PETR4?"), portas de desenvolvimento ("o que está rodando na porta 3000?"), notas e Obsidian ("anota que preciso revisar o PR"), calendário ("o que tenho agendado hoje?"), clipboard ("o que copiei?"), timers ("marca 25 minutos") ou vídeos ("busca no YouTube lo-fi"). O Jarvis consulta ferramentas especializadas nativas e responde com precisão.
 - **Modo Gamer e Reunião (Auto-Suspend):** O Jarvis é educado. Se ele perceber que você está jogando ou em uma apresentação (tela cheia), ele entra em suspensão automaticamente para não te interromper.
 - **Entende seu jeito de falar (IA Multi-Provedor):** Não precisa decorar comandos rígidos. Fale naturalmente com suporte a Google Gemini, OpenAI, Anthropic, DeepSeek e OpenRouter.
 - **Paleta de Comandos (⌨️):** Falar alto nem sempre é o ideal. Aperte `Ctrl + Shift + P` (ou pelo menu da bandeja) a qualquer momento para abrir uma barra de pesquisa rápida na tela e execute suas automações silenciosamente.
@@ -27,6 +27,12 @@ Chega de clicar dezenas de vezes para começar a trabalhar. Diga "Hey Jarvis", p
 Exemplos de como usar as capacidades de memória, ferramentas e controle:
 - **Clima e Previsão**: "Vai chover hoje em Itamonte?", "Como está o tempo em São Paulo?".
 - **Cotações e Mercado**: "Qual a cotação da Apple hoje?", "Como está o dólar?".
+- **Portas e Processos Dev**: "O que está rodando na porta 3000?", "Libera a porta 8080".
+- **Notas e Obsidian**: "Anota que preciso refatorar a autenticação", "Lê minhas notas de hoje".
+- **Agenda e Compromissos**: "Quais meus compromissos de hoje?", "O que tenho agendado amanhã?".
+- **Área de Transferência**: "O que tem no meu clipboard?", "Analisa esse texto que copiei".
+- **Timers e Pomodoro**: "Marca um timer de 15 minutos", "Inicia 25 minutos de pomodoro".
+- **Busca no YouTube**: "Busca no YouTube tutorial de uv", "Toca lo-fi no YouTube".
 - **Descansar/Silenciar**: "Jarvis, ir dormir", "Silenciar", "Parar de ouvir".
 - **Repetir último comando**: "Faz de novo", "De novo".
 - **Salvar como macro**: "Salvar como macro", "Gravar sequência", "Salve isso".
