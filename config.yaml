@@ -123,6 +123,25 @@ tools:
   calculator:
     enabled: true
 
+  timer:
+    enabled: true
+    pomodoro_minutes: 25
+
+  clipboard:
+    enabled: true
+    max_chars: 4000
+
+  notes:
+    enabled: true
+    markdown_dir: ""
+
+  youtube:
+    enabled: true
+
+  calendar:
+    enabled: true
+    ics_url: ""
+
 
 # ==============================================================================
 # ATUALIZAÇÕES DO SISTEMA (AUTO-UPDATER)

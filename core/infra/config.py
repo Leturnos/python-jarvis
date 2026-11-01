@@ -540,6 +540,49 @@ def update_yaml_str_setting(
     if updated:
         with open(yaml_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
+    else:
+        # Fallback insertion: find section or append
+        sec_idx = None
+        subsec_idx = None
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            indent_len = len(line) - len(line.lstrip())
+            if stripped.startswith(f"{section}:") and indent_len == 0:
+                sec_idx = i
+                break
+
+        if sec_idx is not None:
+            if subsection:
+                for j in range(sec_idx + 1, len(lines)):
+                    curr_line = lines[j]
+                    stripped_line = curr_line.strip()
+                    line_ind = len(curr_line) - len(curr_line.lstrip())
+                    if (
+                        line_ind == 0
+                        and stripped_line
+                        and not stripped_line.startswith("#")
+                    ):
+                        break
+                    if stripped_line.startswith(f"{subsection}:") and line_ind > 0:
+                        subsec_idx = j
+                        break
+                if subsec_idx is not None:
+                    lines.insert(subsec_idx + 1, f'    {key}: "{clean_val}"\n')
+                else:
+                    lines.insert(
+                        sec_idx + 1, f'  {subsection}:\n    {key}: "{clean_val}"\n'
+                    )
+            else:
+                lines.insert(sec_idx + 1, f'  {key}: "{clean_val}"\n')
+        else:
+            lines.append(f"\n{section}:\n")
+            if subsection:
+                lines.append(f'  {subsection}:\n    {key}: "{clean_val}"\n')
+            else:
+                lines.append(f'  {key}: "{clean_val}"\n')
+
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
 
     # Update in-memory config dict
     try:
@@ -549,3 +592,13 @@ def update_yaml_str_setting(
         target[key] = clean_val
     except Exception as e:
         logger.warning(f"Failed to update in-memory config for {section}.{key}: {e}")
+
+
+def update_yaml_notes_dir(markdown_dir: str) -> None:
+    """Updates tools.notes.markdown_dir in config.yaml."""
+    update_yaml_str_setting("tools", "markdown_dir", markdown_dir, subsection="notes")
+
+
+def update_yaml_calendar_url(ics_url: str) -> None:
+    """Updates tools.calendar.ics_url in config.yaml."""
+    update_yaml_str_setting("tools", "ics_url", ics_url, subsection="calendar")

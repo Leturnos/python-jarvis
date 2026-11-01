@@ -72,11 +72,18 @@ def init_default_tools(registry: ToolRegistry | None = None) -> None:
     """Initializes default scoped tools based on configuration."""
     from core.infra.config import config
     from core.tools.calculator_tool import CalculatorTool
+    from core.tools.calendar_tool import CalendarTool
+    from core.tools.clipboard_tool import ClipboardTool
+    from core.tools.dev_port_tool import DevPortTool
     from core.tools.finance_tool import FinanceTool
     from core.tools.git_tool import ScopedGitTool
+    from core.tools.github_tool import GitHubTool
+    from core.tools.notes_tool import NotesTool
     from core.tools.project_tool import ProjectInspectTool
+    from core.tools.timer_tool import TimerTool
     from core.tools.weather_tool import WeatherTool
     from core.tools.web_search_tool import WebSearchTool
+    from core.tools.youtube_tool import YouTubeTool
 
     target = registry or tool_registry
     tools_cfg = config.get("tools", {})
@@ -86,12 +93,24 @@ def init_default_tools(registry: ToolRegistry | None = None) -> None:
     if tools_cfg.get("developer", {}).get("enabled", True):
         target.register(ScopedGitTool())
         target.register(ProjectInspectTool())
+        target.register(GitHubTool())
+        target.register(DevPortTool())
     if tools_cfg.get("weather", {}).get("enabled", True):
         target.register(WeatherTool())
     if tools_cfg.get("finance", {}).get("enabled", True):
         target.register(FinanceTool())
     if tools_cfg.get("calculator", {}).get("enabled", True):
         target.register(CalculatorTool())
+    if tools_cfg.get("timer", {}).get("enabled", True):
+        target.register(TimerTool())
+    if tools_cfg.get("clipboard", {}).get("enabled", True):
+        target.register(ClipboardTool())
+    if tools_cfg.get("notes", {}).get("enabled", True):
+        target.register(NotesTool())
+    if tools_cfg.get("youtube", {}).get("enabled", True):
+        target.register(YouTubeTool())
+    if tools_cfg.get("calendar", {}).get("enabled", True):
+        target.register(CalendarTool())
 
 
 init_default_tools()

@@ -1,7 +1,10 @@
 import logging
 import socket
+import ssl
 import time
 from concurrent.futures import ThreadPoolExecutor
+
+import certifi
 
 logger = logging.getLogger(__name__)
 
@@ -65,3 +68,11 @@ def check_internet_connection_async(
     except Exception as e:
         logger.debug(f"Network check exception: {e}")
         return False
+
+
+def get_ssl_context() -> ssl.SSLContext:
+    """Returns an SSLContext configured with certifi CA bundle."""
+    try:
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()

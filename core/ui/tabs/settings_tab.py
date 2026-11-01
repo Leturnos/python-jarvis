@@ -767,6 +767,38 @@ class SettingsTab(QWidget):
         loc_row.addWidget(self.city_input, 1)
         ai_layout.addLayout(loc_row)
 
+        # Markdown / Obsidian notes folder row
+        notes_row = QHBoxLayout()
+        notes_row.setSpacing(8)
+        notes_lbl = BodyLabel("Notas (Cofre Obsidian):", ai_card)
+        notes_lbl.setFixedWidth(155)
+        notes_row.addWidget(notes_lbl)
+
+        self.notes_dir_input = FluentLineEdit(ai_card)
+        self.notes_dir_input.setPlaceholderText("Caminho da pasta ou cofre (Opcional)")
+        self.notes_dir_input.setClearButtonEnabled(True)
+        cur_notes_dir = config.get("tools", {}).get("notes", {}).get("markdown_dir", "")
+        self.notes_dir_input.setText(str(cur_notes_dir))
+        notes_row.addWidget(self.notes_dir_input, 1)
+        ai_layout.addLayout(notes_row)
+
+        # Calendar ICS link row
+        cal_row = QHBoxLayout()
+        cal_row.setSpacing(8)
+        cal_lbl = BodyLabel("Agenda (Link .ics):", ai_card)
+        cal_lbl.setFixedWidth(155)
+        cal_row.addWidget(cal_lbl)
+
+        self.calendar_url_input = FluentLineEdit(ai_card)
+        self.calendar_url_input.setPlaceholderText(
+            "URL privada .ics (Google/Outlook, Opcional)"
+        )
+        self.calendar_url_input.setClearButtonEnabled(True)
+        cur_cal = config.get("tools", {}).get("calendar", {}).get("ics_url", "")
+        self.calendar_url_input.setText(str(cur_cal))
+        cal_row.addWidget(self.calendar_url_input, 1)
+        ai_layout.addLayout(cal_row)
+
         # Save AI preferences button (also aliases save_city_btn for backwards compatibility)
         save_ai_row = QHBoxLayout()
         save_ai_row.addStretch(1)
@@ -1126,6 +1158,13 @@ class SettingsTab(QWidget):
         phrase = self.response_phrase_input.text().strip() or "Sim?"
         ws_prov = self.web_search_options[self.web_search_combo.currentIndex()]
         city = self.city_input.text().strip() or "São Paulo"
+        notes_dir = self.notes_dir_input.text().strip()
+        cal_url = self.calendar_url_input.text().strip()
+
+        config.setdefault("tools", {}).setdefault("notes", {})["markdown_dir"] = (
+            notes_dir
+        )
+        config.setdefault("tools", {}).setdefault("calendar", {})["ics_url"] = cal_url
 
         config.setdefault("ai", {})["proactivity"] = proact
         config.setdefault("voice_activation", {})["response_phrase"] = phrase
@@ -1141,6 +1180,10 @@ class SettingsTab(QWidget):
                 "tools", "provider", ws_prov, subsection="web_search"
             )
             update_yaml_weather_city(city)
+            update_yaml_str_setting(
+                "tools", "markdown_dir", notes_dir, subsection="notes"
+            )
+            update_yaml_str_setting("tools", "ics_url", cal_url, subsection="calendar")
         except Exception as e:
             logger.warning(f"Could not persist AI preferences to yaml: {e}")
 
