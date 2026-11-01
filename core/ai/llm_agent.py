@@ -496,6 +496,12 @@ class LLMAgent:
              * Git / Projetos: Explique o panorama prático das alterações humanas, sem despejar nomes técnicos de arquivos.
              * Web Search: Sintetize o fato apurado diretamente em 1 frase, sem recitar títulos de páginas ou links.
              * Cálculo: Responda o resultado diretamente.
+             * GitHub / Portas: Resuma os PRs/issues abertos, status do CI ou qual processo está rodando na porta especificada.
+             * Agenda / Calendário: Informe o horário e título dos compromissos de forma fluida (ex: "Você tem 2 reuniões hoje: Daily às 10h e Planejamento às 14h").
+             * Timers / Alarmes: Confirme a criação ou cancelamento com simpatia (ex: "Timer de 15 minutos iniciado").
+             * Notas / Lembretes: Confirme a nota registrada ou liste as tarefas pendentes de forma sucinta.
+             * Clipboard: Resuma ou explique com precisão o conteúdo do texto da área de transferência.
+             * YouTube: Confirme o vídeo ou música aberta para reprodução.
            - SÍNTESE QUALITATIVA: Traduza números e telemetria em significado humano prático (nunca leia nomes de variáveis como 'bid', 'precipitation_mm', 'weather_code' ou chaves JSON).
            - LINGUAGEM FALADA (TTS): No máximo 1 a 2 frases concisas, naturais e fluidas para serem ouvidas com facilidade.
            {proactivity_guideline}

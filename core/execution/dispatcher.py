@@ -29,6 +29,8 @@ from core.plugins.plugin_manager import plugin_manager
 from core.runtime.state import JarvisState, state_manager
 from core.shared.errors import BusinessError
 from core.shared.utils import time_it
+from core.tools.dev_port_tool import DevPortTool
+from core.tools.tool_registry import tool_registry
 from core.ui.security_ui import SecurityDialog
 
 
@@ -74,6 +76,23 @@ class ActionDispatcher:
             None  # Access for main.py voice confirmation
         )
         self.last_plan: ExecutionPlan | None = None
+        self._callbacks_bound = False
+        self._bind_tool_callbacks()
+
+    def _bind_tool_callbacks(self) -> None:
+        """Injects system-level callbacks (e.g. TTS speech) into registered tools."""
+        if self._callbacks_bound:
+            return
+        try:
+            from core.tools.timer_tool import TimerTool
+            from core.tools.tool_registry import tool_registry
+
+            timer = tool_registry.get_tool("timer")
+            if isinstance(timer, TimerTool):
+                timer.set_tts_callback(self.tts_engine.speak)
+                self._callbacks_bound = True
+        except Exception as e:
+            logger.debug(f"Could not bind tool callbacks on dispatcher init: {e}")
 
     def handle_plan(self, plan: ExecutionPlan) -> bool:
         """Processes an ExecutionPlan, including validation and user confirmation.
@@ -525,13 +544,27 @@ class ActionDispatcher:
         self, original_query: str, action_json: dict[str, Any], notifier: Any = None
     ) -> bool:
         """Executes a tool call, synthesizes the response, and dispatches the resulting action or chat."""
-        from core.tools.tool_registry import tool_registry
-
         self.last_input_text = original_query
         tool_name = str(action_json.get("tool_name", ""))
         params = action_json.get("parameters", {})
         if not isinstance(params, dict):
             params = {}
+
+        self._bind_tool_callbacks()
+
+        # Security check for destructive actions in tools (e.g. killing processes on ports)
+        if tool_name == "dev_port" and DevPortTool.is_destructive_action(
+            params.get("action")
+        ):
+            target_port = params.get("port")
+            auth_config = {
+                "action": f"kill_port_{target_port}",
+                "risk_level": "dangerous",
+                "description": f"Finalizar processo ocupando a porta {target_port}",
+            }
+            if not self._check_authorization(auth_config):
+                return False
+            params["authorized"] = True
 
         explanation = action_json.get("explanation", "Consultando ferramenta...")
         if notifier:

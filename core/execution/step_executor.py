@@ -16,10 +16,12 @@ try:
 except ImportError:
     notification = None
 
-from core.execution.execution_plan import ExecutionStep, StepType
+from core.execution.execution_plan import ExecutionStep, RiskLevel, StepType
 from core.execution.window_manager import WindowInfo, WindowLayoutManager, WindowManager
 from core.infra.logger_config import logger
 from core.shared.constants import AppRegistry
+from core.tools.dev_port_tool import DevPortTool
+from core.tools.tool_registry import tool_registry
 
 
 def find_window_handle(title_or_process: str) -> int:
@@ -273,12 +275,23 @@ class StepExecutor:
                     )
                 )
             elif step.type == StepType.TOOL:
-                from core.tools.tool_registry import tool_registry
-
                 tool_name = str(step.payload.get("tool_name", ""))
-                params = step.payload.get("parameters", {})
-                if not isinstance(params, dict):
-                    params = {}
+                raw_params = step.payload.get("parameters", {})
+                params: dict[str, Any] = (
+                    dict(raw_params) if isinstance(raw_params, dict) else {}
+                )
+
+                if tool_name == "dev_port" and DevPortTool.is_destructive_action(
+                    params.get("action")
+                ):
+                    if step.step_risk == RiskLevel.DANGEROUS:
+                        params["authorized"] = True
+                    else:
+                        logger.warning(
+                            "Rejecting unauthorized destructive dev_port action in plan step: risk level is not DANGEROUS"
+                        )
+                        params["authorized"] = False
+
                 res = tool_registry.execute_tool(tool_name, **params)
                 return bool(res.get("success", False))
             return False
