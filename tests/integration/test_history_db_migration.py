@@ -5,8 +5,8 @@ import sqlite3
 from core.persistence.history_db import HistoryManager
 
 
-def test_history_db():
-    db_path = "data/test_history.db"
+def test_history_db(tmp_path):
+    db_path = str(tmp_path / "test_history.db")
     if os.path.exists(db_path):
         os.remove(db_path)
 
@@ -80,7 +80,11 @@ def test_history_db():
 
 if __name__ == "__main__":
     try:
-        test_history_db()
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as td:
+            test_history_db(Path(td))
         print("\nAll tests passed!")
     except Exception as e:
         print(f"\nTest failed: {e}")

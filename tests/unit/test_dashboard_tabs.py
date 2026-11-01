@@ -358,9 +358,10 @@ def test_settings_tab_save_weather_city():
     window = MainWindow(ui_adapter)
     tab = window.settings_tab
 
-    with patch(
-        "core.ui.tabs.settings_tab.update_yaml_weather_city"
-    ) as mock_update_yaml:
+    with (
+        patch("core.ui.tabs.settings_tab.update_yaml_str_setting"),
+        patch("core.ui.tabs.settings_tab.update_yaml_weather_city") as mock_update_yaml,
+    ):
         tab.city_input.setText("São Paulo")
         tab.save_city_btn.click()
 
@@ -536,6 +537,8 @@ def test_settings_tab_ai_preferences_save():
     assert hasattr(tab, "web_search_combo")
     assert hasattr(tab, "city_input")
     assert hasattr(tab, "save_city_btn")
+    assert hasattr(tab, "notes_dir_input")
+    assert hasattr(tab, "calendar_url_input")
 
     with (
         patch("core.ui.tabs.settings_tab.update_yaml_str_setting") as mock_str_setting,
@@ -547,12 +550,16 @@ def test_settings_tab_ai_preferences_save():
         tab.response_phrase_input.setText("Às ordens!")
         tab.web_search_combo.setCurrentIndex(0)  # duckduckgo
         tab.city_input.setText("Belo Horizonte")
+        tab.notes_dir_input.setText("C:/Notes")
+        tab.calendar_url_input.setText("https://example.com/calendar.ics")
 
         tab.save_city_btn.click()
 
-        assert mock_str_setting.call_count == 3
+        assert mock_str_setting.call_count == 5
         mock_city_setting.assert_called_once_with("Belo Horizonte")
         calls = [c.args for c in mock_str_setting.call_args_list]
         assert ("ai", "proactivity", "proactive") in calls
         assert ("voice_activation", "response_phrase", "Às ordens!") in calls
         assert ("tools", "provider", "duckduckgo") in calls
+        assert ("tools", "markdown_dir", "C:/Notes") in calls
+        assert ("tools", "ics_url", "https://example.com/calendar.ics") in calls
