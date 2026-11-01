@@ -97,13 +97,18 @@ def test_microphone_failure_and_healing(mock_reset):
 
 
 @patch("core.ai.llm_agent.llm_cache.get", return_value=None)
-@patch("litellm.completion")
-def test_internet_down_retry(mock_completion, mock_cache_get):
+@patch("core.ai.llm_agent.llm_agent._execute_with_fallback")
+@patch("core.execution.worker.time.sleep")
+def test_internet_down_retry(mock_sleep, mock_fallback, mock_cache_get):
+    from core.shared.errors import TechnicalError
+
     """Simulates internet connection loss causing completion errors in litellm and checks worker retries."""
     print("\n--- Test 1.2: Internet Connection Loss Recovery (Retries) ---")
 
     # Mock completion to raise network error
-    mock_completion.side_effect = Exception("APIConnectionError: Network unreachable")
+    mock_fallback.side_effect = TechnicalError(
+        "APIConnectionError: Network unreachable"
+    )
 
     task_queue = queue.Queue()
     stop_event = threading.Event()
@@ -119,13 +124,17 @@ def test_internet_down_retry(mock_completion, mock_cache_get):
     job.max_retries = 2  # speed up tests
     task_queue.put(job)
 
-    # Run command worker briefly to process one job
-    def stop_worker_after_job():
-        time.sleep(0.5)
-        stop_event.set()
+    worker_thread = threading.Thread(
+        target=command_worker,
+        args=(task_queue, dispatcher, notifier, stop_event, worker_busy),
+        daemon=True,
+    )
+    worker_thread.start()
 
-    threading.Thread(target=stop_worker_after_job, daemon=True).start()
-    command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy)
+    # Wait for the job to finish processing
+    task_queue.join()
+    stop_event.set()
+    worker_thread.join(timeout=2.0)
 
     assert job.status == JobStatus.FAILED
     assert job.retries > 0, "The job should have retried due to a technical error."
@@ -136,8 +145,10 @@ def test_internet_down_retry(mock_completion, mock_cache_get):
 
 
 @patch("core.ai.llm_agent.llm_cache.get", return_value=None)
+@patch("core.llm.litellm_provider.check_internet_connection_async", return_value=True)
+@patch("core.execution.worker.time.sleep")
 @patch("litellm.completion")
-def test_gemini_rate_limit_429(mock_completion, mock_cache_get):
+def test_gemini_rate_limit_429(mock_completion, mock_sleep, mock_net, mock_cache_get):
     """Simulates Gemini HTTP 429 Rate Limit error and validates resiliency/backoff."""
     print("\n--- Test 1.3: Gemini Rate Limit (Error 429) ---")
 
@@ -159,12 +170,16 @@ def test_gemini_rate_limit_429(mock_completion, mock_cache_get):
     job.max_retries = 2
     task_queue.put(job)
 
-    def stop_worker():
-        time.sleep(0.5)
-        stop_event.set()
+    worker_thread = threading.Thread(
+        target=command_worker,
+        args=(task_queue, dispatcher, notifier, stop_event, worker_busy),
+        daemon=True,
+    )
+    worker_thread.start()
 
-    threading.Thread(target=stop_worker, daemon=True).start()
-    command_worker(task_queue, dispatcher, notifier, stop_event, worker_busy)
+    task_queue.join()
+    stop_event.set()
+    worker_thread.join(timeout=2.0)
 
     assert job.status == JobStatus.FAILED
     assert job.retries == 2, "The job should have exhausted the 2 retries limit."
@@ -403,7 +418,11 @@ commands:
     with open(yaml_file_path, "w", encoding="utf-8") as f:
         f.write(plugin_yaml)
 
-    pm = PluginManager(plugins_dir=temp_env["plugins_dir"])
+    with patch(
+        "core.plugins.plugin_manager.config",
+        {"plugins": {"enabled_presets": ["test_dev"]}},
+    ):
+        pm = PluginManager(plugins_dir=temp_env["plugins_dir"])
 
     intents = pm.get_intents()
     assert len(intents) == 1

@@ -1,4 +1,6 @@
+import logging
 import os
+from logging.handlers import RotatingFileHandler
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -8,6 +10,15 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.runtime.state import JarvisState, state_manager
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Isolates the Jarvis logger for the test session to prevent file locks on logs/jarvis.log."""
+    jarvis_logger = logging.getLogger("Jarvis")
+    for h in jarvis_logger.handlers[:]:
+        if isinstance(h, RotatingFileHandler):
+            jarvis_logger.removeHandler(h)
+            h.close()
 
 
 @pytest.fixture(autouse=True)
