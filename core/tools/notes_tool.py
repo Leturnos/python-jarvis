@@ -83,7 +83,7 @@ class NotesTool(BaseTool):
 
     @property
     def markdown_dir(self) -> Path | None:
-        if self._markdown_dir_override:
+        if self._markdown_dir_override is not None:
             return self._markdown_dir_override
         configured = (
             config.get("tools", {})

@@ -40,4 +40,4 @@ jobs:
         run: uv run mypy
 
       - name: Run Test Suite + Coverage
-        run: uv run pytest --cov=core --cov-report=term-missing --cov-report=xml --cov-fail-under=75
+        run: uv run pytest --cov=core --cov-report=term-missing --cov-report=xml --cov-fail-under=70

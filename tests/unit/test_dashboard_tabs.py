@@ -472,6 +472,7 @@ def test_settings_tab_autostart_sync_methods():
     toggled_records = []
     tab.autostart_toggled.connect(lambda v: toggled_records.append(v))
 
+    tab.autostart_switch.setChecked(False)
     with patch("core.ui.tabs.settings_tab.manage_autostart") as mock_manage:
         tab.autostart_switch.setChecked(True)
         assert mock_manage.called

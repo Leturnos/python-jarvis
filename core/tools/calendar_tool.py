@@ -74,7 +74,7 @@ class CalendarTool(BaseTool):
 
     @property
     def ics_url(self) -> str:
-        if self._ics_url_override:
+        if self._ics_url_override is not None:
             return self._ics_url_override
         configured = config.get("tools", {}).get("calendar", {}).get("ics_url", "")
         return str(configured).strip()

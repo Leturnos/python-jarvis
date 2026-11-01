@@ -373,3 +373,216 @@ END:VCALENDAR
             )
             is True
         )
+
+    def test_calendar_execute_with_file(self, tmp_path: Path) -> None:
+        from core.security.path_guard import PathGuard
+
+        ics_file = tmp_path / "test.ics"
+        now = datetime.now().astimezone()
+        today_str = now.strftime("%Y%m%d")
+        ics_file.write_text(
+            f"BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:Daily Scrum\nDTSTART:{today_str}T090000Z\nDTEND:{today_str}T093000Z\nEND:VEVENT\nEND:VCALENDAR\n",
+            encoding="utf-8",
+        )
+
+        guard = PathGuard(allowed_workspaces=[tmp_path])
+        tool = CalendarTool(path_guard=guard)
+        res = tool.execute(action="today", ics_url=str(ics_file))
+        assert res["success"] is True
+        assert res["count"] == 1
+        assert res["events"][0]["title"] == "Daily Scrum"
+
+    def test_calendar_execute_missing_source(self) -> None:
+        tool = CalendarTool(ics_url="")
+        res = tool.execute(action="today", ics_url="")
+        assert res["success"] is False
+        assert "nenhum link ou arquivo" in res["error"].lower()
+
+    def test_calendar_execute_unsafe_url(self) -> None:
+        tool = CalendarTool()
+        res = tool.execute(action="today", ics_url="http://169.254.169.254/meta")
+        assert res["success"] is False
+        assert "insegura" in res["error"].lower()
+
+
+# ==============================================================================
+# 7. ADDITIONAL HIGH-COVERAGE TESTS
+# ==============================================================================
+class TestToolsAdditionalCoverage:
+    @patch("subprocess.run")
+    def test_github_issue_list(self, mock_run: MagicMock) -> None:
+        fake_issues = [
+            {
+                "number": 10,
+                "title": "Bug in audio",
+                "author": {"login": "tester"},
+                "labels": [{"name": "bug"}],
+                "url": "https://github.com/Leturnos/python-jarvis/issues/10",
+            }
+        ]
+        mock_proc = MagicMock()
+        mock_proc.stdout = json.dumps(fake_issues)
+        mock_run.return_value = mock_proc
+
+        tool = GitHubTool()
+        res = tool.execute(action="issue_list", limit=3)
+        assert res["success"] is True
+        assert res["count"] == 1
+        assert res["issues"][0]["number"] == 10
+
+    @patch("subprocess.run")
+    def test_github_ci_status(self, mock_run: MagicMock) -> None:
+        fake_runs = [
+            {
+                "databaseId": 123,
+                "displayTitle": "CI Workflow",
+                "status": "completed",
+                "conclusion": "success",
+                "workflowName": "CI",
+                "headBranch": "main",
+            }
+        ]
+        mock_proc = MagicMock()
+        mock_proc.stdout = json.dumps(fake_runs)
+        mock_run.return_value = mock_proc
+
+        tool = GitHubTool()
+        res = tool.execute(action="ci_status", limit=2)
+        assert res["success"] is True
+        assert res["count"] == 1
+        assert res["runs"][0]["conclusion"] == "success"
+
+    @patch("subprocess.run")
+    def test_github_pr_status(self, mock_run: MagicMock) -> None:
+        fake_status = {
+            "currentBranch": {"title": "feat: pr status"},
+            "createdBy": [],
+            "needsReview": [],
+        }
+        mock_proc = MagicMock()
+        mock_proc.stdout = json.dumps(fake_status)
+        mock_run.return_value = mock_proc
+
+        tool = GitHubTool()
+        res = tool.execute(action="pr_status")
+        assert res["success"] is True
+        assert "currentBranch" in res["status"]
+
+    @patch("subprocess.run", side_effect=FileNotFoundError("gh not found"))
+    def test_github_cli_not_found(self, mock_run: MagicMock) -> None:
+        tool = GitHubTool()
+        res = tool.execute(action="pr_list")
+        assert res["success"] is False
+        assert "não foi encontrado" in res["error"]
+
+    def test_github_unknown_action(self) -> None:
+        tool = GitHubTool()
+        res = tool.execute(action="unknown_action_xyz")
+        assert res["success"] is False
+        assert "desconhecida" in res["error"]
+
+    @patch("psutil.Process")
+    @patch("psutil.net_connections")
+    def test_dev_port_list_all_ports(
+        self, mock_net: MagicMock, mock_proc_cls: MagicMock
+    ) -> None:
+        conn1 = MagicMock()
+        conn1.status = getattr(psutil, "CONN_LISTEN", "LISTEN")
+        conn1.laddr.port = 3000
+        conn1.laddr.ip = "127.0.0.1"
+        conn1.pid = 1111
+
+        conn2 = MagicMock()
+        conn2.status = getattr(psutil, "CONN_LISTEN", "LISTEN")
+        conn2.laddr.port = 5000
+        conn2.laddr.ip = "0.0.0.0"
+        conn2.pid = 2222
+
+        mock_net.return_value = [conn1, conn2]
+
+        mock_proc = MagicMock()
+        mock_proc.name.return_value = "python.exe"
+        mock_proc_cls.return_value = mock_proc
+
+        tool = DevPortTool()
+        res = tool.execute(action="inspect")
+        assert res["success"] is True
+        assert res["count"] == 2
+        assert len(res["ports"]) == 2
+
+    def test_dev_port_is_destructive_action(self) -> None:
+        assert DevPortTool.is_destructive_action("kill") is True
+        assert DevPortTool.is_destructive_action("KILL") is True
+        assert DevPortTool.is_destructive_action({"action": "kill"}) is True
+        assert DevPortTool.is_destructive_action("inspect") is False
+        assert DevPortTool.is_destructive_action({"action": "inspect"}) is False
+        assert DevPortTool.is_destructive_action(None) is False
+
+    def test_dev_port_unknown_action(self) -> None:
+        tool = DevPortTool()
+        res = tool.execute(action="explode_server")
+        assert res["success"] is False
+        assert "desconhecida" in res["error"]
+
+    def test_notes_reminders_crud(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test_notes.db"
+        db = NotesDatabase(db_path=db_path)
+        tool = NotesTool(db=db)
+
+        r1 = tool.execute(action="add_reminder", content="Comprar café")
+        assert r1["success"] is True
+        assert "reminder_id" in r1
+
+        listing = tool.execute(action="list_reminders")
+        assert listing["success"] is True
+        assert listing["count"] == 1
+        assert listing["reminders"][0]["content"] == "Comprar café"
+
+        comp = tool.execute(action="complete_reminder", reminder_id=r1["reminder_id"])
+        assert comp["success"] is True
+
+        listing2 = tool.execute(action="list_reminders")
+        assert listing2["count"] == 0
+
+    def test_notes_markdown_file_append(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test_notes.db"
+        db = NotesDatabase(db_path=db_path)
+        tool = NotesTool(db=db, markdown_dir=tmp_path)
+
+        res = tool.execute(
+            action="add_note", content="Planejar Sprint 3", tag="planning"
+        )
+        assert res["success"] is True
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        md_file = tmp_path / f"Jarvis_Notes_{today_str}.md"
+        assert md_file.exists()
+        content = md_file.read_text(encoding="utf-8")
+        assert "Planejar Sprint 3" in content
+        assert "#planning" in content
+
+    def test_timer_invalid_duration(self) -> None:
+        tool = TimerTool(notifier=MagicMock())
+        res = tool.execute(action="start", duration_seconds=-5)
+        assert res["success"] is False
+        assert "maior que zero" in res["error"].lower()
+
+    def test_timer_unknown_action(self) -> None:
+        tool = TimerTool(notifier=MagicMock())
+        res = tool.execute(action="fly_to_moon")
+        assert res["success"] is False
+        assert "desconhecida" in res["error"].lower()
+
+    def test_youtube_missing_query(self) -> None:
+        tool = YouTubeTool()
+        res = tool.execute(action="play", query="")
+        assert res["success"] is False
+        assert "termo de busca" in res["error"].lower()
+
+    @patch("pyperclip.paste", return_value="")
+    def test_clipboard_empty_content(self, mock_paste: MagicMock) -> None:
+        tool = ClipboardTool()
+        res = tool.execute(action="read")
+        assert res["success"] is True
+        assert res["content"] == ""
+        assert "vazia" in res["message"].lower()
