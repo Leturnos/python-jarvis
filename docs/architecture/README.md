@@ -22,4 +22,4 @@ Este espaço reúne as especificações técnicas vivas, diagramas conceituais e
 1. **Documentação Viva:** Qualquer refatoração estrutural que altere fluxos, classes ou contratos entre módulos deve ser refletida nestes documentos.
 2. **Uso de Diagramas:** Prefira diagramas **Mermaid** (`flowchart`, `stateDiagram-v2`, `classDiagram`, `sequenceDiagram`) para representar fluxos complexos.
 3. **Padrão de Idioma:** Textos conceituais e explicações em Português Brasileiro; identificadores de código, nomes de métodos e termos técnicos mantidos em Inglês.
-4. **Planos vs. Arquitetura:** Checklists de tarefas, planos com caixas de seleção (`- [ ]`) e execuções passo a passo devem residir em `docs/superpowers/plans/`, mantendo esta pasta estritamente para a arquitetura de produção do sistema.
+4. **Separação de Escopo:** Esta pasta destina-se estritamente à arquitetura viva do sistema, enquanto o histórico de design e especificações técnicas formais reside em `docs/superpowers/specs/`.

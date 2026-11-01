@@ -158,11 +158,16 @@ O Jarvis foi desenhado com arquitetura modular desacoplada em domínios de respo
 - 🧠 **[Visão Consolidada & Grafo de Funcionamento](./docs/architecture/jarvis_architecture_and_flow.md)**: Diagramas completos do ciclo de vida, máquina de estados finitos (`JarvisState`) e fluxo de ponta a ponta.
 - 📚 **[Central de Documentação (docs/README.md)](./docs/README.md)**: Índice completo navegável com deep-dives de subsistemas (Roteamento de Comandos, UI PySide6, Cache SQLite) e diretrizes técnicas.
 
-## 🗺️ Para onde vamos?
+## 🗺️ Próximos Passos e Evolução
 
-O Jarvis é um projeto vivo e construído para escalar. 
+O Jarvis é um projeto vivo e em constante aprimoramento. 
 
-Quer saber o que vem por aí ou o que já fizemos? Dá uma olhada no **[ROADMAP.md](./ROADMAP.md)** (Plano de voo) e no **[TODO.md](./TODO.md)** (Nossas tarefas técnicas).
+No momento, o foco do desenvolvimento está em:
+- **Polimento e Estabilidade:** Otimizações contínuas de latência, tolerância a ruídos no microfone e robustez da interface gráfica.
+- **Novas Ferramentas e Integrações:** Expansão contínua do catálogo de ferramentas (`core/tools/`) e automações do Windows.
+- **Distribuição e UX:** Refinamento do empacotamento portátil e simplificação de setup.
+
+Acompanhe as novidades e releases em [Releases](https://github.com/Leturnos/python-jarvis/releases).
 
 ---
 *Desenvolvido para facilitar a rotina de quem busca produtividade máxima.*

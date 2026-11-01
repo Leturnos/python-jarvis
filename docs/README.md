@@ -20,8 +20,7 @@ docs/
 ├── skills/                               <- Skills e ferramentas de IA do repositório
 │   └── project-analysis-skill/           <- Metodologia de auditoria arquitetural
 └── superpowers/                          <- Histórico de engenharia assistida por IA
-    ├── specs/                            <- Especificações de design técnico (RFCs/Designs)
-    └── plans/                            <- Planos de implementação executados
+    └── specs/                            <- Especificações de design técnico (RFCs/Designs)
 ```
 
 ---
@@ -76,7 +75,4 @@ Regras técnicas e convenções que orientam o desenvolvimento assistido por IA:
 
 ## 📜 5. Histórico e Evolução do Projeto
 
-- 🗺️ **[ROADMAP.md](../ROADMAP.md)**: Direcionamento estratégico de longo prazo do Jarvis (arquitetura, distribuição `.exe`, streaming STT, etc.).
-- ✅ **[TODO.md](../TODO.md)**: Checklist detalhado do progresso das fases de desenvolvimento.
-- 📁 **[Superpowers Specs](./superpowers/specs/)**: Especificações técnicas formais de cada funcionalidade desenvolvida.
-- 📁 **[Superpowers Plans](./superpowers/plans/)**: Planos atômicos de implementação executados ao longo do ciclo de vida do projeto.
+- 📁 **[Superpowers Specs](./superpowers/specs/)**: Especificações técnicas formais de cada funcionalidade desenvolvida (ex: Nova Suíte de Integrações, Redesign de UI/UX frameless, Silero VAD & TTS streaming, Presets de plugins a quente, permissões de Lockscreen no Windows, empacotamento `.exe` e Tool Calling).
