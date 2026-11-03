@@ -32,7 +32,7 @@ Documentação técnica viva sobre o funcionamento interno do Jarvis:
 - 🧠 **[Visão Consolidada e Grafo de Funcionamento](./architecture/jarvis_architecture_and_flow.md)**  
   *Documento mestre de arquitetura.* Contém o grafo ponta a ponta (do áudio ao OS), a máquina de estados global (`JarvisState`), o diagrama de classes das camadas e a tabela detalhada de todos os módulos.
 - 🧭 **[Roteamento de Comandos e Resolução de Intenções](./architecture/command-routing.md)**  
-  Explica o pipeline escalonado de 3 estágios (`CommandResolver`), a regra de normalização simétrica, match difuso com Levenshtein, comandos especiais de sistema (`replay`, `macro`) e fallback de IA.
+  Explica o pipeline escalonado de 3 estágios (`CommandResolver`), a regra de normalização simétrica, expansão de homófonos fonéticos e portas de rede, match difuso com Levenshtein, comandos especiais de sistema (`replay`, `macro`) e fallback de IA.
 - 💻 **[Arquitetura de Interface Gráfica (UI)](./architecture/ui-architecture.md)**  
   Detalhes sobre a implementação em PySide6 e PyQt-Fluent-Widgets, desacoplamento por Qt Signals e controle de ciclo de vida em background.
 - ⚡ **[Cache de Respostas LLM](./architecture/llm-cache.md)**  

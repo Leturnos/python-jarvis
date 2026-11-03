@@ -25,7 +25,7 @@ flowchart TD
         SUSPEND_STATE["⏸️ Estado SUSPENDED<br/>(Descarrega modelos)"]
         LISTEN_STATE["👂 Estado LISTENING<br/>(Captura buffer de voz)"]
         SILENCE_CHECK{"🤫 Detecção de Silêncio<br/>RMS < silence_rms"}
-        STT["🗣️ Speech-to-Text<br/><code>faster-whisper (STTEngine)</code>"]
+        STT["🗣️ Speech-to-Text<br/><code>faster-whisper (STTEngine)</code><br/>+ <code>initial_prompt</code>"]
     end
 
     %% Fila de Processamento
@@ -234,9 +234,9 @@ classDiagram
 | **Ponto de Entrada** | [`main.py`](../../main.py) | Bootstrap, migração segura de credenciais para Keyring, inicialização de threads e interface PySide6. |
 | **Orquestrador de Áudio** | [`core/controller.py`](../../core/controller.py) | Loop de áudio em tempo real, detecção de wake words e gestão de estados de escuta. |
 | **Gerenciador de Ativação** | [`core/activation.py`](../../core/activation.py) | Avaliação híbrida de ativação (PTT, wake word, supressão em jogos fullscreen via Win32 `WS_CAPTION`). |
-| **Speech-to-Text** | [`core/audio/stt_engine.py`](../../core/audio/stt_engine.py) | Transcrição de áudio ultrarrápida usando `faster-whisper` com carregamento sob demanda (*lazy-load*). |
-| **Resolução de Comandos** | [`core/ai/command_resolver.py`](../../core/ai/command_resolver.py) | Match exato e fuzzy local com normalização simétrica antes de recorrer a LLMs. |
-| **Agente Inteligente** | [`core/ai/llm_agent.py`](../../core/ai/llm_agent.py) | Conexão com LLMs via `LiteLLMProvider` com cache SQLite e fallback de conectividade. |
+| **Speech-to-Text** | [`core/audio/stt_engine.py`](../../core/audio/stt_engine.py) | Transcrição de áudio ultrarrápida usando `faster-whisper` com lazy-load e priming contextual de `initial_prompt`. |
+| **Resolução de Comandos** | [`core/ai/command_resolver.py`](../../core/ai/command_resolver.py) | Match exato e fuzzy local com normalização simétrica, homófonos fonéticos e portas de rede faladas. |
+| **Agente Inteligente** | [`core/ai/llm_agent.py`](../../core/ai/llm_agent.py) | Conexão com LLMs via `LiteLLMProvider` com cache SQLite, tolerância fonética e guardrails anti-alucinação. |
 | **Guarda de Segurança** | [`core/ai/prompt_guard.py`](../../core/ai/prompt_guard.py) | Validação contra injeção de prompt e sanitização de planos de execução. |
 | **Fila e Worker** | [`core/execution/worker.py`](../../core/execution/worker.py) | Consumo assíncrono de jobs com separação estrita de `BusinessError` vs `TechnicalError` e retry com backoff exponencial. |
 | **Despachante & Segurança** | [`core/execution/dispatcher.py`](../../core/execution/dispatcher.py) | Roteamento de planos, verificação de níveis de risco (`RiskLevel`) e confirmação de Dry-Run. |
