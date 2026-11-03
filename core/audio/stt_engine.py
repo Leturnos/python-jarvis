@@ -10,6 +10,26 @@ from core.infra.logger_config import logger
 from core.shared.errors import TechnicalError
 from core.shared.utils import post_process_stt_text
 
+DEFAULT_SPEECH_KEYWORDS: list[str] = [
+    "Jarvis",
+    "timer",
+    "pomodoro",
+    "YouTube",
+    "GitHub",
+    "pull request",
+    "PR",
+    "clipboard",
+    "Obsidian",
+    "Spotify",
+    "porta",
+    "localhost",
+    "Docker",
+    "Python",
+    "VS Code",
+    "commit",
+    "status",
+]
+
 
 class STTEngine:
     def __init__(
@@ -97,20 +117,29 @@ class STTEngine:
                 self._unload_timer.daemon = True
                 self._unload_timer.start()
 
+    def build_contextual_prompt(self, extra_keywords: list[str] | None = None) -> str:
+        """Builds an initial prompt combining default ecosystem keywords and optional contextual terms."""
+        keywords: list[str] = []
+        if extra_keywords:
+            keywords.extend(extra_keywords)
+        keywords.extend(DEFAULT_SPEECH_KEYWORDS)
+        return self.build_initial_prompt(keywords)
+
     def build_initial_prompt(
         self, keywords: list[str], max_chars: int | None = None
     ) -> str:
         """Builds a capped initial prompt string for Faster-Whisper."""
         if max_chars is None:
-            max_chars = int(self.stt_conf.get("max_prompt_chars", 150))
+            max_chars = int(self.stt_conf.get("max_prompt_chars", 250))
         unique_keywords = list(dict.fromkeys(keywords))
         prompt_items = []
         current_length = 0
         for kw in unique_keywords:
-            if current_length + len(kw) + 2 > max_chars:
+            item_len = len(kw) if not prompt_items else len(kw) + 2
+            if current_length + item_len > max_chars:
                 break
             prompt_items.append(kw)
-            current_length += len(kw) + 2
+            current_length += item_len
         return ", ".join(prompt_items)
 
     def transcribe(
@@ -141,8 +170,13 @@ class STTEngine:
                 kwargs["vad_parameters"] = {
                     "min_silence_duration_ms": self.vad_min_silence_duration_ms
                 }
-            if initial_prompt:
-                kwargs["initial_prompt"] = initial_prompt
+            prompt_to_use = (
+                initial_prompt
+                if initial_prompt is not None
+                else self.build_contextual_prompt()
+            )
+            if prompt_to_use:
+                kwargs["initial_prompt"] = prompt_to_use
 
             segments, info = self.model.transcribe(audio_np, **kwargs)
 

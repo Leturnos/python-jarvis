@@ -306,6 +306,8 @@ class LLMAgent:
         - SEMPRE retorne um "explanation" humano para ações e tool_calls.
         - Se a ação corresponder a um comando de plugin, use type "command" ou o
           tipo mais adequado dentro dos steps.
+        - Tolerância a Fala e STT: O input provém de um transcritor de voz automático (STT) e pode conter grafias fonéticas aportuguesadas, termos técnicos em inglês com sotaque ou palavras truncadas (ex: "taimer" = timer, "clipe borde" = clipboard, "pê-érre" = pull request, "porta três mil" = porta 3000, "espotifai" = Spotify). Deduza a intenção técnica a partir do contexto sem apontar o erro fonético ao usuário.
+        - Anti-Alucinação e Discernimento: Se a entrada for ininteligível, com ruído indistinguível ou sem sentido claro para uma ação técnica, NÃO adivinhe nem execute uma ação técnica às cegas. Retorne type "chat" pedindo esclarecimento educadamente em 1 frase.
         - Retorne APENAS o JSON, sem markdown.
         """
 

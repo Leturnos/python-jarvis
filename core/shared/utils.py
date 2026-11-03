@@ -84,6 +84,30 @@ HOMOPHONE_REPLACEMENTS: list[tuple[str, str]] = [
     (r"\bespotifai\b", "Spotify"),
     (r"\bwarpe\b", "Warp"),
     (r"\bjarvis ir dormir\b", "Jarvis, ir dormir"),
+    # Productivity & tool homophones
+    (r"\b(?:taimer|taymer)\b", "timer"),
+    (r"\b(?:pomod[oó]ro|pomodori)\b", "pomodoro"),
+    (r"\b(?:clipe\s*borde|clipbord|clip\s*board)\b", "clipboard"),
+    (r"\b(?:obsidiam|obsidien)\b", "Obsidian"),
+    (r"\b(?:iuque|youtubi|utube)\b", "YouTube"),
+    # Dev & version control homophones
+    (r"\bguite\b", "git"),
+    (r"\b(?:guith[aã]bi|guihabi|guithub)\b", "GitHub"),
+    (r"\b(?:p[eê][-\s]?[eé]rre|pull\s+requ[eé]ste|pu\s+ricu[eé]ste)\b", "pull request"),
+    (r"\bd[oó]quer\b", "docker"),
+    (r"\b(?:n[oó]de\s*dj[eé]ss|node\s+djes)\b", "Node.js"),
+    (r"\b(?:local\s*roste|localhoste)\b", "localhost"),
+    # Spoken network port normalization (specific patterns must precede general thousands)
+    (
+        r"\bporta\s+(?:oito|8)\s*(?:mil\s+e\s+oitenta|zero\s+oito\s+zero)\b",
+        "porta 8080",
+    ),
+    (r"\bporta\s+(?:tr[eê]s|3)\s*mil\b", "porta 3000"),
+    (r"\bporta\s+(?:quatro|4)\s*mil\b", "porta 4000"),
+    (r"\bporta\s+(?:cinco|5)\s*mil\b", "porta 5000"),
+    (r"\bporta\s+(?:oito|8)\s*mil\b", "porta 8000"),
+    (r"\bporta\s+(?:nove|9)\s*mil\b", "porta 9000"),
+    (r"\bporta\s+(\d+)\.000\b", r"porta \g<1>000"),
 ]
 
 
