@@ -602,3 +602,173 @@ def update_yaml_notes_dir(markdown_dir: str) -> None:
 def update_yaml_calendar_url(ics_url: str) -> None:
     """Updates tools.calendar.ics_url in config.yaml."""
     update_yaml_str_setting("tools", "ics_url", ics_url, subsection="calendar")
+
+
+def update_yaml_float_setting(
+    section: str,
+    key: str,
+    value: float,
+    subsection: str | None = None,
+    precision: int = 2,
+) -> None:
+    """Updates a float key inside a section (and optional subsection) in config.yaml preserving comments."""
+    float_val = float(value)
+    formatted_val = f"{float_val:.{precision}f}"
+    yaml_path = get_user_config_path(get_app_root())
+    if not yaml_path.exists():
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_section = False
+    in_subsection = subsection is None
+    sub_indent = None
+    updated = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        indent_len = len(line) - len(line.lstrip())
+
+        if stripped.startswith(f"{section}:") and indent_len == 0:
+            in_section = True
+            in_subsection = subsection is None
+            sub_indent = None
+        elif (
+            in_section and indent_len == 0 and stripped and not stripped.startswith("#")
+        ):
+            in_section = False
+            in_subsection = False
+        elif in_section:
+            if subsection:
+                if stripped.startswith(f"{subsection}:") and indent_len > 0:
+                    in_subsection = True
+                    sub_indent = indent_len
+                elif (
+                    in_subsection
+                    and sub_indent is not None
+                    and indent_len <= sub_indent
+                    and stripped
+                    and not stripped.startswith("#")
+                ):
+                    in_subsection = False
+
+            if in_subsection and stripped.startswith(f"{key}:"):
+                indent = line[:indent_len]
+                comment = ""
+                if "#" in line:
+                    hash_pos = line.index("#")
+                    comment = "  " + line[hash_pos:].rstrip()
+                lines[i] = f"{indent}{key}: {formatted_val}{comment}\n"
+                updated = True
+                break
+
+    if updated:
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    else:
+        # Fallback insertion
+        sec_idx = None
+        subsec_idx = None
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            indent_len = len(line) - len(line.lstrip())
+            if stripped.startswith(f"{section}:") and indent_len == 0:
+                sec_idx = i
+                break
+
+        if sec_idx is not None:
+            if subsection:
+                for j in range(sec_idx + 1, len(lines)):
+                    curr_line = lines[j]
+                    stripped_line = curr_line.strip()
+                    line_ind = len(curr_line) - len(curr_line.lstrip())
+                    if (
+                        line_ind == 0
+                        and stripped_line
+                        and not stripped_line.startswith("#")
+                    ):
+                        break
+                    if stripped_line.startswith(f"{subsection}:") and line_ind > 0:
+                        subsec_idx = j
+                        break
+                if subsec_idx is not None:
+                    lines.insert(subsec_idx + 1, f"    {key}: {formatted_val}\n")
+                else:
+                    lines.insert(
+                        sec_idx + 1, f"  {subsection}:\n    {key}: {formatted_val}\n"
+                    )
+            else:
+                lines.insert(sec_idx + 1, f"  {key}: {formatted_val}\n")
+        else:
+            lines.append(f"\n{section}:\n")
+            if subsection:
+                lines.append(f"  {subsection}:\n    {key}: {formatted_val}\n")
+            else:
+                lines.append(f"  {key}: {formatted_val}\n")
+
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+    # Update in-memory config dict
+    try:
+        target = config.setdefault(section, {})
+        if subsection:
+            target = target.setdefault(subsection, {})
+        target[key] = float_val
+    except Exception as e:
+        logger.warning(f"Failed to update in-memory config for {section}.{key}: {e}")
+
+
+def update_yaml_device_index(device_index: int | None) -> None:
+    """Updates the device_index setting under voice_activation in config.yaml."""
+    val_str = "null" if device_index is None else str(int(device_index))
+    yaml_path = get_user_config_path(get_app_root())
+    if not yaml_path.exists():
+        return
+    with open(yaml_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_section = False
+    updated = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        indent_len = len(line) - len(line.lstrip())
+
+        if stripped.startswith("voice_activation:") and indent_len == 0:
+            in_section = True
+        elif (
+            in_section and indent_len == 0 and stripped and not stripped.startswith("#")
+        ):
+            in_section = False
+        elif in_section:
+            if stripped.startswith("device_index:"):
+                indent = line[:indent_len]
+                comment = ""
+                if "#" in line:
+                    hash_pos = line.index("#")
+                    comment = "  " + line[hash_pos:].rstrip()
+                lines[i] = f"{indent}device_index: {val_str}{comment}\n"
+                updated = True
+                break
+
+    if updated:
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    else:
+        # Fallback insertion under voice_activation
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            indent_len = len(line) - len(line.lstrip())
+            if stripped.startswith("voice_activation:") and indent_len == 0:
+                lines.insert(i + 1, f"  device_index: {val_str}\n")
+                with open(yaml_path, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
+                break
+
+    try:
+        config.setdefault("voice_activation", {})["device_index"] = device_index
+    except Exception as e:
+        logger.warning(
+            f"Failed to update in-memory config for voice_activation.device_index: {e}"
+        )

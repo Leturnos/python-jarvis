@@ -36,9 +36,7 @@ def _call_dispatcher(
 
 
 def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
-    """
-    Handles LLM-based dynamic commands with one-shot STT and CommandResolver.
-    """
+    """Handles LLM-based dynamic commands with one-shot STT and CommandResolver."""
     # 1. Performance: One-shot STT (use cached text if retrying)
     if not job.payload_text:
         audio_bytes = job.payload
@@ -51,7 +49,11 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
             return True  # Final state for silence
 
         try:
-            job.payload_text = stt_engine.transcribe(audio_bytes)
+            # Transcribe raw audio to payload_text with dynamic ecosystem context prompt
+            initial_prompt = stt_engine.build_contextual_prompt()
+            job.payload_text = stt_engine.transcribe(
+                audio_bytes, initial_prompt=initial_prompt
+            )
         except TechnicalError:
             raise  # Let worker handle retry for STT failure
 

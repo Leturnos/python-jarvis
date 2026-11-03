@@ -10,6 +10,77 @@ from openwakeword.model import Model
 
 from core.infra.logger_config import logger
 
+IGNORED_DEVICE_PATTERNS = (
+    "mapeador de som",
+    "sound mapper",
+    "driver de captura",
+    "primary sound capture",
+    "mixagem est",
+    "stereo mix",
+    "wave out",
+    "what u hear",
+    "steam streaming",
+    "line in",
+    "line input",
+    "linha de entrada",
+    "entrada (realtek",
+)
+
+
+def _clean_device_name(name: str) -> str:
+    """Repairs encoding issues (e.g. CP1252 bytes interpreted as UTF-8) and strips whitespace."""
+    if "Ã" in name:
+        try:
+            name = name.encode("cp1252").decode("utf-8")
+        except Exception:
+            pass
+    return name.strip()
+
+
+def get_input_devices() -> list[tuple[int, str]]:
+    """Discovers available audio input devices (microphones) on the system.
+
+    Filters out virtual loopbacks (Stereo Mix), OS sound mappers, and duplicates
+    across Host APIs (MME, DirectSound, WASAPI) to present a clean microphone list.
+
+    Returns:
+        list[tuple[int, str]]: List of (device_index, device_name) tuples.
+    """
+    devices: list[tuple[int, str]] = []
+    seen_names: set[str] = set()
+    pa = None
+    try:
+        pa = pyaudio.PyAudio()
+        device_count = pa.get_device_count()
+        for i in range(device_count):
+            try:
+                info = pa.get_device_info_by_index(i)
+                if int(info.get("maxInputChannels", 0)) > 0:
+                    raw_name = str(info.get("name", ""))
+                    name = _clean_device_name(raw_name)
+                    if not name or name in ("Input ()", "Input"):
+                        continue
+
+                    name_lower = name.lower()
+                    if any(pat in name_lower for pat in IGNORED_DEVICE_PATTERNS):
+                        continue
+
+                    # Deduplicate physical devices across host APIs (keeps first/MME index)
+                    if name_lower not in seen_names:
+                        seen_names.add(name_lower)
+                        devices.append((i, name))
+            except Exception as e:
+                logger.debug(f"Error querying audio device {i}: {e}")
+    except Exception as e:
+        logger.warning(f"Error enumerating PyAudio input devices: {e}")
+    finally:
+        if pa is not None:
+            try:
+                pa.terminate()
+            except Exception:
+                pass
+    return devices
+
 
 def get_audio_stream(
     config: dict[str, Any] | None = None,
@@ -35,7 +106,18 @@ def get_audio_stream(
     if device_index is not None:
         stream_kwargs["input_device_index"] = int(device_index)
 
-    stream = pa.open(**stream_kwargs)
+    try:
+        stream = pa.open(**stream_kwargs)
+    except Exception as e:
+        if device_index is not None:
+            logger.warning(
+                f"Failed to open audio stream on device_index={device_index} ({e}). "
+                "Falling back to system default input device."
+            )
+            stream_kwargs.pop("input_device_index", None)
+            stream = pa.open(**stream_kwargs)
+        else:
+            raise
     return pa, stream
 
 

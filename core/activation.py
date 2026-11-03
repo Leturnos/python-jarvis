@@ -225,7 +225,12 @@ class ActivationManager:
             "enabled", True
         ):
             # Look up threshold in correct config path
-            threshold = self.full_config.get("jarvis", {}).get("threshold", 0.5)
+            threshold = float(
+                self.ww_config.get(
+                    "threshold",
+                    self.full_config.get("jarvis", {}).get("threshold", 0.5),
+                )
+            )
             if context.wakeword_score > threshold:
                 if context.wakeword_detected == self.ww_config.get(
                     "keyword", "hey_jarvis"

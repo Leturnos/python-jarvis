@@ -19,6 +19,7 @@ class JarvisState(Enum):
         MUTED: The system is manually muted by the user.
         SLEEPING: Deep sleep mode (unloaded models).
         SUSPENDED: Auto-suspended (e.g., fullscreen context).
+        CALIBRATING: Interactive microphone and wake word calibration.
         ERROR: A temporary failure state.
     """
 
@@ -31,6 +32,7 @@ class JarvisState(Enum):
     MUTED = auto()  # Muted
     SLEEPING = auto()  # Sleeping (Unloaded models)
     SUSPENDED = auto()  # Auto-suspended
+    CALIBRATING = auto()  # Interactive microphone and wake word calibration
     ERROR = auto()  # Error state
 
 
@@ -65,6 +67,7 @@ class StateManager:
                 JarvisState.SLEEPING,
                 JarvisState.SUSPENDED,
                 JarvisState.EXECUTING,
+                JarvisState.CALIBRATING,
             ],
             JarvisState.LISTENING: [
                 JarvisState.THINKING,
@@ -103,12 +106,23 @@ class StateManager:
                 JarvisState.SLEEPING,
                 JarvisState.SUSPENDED,
             ],
-            JarvisState.MUTED: [JarvisState.IDLE, JarvisState.SLEEPING],
+            JarvisState.MUTED: [
+                JarvisState.IDLE,
+                JarvisState.SLEEPING,
+                JarvisState.CALIBRATING,
+            ],
             JarvisState.SLEEPING: [JarvisState.IDLE, JarvisState.LISTENING],
             JarvisState.SUSPENDED: [
                 JarvisState.IDLE,
                 JarvisState.MUTED,
                 JarvisState.SLEEPING,
+                JarvisState.CALIBRATING,
+            ],
+            JarvisState.CALIBRATING: [
+                JarvisState.IDLE,
+                JarvisState.MUTED,
+                JarvisState.SLEEPING,
+                JarvisState.SUSPENDED,
             ],
             JarvisState.ERROR: [
                 JarvisState.IDLE,

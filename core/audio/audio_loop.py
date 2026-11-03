@@ -36,7 +36,12 @@ class AudioLoopManager:
         self.frame_size = config.get("voice_activation", {}).get(
             "frames_per_buffer", 1280
         )
-        self.volume_multiplier = config.get("jarvis", {}).get("volume_multiplier", 1.0)
+        self.volume_multiplier = float(
+            config.get("voice_activation", {}).get(
+                "volume_multiplier",
+                config.get("jarvis", {}).get("volume_multiplier", 1.0),
+            )
+        )
         self.max_zero_rms_before_reset = (
             config.get("voice_activation", {})
             .get("thresholds", {})
@@ -96,6 +101,13 @@ class AudioLoopManager:
                     logger.debug(f"Resetting model during audio self-healing: {e}")
             return True
         return False
+
+    def set_volume_multiplier(self, gain: float) -> None:
+        """Dynamically updates the microphone volume multiplier."""
+        self.volume_multiplier = max(0.1, float(gain))
+        logger.info(
+            f"Microphone volume multiplier updated to {self.volume_multiplier:.2f}x"
+        )
 
     def cleanup(self) -> None:
         """Safely stops and releases PyAudio resources."""

@@ -219,7 +219,7 @@ class MainWindow(QMainWindow):
         )
         self.history_tab = HistoryTab(body_widget)
         self.plugins_tab = PluginsTab(body_widget)
-        self.settings_tab = SettingsTab(body_widget)
+        self.settings_tab = SettingsTab(body_widget, ui_adapter=ui_adapter)
 
         self._add_tab(self.status_tab, "status", "Status")
         self._add_tab(self.history_tab, "history", "Histórico")

@@ -15,6 +15,7 @@ class JarvisUIAdapter(QObject):
 
     # Unified visual state snapshot: dict containing status, score, volume, state, and mode
     visual_state_updated = Signal(dict)
+    calibration_data_updated = Signal(float, float)
 
     def __init__(self, wakeword_name: str | list[str]) -> None:
         super().__init__()
@@ -30,6 +31,8 @@ class JarvisUIAdapter(QObject):
             "state": state_manager.get_state(),
             "mode": config.get("voice_activation", {}).get("mode", "hybrid"),
         }
+
+        self.controller: Any = None
 
         # Listen to backend state changes instead of polling
         state_manager.add_callback(self._on_backend_state_change)
@@ -75,6 +78,27 @@ class JarvisUIAdapter(QObject):
 
         if updated:
             self.visual_state_updated.emit(self._visual_state.copy())
+
+    def update_calibration(self, score: float, rms: float) -> None:
+        """Emits real-time audio calibration metrics (openwakeword score and RMS volume)."""
+        self.calibration_data_updated.emit(float(score), float(rms))
+
+    def set_controller(self, controller: Any) -> None:
+        """Stores a reference to the active controller for dynamic parameter updates."""
+        self.controller = controller
+
+    def apply_calibration(
+        self,
+        threshold: float,
+        volume_multiplier: float,
+        speech_rms: float | None = None,
+    ) -> None:
+        """Applies calibrated audio parameters directly to the active controller."""
+        if hasattr(self, "controller") and self.controller is not None:
+            if hasattr(self.controller, "apply_audio_calibration"):
+                self.controller.apply_audio_calibration(
+                    threshold, volume_multiplier, speech_rms
+                )
 
     def get_live(self) -> Any:
         class DummyLive:

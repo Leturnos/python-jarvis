@@ -22,6 +22,9 @@ voice_activation:
   wake_word:
     enabled: true
     keyword: "hey_jarvis"
+    threshold: 0.50                   # Sensibilidade de detecção (0.1 a 0.9, padrão 0.50)
+  thresholds:
+    speech_rms: 20.0                  # Limiar mínimo de energia sonora para processar fala
   push_to_talk:
     key: "ctrl+alt"
     behavior: "hold"

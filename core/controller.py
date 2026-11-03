@@ -71,6 +71,9 @@ class JarvisController:
         self.stop_event = stop_event
         self.audio_cue_manager = audio_cue_manager
 
+        if hasattr(self.ui, "set_controller"):
+            self.ui.set_controller(self)
+
         # AudioLoopManager handles PyAudio lifecycle
         self.audio_manager = AudioLoopManager(
             config=config,
@@ -247,6 +250,10 @@ class JarvisController:
                         self._handle_listening(pcm, rms, now)
                         continue
 
+                    if current_state == JarvisState.CALIBRATING:
+                        self._handle_calibration(pcm, rms, context)
+                        continue
+
                     if current_state == JarvisState.IDLE:
                         self._handle_idle(pcm, rms, context)
 
@@ -348,7 +355,13 @@ class JarvisController:
             self.confirmation_start_time = None
 
             try:
-                text = stt_engine.transcribe(audio_chunk)
+                # Provide confirmation-specific contextual hints to the STT model
+                confirmation_prompt = stt_engine.build_contextual_prompt(
+                    ["sim", "confirma", "executa", "não", "cancela", "esquece"]
+                )
+                text = stt_engine.transcribe(
+                    audio_chunk, initial_prompt=confirmation_prompt
+                )
                 norm = normalize_text(text)
                 if any(word in norm for word in CONFIRMATION_APPROVALS):
                     logger.info(f"Voice confirmation: APPROVED ('{text}')")
@@ -543,6 +556,62 @@ class JarvisController:
                 self.command_start_time = context.timestamp
 
             self.cooldown = context.timestamp + self.cooldown_seconds
+
+    def _handle_calibration(
+        self, pcm: np.ndarray, rms: float, context: ActivationContext
+    ) -> None:
+        self.ui.update(status="Calibrando...")
+
+        highest_score = 0.0
+        if self.model is not None:
+            prediction = self.model.predict(pcm)
+            configured_keyword = (
+                self.config.get("voice_activation", {})
+                .get("wake_word", {})
+                .get("keyword", "hey_jarvis")
+            )
+            target_scores = [
+                float(score)
+                for k, score in prediction.items()
+                if configured_keyword in k or k in configured_keyword
+            ]
+            highest_score = (
+                max(target_scores)
+                if target_scores
+                else max((float(s) for s in prediction.values()), default=0.0)
+            )
+
+        if hasattr(self.ui, "update_calibration"):
+            self.ui.update_calibration(score=highest_score, rms=rms)
+
+    def apply_audio_calibration(
+        self,
+        threshold: float,
+        volume_multiplier: float,
+        speech_rms: float | None = None,
+    ) -> None:
+        """Applies dynamic audio calibration parameters in memory immediately."""
+        self.threshold = float(threshold)
+        self.config.setdefault("voice_activation", {}).setdefault("wake_word", {})[
+            "threshold"
+        ] = float(threshold)
+        self.activation_manager.ww_config["threshold"] = float(threshold)
+
+        self.audio_manager.set_volume_multiplier(volume_multiplier)
+        self.config.setdefault("voice_activation", {})["volume_multiplier"] = float(
+            volume_multiplier
+        )
+
+        if speech_rms is not None:
+            self.config.setdefault("voice_activation", {}).setdefault("thresholds", {})[
+                "speech_rms"
+            ] = float(speech_rms)
+
+        logger.info(
+            f"Applied live audio calibration: threshold={self.threshold:.2f}, "
+            f"volume_multiplier={volume_multiplier:.2f}x"
+            + (f", speech_rms={speech_rms:.1f}" if speech_rms else "")
+        )
 
     def _cleanup(self) -> None:
         self.audio_manager.cleanup()

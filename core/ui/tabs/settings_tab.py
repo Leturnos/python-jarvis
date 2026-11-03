@@ -39,10 +39,13 @@ from qfluentwidgets import (
 )
 
 from core.ai.llm_agent import llm_agent
+from core.audio.audio_engine import get_input_devices
 from core.infra.config import (
     config,
     update_yaml_active_provider,
     update_yaml_bool_setting,
+    update_yaml_device_index,
+    update_yaml_float_setting,
     update_yaml_performance_profile,
     update_yaml_str_setting,
     update_yaml_ui_position,
@@ -53,11 +56,14 @@ from core.infra.logger_config import logger
 from core.infra.presets import detect_recommended_preset, get_system_hardware_info
 from core.infra.update_preferences import UpdatePreferenceManager
 from core.infra.updater import ReleaseInfo, UpdateManager
+from core.runtime.state import JarvisState, state_manager
 from core.shared.constants import DEFAULT_PROVIDER
 from core.shared.paths import get_app_version, get_user_config_path
 from core.shared.utils import is_autostart_enabled_check, manage_autostart
 from core.ui.screen_position import SCREEN_POSITION_LABELS, SCREEN_POSITIONS_ORDER
+from core.ui.widgets.audio_calibration_dialog import AudioCalibrationDialog
 from core.ui.widgets.hotkey_recorder import HotkeyRecorder
+from core.ui.widgets.safe_slider import SafeSlider
 
 
 class MiniMonitorPreview(QFrame):
@@ -69,6 +75,7 @@ class MiniMonitorPreview(QFrame):
         self, initial_position: str = "top_center", parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
+
         self.setObjectName("MiniMonitorFrame")
         self.setFixedSize(172, 108)
         self._selected = (
@@ -191,8 +198,10 @@ class SettingsTab(QWidget):
         "performance": "Alto Desempenho (PC Gamer/Workstation)",
     }
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, ui_adapter: Any = None) -> None:
         super().__init__(parent)
+
+        self.ui_adapter = ui_adapter
         self._active_recorder: HotkeyRecorder | None = None
         self._active_field: str | None = None
         self._prev_recorded_val: str = ""
@@ -291,7 +300,7 @@ class SettingsTab(QWidget):
 
         scroll_content = QWidget()
         layout = QVBoxLayout(scroll_content)
-        layout.setContentsMargins(0, 2, 4, 8)
+        layout.setContentsMargins(0, 2, 8, 8)
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -498,6 +507,126 @@ class SettingsTab(QWidget):
 
         layout.addWidget(keys_card)
 
+        # Card 2.5: Microphone & Wake Word Sensitivity
+        mic_card = SimpleCardWidget(scroll_content)
+        self._style_card(mic_card)
+        mic_layout = QVBoxLayout(mic_card)
+        mic_layout.setContentsMargins(16, 12, 16, 12)
+        mic_layout.setSpacing(10)
+
+        mic_title = StrongBodyLabel("🎙️ Microfone & Sensibilidade de Ativação", mic_card)
+        mic_layout.addWidget(mic_title)
+
+        mic_desc = CaptionLabel(
+            "Selecione o microfone, ajuste ganho e sensibilidade ou calibre pelo assistente.",
+            mic_card,
+        )
+        mic_desc.setWordWrap(True)
+        mic_desc.setStyleSheet("color: #82828e;")
+        mic_layout.addWidget(mic_desc)
+
+        # Row 1: Audio Input Device Selector
+        dev_row = QHBoxLayout()
+        dev_row.setSpacing(8)
+        dev_lbl = BodyLabel("Dispositivo de Entrada:", mic_card)
+        dev_lbl.setFixedWidth(165)
+        dev_row.addWidget(dev_lbl)
+
+        self.input_device_combo = ComboBox(mic_card)
+        self.input_device_combo.addItem("Padrão do Sistema (Windows)", userData=None)
+
+        try:
+            input_devs = get_input_devices()
+            cur_dev_idx = config.get("voice_activation", {}).get("device_index")
+            selected_combo_idx = 0
+            for idx, (d_idx, d_name) in enumerate(input_devs):
+                self.input_device_combo.addItem(d_name, userData=d_idx)
+                if cur_dev_idx is not None and int(cur_dev_idx) == d_idx:
+                    selected_combo_idx = idx + 1
+            self.input_device_combo.setCurrentIndex(selected_combo_idx)
+        except Exception as e:
+            logger.warning(f"Error listing input devices: {e}")
+
+        dev_row.addWidget(self.input_device_combo, 1)
+        mic_layout.addLayout(dev_row)
+
+        # Row 2: Wake Word Threshold Slider
+        th_row = QHBoxLayout()
+        th_row.setSpacing(8)
+        th_lbl = BodyLabel("Sensibilidade Wake Word:", mic_card)
+        th_lbl.setFixedWidth(165)
+        th_row.addWidget(th_lbl)
+
+        cur_th = float(
+            config.get("voice_activation", {})
+            .get("wake_word", {})
+            .get("threshold", config.get("jarvis", {}).get("threshold", 0.50))
+        )
+        self.wake_threshold_val_lbl = StrongBodyLabel(f"{cur_th:.2f}", mic_card)
+        self.wake_threshold_val_lbl.setStyleSheet("color: #4cc2ff;")
+        self.wake_threshold_val_lbl.setFixedWidth(40)
+        self.wake_threshold_val_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        self.wake_threshold_slider = SafeSlider(Qt.Orientation.Horizontal, mic_card)
+        self.wake_threshold_slider.setRange(10, 90)
+        self.wake_threshold_slider.setValue(int(cur_th * 100))
+        self.wake_threshold_slider.valueChanged.connect(
+            lambda v: self.wake_threshold_val_lbl.setText(f"{v / 100.0:.2f}")
+        )
+        th_row.addWidget(self.wake_threshold_slider, 1)
+        th_row.addWidget(self.wake_threshold_val_lbl)
+        mic_layout.addLayout(th_row)
+
+        # Row 3: Microphone Volume Multiplier Slider
+        gain_row = QHBoxLayout()
+        gain_row.setSpacing(8)
+        gain_lbl = BodyLabel("Ganho do Microfone:", mic_card)
+        gain_lbl.setFixedWidth(165)
+        gain_row.addWidget(gain_lbl)
+
+        cur_gain = float(
+            config.get("voice_activation", {}).get(
+                "volume_multiplier",
+                config.get("jarvis", {}).get("volume_multiplier", 1.0),
+            )
+        )
+        self.mic_gain_val_lbl = StrongBodyLabel(f"{cur_gain:.1f}x", mic_card)
+        self.mic_gain_val_lbl.setStyleSheet("color: #4cc2ff;")
+        self.mic_gain_val_lbl.setFixedWidth(40)
+        self.mic_gain_val_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        self.mic_gain_slider = SafeSlider(Qt.Orientation.Horizontal, mic_card)
+        self.mic_gain_slider.setRange(5, 25)
+        self.mic_gain_slider.setValue(int(cur_gain * 10))
+        self.mic_gain_slider.valueChanged.connect(
+            lambda v: self.mic_gain_val_lbl.setText(f"{v / 10.0:.1f}x")
+        )
+        gain_row.addWidget(self.mic_gain_slider, 1)
+        gain_row.addWidget(self.mic_gain_val_lbl)
+        mic_layout.addLayout(gain_row)
+
+        # Action Buttons Row
+        mic_btns_row = QHBoxLayout()
+        mic_btns_row.setSpacing(10)
+
+        self.calibrate_mic_btn = PrimaryPushButton("🎙️ Calibrar Microfone...", mic_card)
+        self.calibrate_mic_btn.clicked.connect(self._open_audio_calibration_dialog)
+        mic_btns_row.addWidget(self.calibrate_mic_btn)
+
+        mic_btns_row.addStretch(1)
+
+        self.save_mic_btn = PushButton("Salvar Ajustes", mic_card)
+        self.save_mic_btn.setFixedWidth(130)
+        self.save_mic_btn.clicked.connect(self._save_audio_settings)
+        mic_btns_row.addWidget(self.save_mic_btn)
+
+        mic_layout.addLayout(mic_btns_row)
+        layout.addWidget(mic_card)
+
         # Card 3: Behavior Toggles (Uniform Switch Alignment)
         beh_card = SimpleCardWidget(scroll_content)
         self._style_card(beh_card)
@@ -585,7 +714,7 @@ class SettingsTab(QWidget):
 
         scroll_content = QWidget()
         layout = QVBoxLayout(scroll_content)
-        layout.setContentsMargins(0, 2, 4, 8)
+        layout.setContentsMargins(0, 2, 8, 8)
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -833,7 +962,7 @@ class SettingsTab(QWidget):
 
         scroll_content = QWidget()
         layout = QVBoxLayout(scroll_content)
-        layout.setContentsMargins(0, 2, 4, 8)
+        layout.setContentsMargins(0, 2, 8, 8)
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -1072,6 +1201,84 @@ class SettingsTab(QWidget):
         logger.info(
             f"Saved shortcuts: wake_word='{kw}', ptt_key='{ptt_key}', behavior='{ptt_beh}', command_palette='{cp_key}'."
         )
+
+    def _open_audio_calibration_dialog(self) -> None:
+        current_state = state_manager.get_state()
+        if current_state in (
+            JarvisState.LISTENING,
+            JarvisState.THINKING,
+            JarvisState.EXECUTING,
+            JarvisState.CONFIRMING_DRY_RUN,
+        ):
+            InfoBar.warning(
+                "Jarvis Ocupado",
+                "Aguarde a conclusão do comando atual para calibrar o microfone.",
+                parent=self.window(),
+                duration=3500,
+            )
+            return
+        """Opens the interactive 3-step audio and wake word calibration dialog."""
+        dialog = AudioCalibrationDialog(
+            ui_adapter=self.ui_adapter,
+            on_apply=self._on_calibration_applied,
+            parent=self.window(),
+        )
+        dialog.exec()
+
+    def _on_calibration_applied(
+        self, threshold: float, volume_multiplier: float, speech_rms: float
+    ) -> None:
+        """Callback invoked when calibration wizard completes and applies settings."""
+        self.wake_threshold_slider.setValue(int(threshold * 100))
+        self.mic_gain_slider.setValue(int(volume_multiplier * 10))
+        if self.ui_adapter is not None and hasattr(
+            self.ui_adapter, "apply_calibration"
+        ):
+            self.ui_adapter.apply_calibration(threshold, volume_multiplier, speech_rms)
+        InfoBar.success(
+            "Calibração Concluída!",
+            f"Sensibilidade definida para {threshold:.2f} e ganho para {volume_multiplier:.1f}x.",
+            parent=self.window(),
+            duration=3500,
+        )
+
+    def _save_audio_settings(self) -> None:
+        """Saves manual microphone and wake word threshold settings."""
+        dev_data = self.input_device_combo.currentData()
+        th_val = self.wake_threshold_slider.value() / 100.0
+        gain_val = self.mic_gain_slider.value() / 10.0
+
+        try:
+            update_yaml_device_index(dev_data)
+            update_yaml_float_setting(
+                "voice_activation",
+                "threshold",
+                th_val,
+                subsection="wake_word",
+                precision=2,
+            )
+            update_yaml_float_setting(
+                "voice_activation",
+                "volume_multiplier",
+                gain_val,
+                precision=2,
+            )
+            if self.ui_adapter is not None and hasattr(
+                self.ui_adapter, "apply_calibration"
+            ):
+                self.ui_adapter.apply_calibration(th_val, gain_val)
+
+            dev_name = "Padrão" if dev_data is None else f"ID {dev_data}"
+            dev_suffix = " (ativo ao reiniciar)" if dev_data is not None else ""
+            InfoBar.success(
+                "Ajustes de Áudio Salvos!",
+                f"Dispositivo: {dev_name}{dev_suffix} | Sensibilidade: {th_val:.2f} | Ganho: {gain_val:.1f}x.",
+                parent=self.window(),
+                duration=3500,
+            )
+        except Exception as e:
+            logger.error(f"Error saving audio settings: {e}")
+            InfoBar.error("Erro ao Salvar", str(e), parent=self.window(), duration=3500)
 
     def _toggle_hotkey_recording(self, field: str) -> None:
         if self._active_recorder and self._active_recorder.is_active:
