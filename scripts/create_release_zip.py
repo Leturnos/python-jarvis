@@ -7,6 +7,9 @@ from pathlib import Path
 
 def get_default_version() -> str:
     try:
+        root_dir = Path(__file__).resolve().parent.parent
+        if str(root_dir) not in sys.path:
+            sys.path.insert(0, str(root_dir))
         from core.shared.paths import get_app_version
 
         ver = get_app_version()
@@ -68,5 +71,6 @@ def create_release_zip(
 
 
 if __name__ == "__main__":
-    cli_version = sys.argv[1] if len(sys.argv) > 1 else get_default_version()
+    positional_args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    cli_version = positional_args[0] if positional_args else get_default_version()
     create_release_zip(cli_version)

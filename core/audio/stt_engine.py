@@ -132,7 +132,7 @@ class STTEngine:
         if max_chars is None:
             max_chars = int(self.stt_conf.get("max_prompt_chars", 250))
         unique_keywords = list(dict.fromkeys(keywords))
-        prompt_items = []
+        prompt_items: list[str] = []
         current_length = 0
         for kw in unique_keywords:
             item_len = len(kw) if not prompt_items else len(kw) + 2

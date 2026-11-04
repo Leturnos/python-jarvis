@@ -9,26 +9,26 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint-and-test:
     runs-on: windows-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: ".python-version"
-
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Run Ruff Lint
         run: uv run ruff check
@@ -40,4 +40,6 @@ jobs:
         run: uv run mypy
 
       - name: Run Test Suite + Coverage
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: uv run pytest --cov=core --cov-report=term-missing --cov-report=xml --cov-fail-under=70
