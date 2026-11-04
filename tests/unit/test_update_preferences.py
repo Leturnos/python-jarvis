@@ -25,6 +25,24 @@ def test_should_notify_version_default(tmp_path):
     assert mgr.should_notify_version("v1.2.0") is True
 
 
+def test_should_notify_version_cooldown(tmp_path):
+    mgr = UpdatePreferenceManager(
+        state_file=tmp_path / "updates_state.json",
+        notification_cooldown_hours=24.0,
+    )
+    now = 1000000.0
+    mgr.record_notification("v1.2.0", timestamp=now)
+
+    # 2 hours later, same version -> should be suppressed
+    assert mgr.should_notify_version("v1.2.0", now=now + 7200.0) is False
+
+    # 2 hours later, NEW version -> should NOT be suppressed
+    assert mgr.should_notify_version("v1.3.0", now=now + 7200.0) is True
+
+    # 25 hours later, same version -> cooldown expired, allowed again
+    assert mgr.should_notify_version("v1.2.0", now=now + 25 * 3600.0) is True
+
+
 def test_should_notify_version_snoozed(tmp_path):
     mgr = UpdatePreferenceManager(state_file=tmp_path / "updates_state.json")
     now = 1000000.0
@@ -52,12 +70,15 @@ def test_persistence_across_instances(tmp_path):
     state_file = tmp_path / "updates_state.json"
     mgr1 = UpdatePreferenceManager(state_file=state_file)
     mgr1.record_check(timestamp=123456.0)
+    mgr1.record_notification("v0.9.0", timestamp=123456.0)
     mgr1.dismiss_version("v0.9.0")
     mgr1.snooze(hours=12.0, now=100000.0)
 
     # Instantiate second manager with same file
     mgr2 = UpdatePreferenceManager(state_file=state_file)
     assert mgr2.last_check_timestamp == 123456.0
+    assert mgr2.last_notified_timestamp == 123456.0
+    assert mgr2.last_notified_version == "v0.9.0"
     assert mgr2.dismissed_version == "v0.9.0"
     assert mgr2.dismissed_until == 100000.0 + 12.0 * 3600.0
 

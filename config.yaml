@@ -151,7 +151,8 @@ tools:
 # ==============================================================================
 updates:
   check_on_boot: true
-  check_interval_hours: 24.0
+  check_interval_hours: 2.0           # Intervalo mínimo entre verificações de rede (em horas)
+  notification_cooldown_hours: 24.0   # Intervalo mínimo entre notificações da mesma versão (em horas)
   github_repo: "Leturnos/python-jarvis"
 
 # ==============================================================================

@@ -161,9 +161,28 @@ def test_boot_update_check_suppressed_when_rate_limited():
             mock_pref.can_check_on_boot.return_value = False
 
             with patch("core.ui.app_controller.UpdateManager") as mock_upd_cls:
-                controller = QtAppController(app, MagicMock(), MagicMock())
-                controller._run_boot_update_check()
-                mock_upd_cls.return_value.check_for_updates.assert_not_called()
+                with patch.object(QtAppController, "_start_boot_update_check"):
+                    controller = QtAppController(app, MagicMock(), MagicMock())
+                    controller._run_boot_update_check()
+                    mock_upd_cls.return_value.check_for_updates.assert_not_called()
+
+
+def test_boot_update_check_does_not_lock_out_when_offline():
+    app = QApplication.instance() or QApplication([])
+    with patch(
+        "core.ui.app_controller.config", {"updates": {"check_on_boot": True}, "llm": {}}
+    ):
+        with patch("core.ui.app_controller.UpdatePreferenceManager") as mock_pref_cls:
+            mock_pref = mock_pref_cls.return_value
+            mock_pref.can_check_on_boot.return_value = True
+
+            with patch("core.ui.app_controller.UpdateManager") as mock_upd_cls:
+                mock_upd_cls.return_value.check_for_updates.return_value = None
+                with patch.object(QtAppController, "_start_boot_update_check"):
+                    controller = QtAppController(app, MagicMock(), MagicMock())
+                    controller._run_boot_update_check()
+                    # Must not record check timestamp on failure so next boot can retry
+                    mock_pref.record_check.assert_not_called()
 
 
 def test_boot_update_check_notifies_user_when_allowed():
@@ -191,10 +210,14 @@ def test_boot_update_check_notifies_user_when_allowed():
 
             with patch("core.ui.app_controller.UpdateManager") as mock_upd_cls:
                 mock_upd_cls.return_value.check_for_updates.return_value = info
-                controller = QtAppController(app, MagicMock(), MagicMock())
-                controller._show_update_notification = MagicMock()
-                controller._run_boot_update_check()
-                controller._show_update_notification.assert_called_once_with(info)
+                with patch.object(QtAppController, "_start_boot_update_check"):
+                    controller = QtAppController(app, MagicMock(), MagicMock())
+                    controller._show_update_notification = MagicMock()
+                    controller._run_boot_update_check()
+
+                    mock_pref.record_check.assert_called_once()
+                    mock_pref.record_notification.assert_called_once_with("v999.0.0")
+                    controller._show_update_notification.assert_called_once_with(info)
 
 
 def test_app_controller_applies_update_and_quits(tmp_path):

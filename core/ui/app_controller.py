@@ -565,11 +565,29 @@ class QtAppController(QObject):
                 )
                 return
 
-            pref_mgr.record_check()
             updater = UpdateManager()
             info = updater.check_for_updates()
-            if not info or not info.has_update:
+            if not info:
+                # Network not ready or GitHub unreachable on early boot; do not lock out future boots
+                logger.debug("Boot update check: GitHub unreachable or offline.")
                 return
+
+            # Record check timestamp only on successful query response
+            pref_mgr.record_check()
+
+            if not info.has_update:
+                return
+
+            # Prime the Settings tab UI so the update button is ready if opened
+            if hasattr(self, "main_window") and hasattr(
+                self.main_window, "settings_tab"
+            ):
+                try:
+                    self.main_window.settings_tab._on_update_check_finished(info)
+                except Exception as e:
+                    logger.debug(
+                        f"Could not prime settings tab with boot release info: {e}"
+                    )
 
             if not pref_mgr.should_notify_version(info.version):
                 logger.info(
@@ -577,12 +595,20 @@ class QtAppController(QObject):
                 )
                 return
 
+            pref_mgr.record_notification(info.version)
             self.update_available_boot.emit(info)
         except Exception as e:
             logger.debug(f"Boot update check failed silently: {e}")
 
     def _show_update_notification(self, info: ReleaseInfo) -> None:
         """Shows unobtrusive tray balloon or InfoBar notification when an update is available."""
+        # Ensure Settings tab is updated with release info
+        if hasattr(self, "main_window") and hasattr(self.main_window, "settings_tab"):
+            try:
+                self.main_window.settings_tab._on_update_check_finished(info)
+            except Exception as e:
+                logger.debug(f"Could not update settings tab on notification: {e}")
+
         if hasattr(self, "tray_icon") and self.tray_icon and self.tray_icon.isVisible():
             self.tray_icon.showMessage(
                 f"Jarvis - Nova Versão {info.version}",
@@ -596,7 +622,12 @@ class QtAppController(QObject):
                 )
             except Exception:
                 pass
-        elif hasattr(self, "main_window") and self.main_window.isVisible():
+
+        if (
+            hasattr(self, "main_window")
+            and self.main_window
+            and self.main_window.isVisible()
+        ):
             InfoBar.info(
                 f"Nova Versão {info.version} Disponível",
                 f"{info.title}. Acesse a aba Configurações para atualizar.",
@@ -609,3 +640,11 @@ class QtAppController(QObject):
         self.show_window()
         self.main_window.pivot.setCurrentItem("settings")
         self.main_window.stacked_widget.setCurrentWidget(self.main_window.settings_tab)
+        if hasattr(self.main_window.settings_tab, "sub_pivot"):
+            try:
+                self.main_window.settings_tab.sub_pivot.setCurrentItem("sys_upd")
+                self.main_window.settings_tab.sub_stack.setCurrentWidget(
+                    self.main_window.settings_tab.pane_sys_upd
+                )
+            except Exception:
+                pass
