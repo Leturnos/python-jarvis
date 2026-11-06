@@ -9,11 +9,12 @@ from typing import Any
 import keyboard
 import win32api
 import win32con
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
 from qfluentwidgets import InfoBar, Theme, setTheme
 
+from core.activation import is_screen_locked
 from core.ai.llm_agent import llm_agent
 from core.infra.config import config, reload_config, update_yaml_active_provider
 from core.infra.keyring_manager import KeyringManager
@@ -575,19 +576,19 @@ class QtAppController(QObject):
             # Record check timestamp only on successful query response
             pref_mgr.record_check()
 
-            if not info.has_update:
-                return
-
-            # Prime the Settings tab UI so the update button is ready if opened
+            # Prime the Settings tab UI thread-safely via Qt signal
             if hasattr(self, "main_window") and hasattr(
                 self.main_window, "settings_tab"
             ):
                 try:
-                    self.main_window.settings_tab._on_update_check_finished(info)
+                    self.main_window.settings_tab.update_checked.emit(info)
                 except Exception as e:
                     logger.debug(
                         f"Could not prime settings tab with boot release info: {e}"
                     )
+
+            if not info.has_update:
+                return
 
             if not pref_mgr.should_notify_version(info.version):
                 logger.info(
@@ -595,13 +596,45 @@ class QtAppController(QObject):
                 )
                 return
 
+            if not self._wait_until_screen_unlocked():
+                return
+
             pref_mgr.record_notification(info.version)
             self.update_available_boot.emit(info)
         except Exception as e:
             logger.debug(f"Boot update check failed silently: {e}")
 
+    def _wait_until_screen_unlocked(
+        self, poll_interval: float = 2.0, post_unlock_delay: float = 1.5
+    ) -> bool:
+        """Waits while the Windows workstation is locked before showing a boot update notification.
+
+        Returns True once unlocked, or False if the application is stopping.
+        """
+        was_locked = False
+        while is_screen_locked():
+            if not was_locked:
+                logger.info(
+                    "Screen is locked during boot update check; waiting for unlock before notifying..."
+                )
+                was_locked = True
+            if self.stop_event and self.stop_event.is_set():
+                return False
+            time.sleep(poll_interval)
+
+        if was_locked and post_unlock_delay > 0:
+            time.sleep(post_unlock_delay)
+        return True
+
     def _show_update_notification(self, info: ReleaseInfo) -> None:
         """Shows unobtrusive tray balloon or InfoBar notification when an update is available."""
+        if is_screen_locked():
+            logger.info(
+                "Screen is locked; deferring update notification until desktop is unlocked."
+            )
+            QTimer.singleShot(2000, lambda: self._show_update_notification(info))
+            return
+
         # Ensure Settings tab is updated with release info
         if hasattr(self, "main_window") and hasattr(self.main_window, "settings_tab"):
             try:
@@ -618,7 +651,8 @@ class QtAppController(QObject):
             )
             try:
                 self.tray_icon.messageClicked.connect(
-                    self._on_update_tray_message_clicked
+                    self._on_update_tray_message_clicked,
+                    Qt.ConnectionType.UniqueConnection,
                 )
             except Exception:
                 pass
@@ -636,10 +670,17 @@ class QtAppController(QObject):
             )
 
     def _on_update_tray_message_clicked(self) -> None:
-        """Navigates to Settings tab when user clicks the update tray balloon."""
+        """Navigates to Settings > System tab, scrolls to bottom, and highlights the update card."""
         self.show_window()
         self.main_window.pivot.setCurrentItem("settings")
         self.main_window.stacked_widget.setCurrentWidget(self.main_window.settings_tab)
+        if hasattr(self.main_window.settings_tab, "focus_update_section"):
+            try:
+                self.main_window.settings_tab.focus_update_section()
+                return
+            except Exception as e:
+                logger.debug(f"Could not focus update section: {e}")
+
         if hasattr(self.main_window.settings_tab, "sub_pivot"):
             try:
                 self.main_window.settings_tab.sub_pivot.setCurrentItem("sys_upd")

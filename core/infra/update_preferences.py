@@ -98,6 +98,7 @@ class UpdatePreferenceManager:
 
     def can_check_on_boot(self, now: float | None = None) -> bool:
         """Returns True if enough time has passed since the last background boot check."""
+        self._load()
         current_time = time.time() if now is None else now
         with self._lock:
             elapsed_seconds = current_time - self.last_check_timestamp
@@ -112,6 +113,7 @@ class UpdatePreferenceManager:
         2. The user requested 'Not now' (snooze) and the snooze period has not elapsed yet.
         3. A notification for this exact version was already displayed within the cooldown window.
         """
+        self._load()
         current_time = time.time() if now is None else now
         with self._lock:
             if self.dismissed_version and self.dismissed_version == version:
@@ -126,6 +128,7 @@ class UpdatePreferenceManager:
 
     def record_check(self, timestamp: float | None = None) -> None:
         """Records that an update check just completed."""
+        self._load()
         current_time = time.time() if timestamp is None else timestamp
         with self._lock:
             self.last_check_timestamp = current_time
@@ -133,6 +136,7 @@ class UpdatePreferenceManager:
 
     def record_notification(self, version: str, timestamp: float | None = None) -> None:
         """Records that a notification was shown for a specific version."""
+        self._load()
         current_time = time.time() if timestamp is None else timestamp
         with self._lock:
             self.last_notified_timestamp = current_time
@@ -141,6 +145,7 @@ class UpdatePreferenceManager:
 
     def snooze(self, hours: float = 24.0, now: float | None = None) -> None:
         """Snoozes update popups/notifications for the given number of hours."""
+        self._load()
         current_time = time.time() if now is None else now
         with self._lock:
             self.dismissed_until = current_time + (hours * 3600.0)
@@ -148,12 +153,14 @@ class UpdatePreferenceManager:
 
     def dismiss_version(self, version: str) -> None:
         """Permanently skips notifications for this specific version until a newer version is released."""
+        self._load()
         with self._lock:
             self.dismissed_version = version
         self._save()
 
     def reset_dismissed_version(self) -> None:
         """Resets dismissed version to allow future notifications."""
+        self._load()
         with self._lock:
             self.dismissed_version = None
         self._save()

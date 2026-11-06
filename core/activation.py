@@ -301,6 +301,15 @@ class ActivationManager:
                         "webwallpaper32",
                         "warp",
                         "code",
+                        "antigravity",
+                        "cursor",
+                        "windsurf",
+                        "windowsterminal",
+                        "discord",
+                        "spotify",
+                        "obsidian",
+                        "slack",
+                        "notion",
                         "jarvis",
                         "searchhost",
                         "shellexperiencehost",
@@ -308,6 +317,8 @@ class ActivationManager:
                         "applicationframehost",
                         "textinputhost",
                         "lockapp",
+                        "snippingtool",
+                        "screenclippinghost",
                     )
                     if proc_name in non_game_procs or proc_name.startswith("lively"):
                         return False

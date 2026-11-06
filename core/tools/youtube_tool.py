@@ -15,8 +15,9 @@ class YouTubeTool(BaseTool):
 
     name = "youtube"
     description = (
-        "Pesquisa e reproduz vídeos no YouTube. "
-        "Permite tocar músicas, podcasts ou vídeos diretamente por voz no navegador padrão."
+        "Pesquisa e reproduz vídeos especificamente no YouTube no navegador padrão. "
+        "Use APENAS quando o usuário mencionar explicitamente 'YouTube' ou pedir um 'vídeo'. "
+        "NÃO use para pedidos de Spotify ou música em geral."
     )
     risk_level = RiskLevel.SAFE
 

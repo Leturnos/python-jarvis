@@ -3,7 +3,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFrame,
@@ -1044,7 +1044,8 @@ class SettingsTab(QWidget):
         self.update_download_finished.connect(self._on_download_finished)
         self.update_failed.connect(self._on_update_failed)
 
-        update_card = SimpleCardWidget(scroll_content)
+        self.update_card = SimpleCardWidget(scroll_content)
+        update_card = self.update_card
         self._style_card(update_card)
         update_layout = QVBoxLayout(update_card)
         update_layout.setContentsMargins(16, 12, 16, 12)
@@ -1724,3 +1725,68 @@ class SettingsTab(QWidget):
         self.update_progress_bar.setVisible(False)
         self.update_status_label.setText(f"Falha na atualização: {err_msg}")
         InfoBar.error("Erro na Atualização", err_msg, parent=self)
+
+    def focus_update_section(self) -> None:
+        """Switches to the System sub-tab, scrolls to the bottom, and pulses the update section."""
+        self.sub_pivot.setCurrentItem("sys_upd")
+        self.sub_stack.setCurrentWidget(self.pane_sys_upd)
+        self._scroll_to_update_card()
+        QTimer.singleShot(80, self._scroll_to_update_card)
+        QTimer.singleShot(120, self._start_update_pulse)
+
+    def _scroll_to_update_card(self) -> None:
+        """Scrolls the System sub-tab scroll area all the way down to the update card."""
+        if hasattr(self, "sys_scroll") and self.sys_scroll is not None:
+            if hasattr(self, "update_card") and self.update_card is not None:
+                self.sys_scroll.ensureWidgetVisible(self.update_card, 0, 24)
+            vbar = self.sys_scroll.verticalScrollBar()
+            if vbar is not None:
+                vbar.setValue(vbar.maximum())
+
+    def _start_update_pulse(self) -> None:
+        """Pulses the update card and action buttons to draw visual attention."""
+        pulse_timer = getattr(self, "_update_pulse_timer", None)
+        if pulse_timer is not None:
+            try:
+                pulse_timer.stop()
+            except Exception:
+                pass
+
+        self._pulse_step = 0
+        timer = QTimer(self)
+        self._update_pulse_timer = timer
+
+        def _tick() -> None:
+            self._pulse_step += 1
+            if self._pulse_step > 6:
+                timer.stop()
+                if hasattr(self, "update_card"):
+                    self._style_card(self.update_card)
+                self.check_update_btn.setStyleSheet("")
+                return
+
+            is_highlight = self._pulse_step % 2 == 1
+            if hasattr(self, "update_card"):
+                if is_highlight:
+                    self.update_card.setStyleSheet(
+                        """
+                        SimpleCardWidget {
+                            background-color: #1e2631;
+                            border: 1.5px solid #4cc2ff;
+                            border-radius: 9px;
+                        }
+                        """
+                    )
+                else:
+                    self._style_card(self.update_card)
+
+            if is_highlight:
+                self.check_update_btn.setStyleSheet(
+                    "PushButton { border: 1.5px solid #4cc2ff; color: #4cc2ff; font-weight: 600; }"
+                )
+            else:
+                self.check_update_btn.setStyleSheet("")
+
+        timer.timeout.connect(_tick)
+        _tick()
+        timer.start(240)

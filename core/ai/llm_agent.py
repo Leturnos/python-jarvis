@@ -168,7 +168,12 @@ class LLMAgent:
         if cached_response:
             logger.info(f"Using cached LLM response for: '{text}'")
             history_manager.log_metric("llm_cache_hit", 1.0)
-            return PromptGuard.sanitize_output(cached_response)
+            normalized_cached, was_corrected = self._normalize_media_vs_youtube_routing(
+                text, cached_response
+            )
+            if was_corrected:
+                llm_cache.set(text, normalized_cached)
+            return PromptGuard.sanitize_output(normalized_cached)
 
         history_manager.log_metric("llm_cache_hit", 0.0)
 
@@ -267,7 +272,7 @@ class LLMAgent:
         - Responda em Português de forma elegante, direta e conversacional (1 a 2 frases para TTS).
         - Se a instrução for uma pergunta de acompanhamento ao Diálogo Recente (ex: "e amanhã?", "e no Rio?"), use a Memória de Conversa para responder no contexto adequado.
 
-        3. Se for uma MÍDIA (tocar música, pausar, pular no Spotify ou sistema):
+        3. Se for uma MÍDIA (tocar música, artista, banda, playlist, pausar ou pular no Spotify ou sistema — SEMPRE use este tipo quando o usuário mencionar Spotify ou pedir para tocar música/artista sem citar YouTube):
         {{
             "type": "media",
             "action": "PLAY_QUERY",
@@ -281,7 +286,7 @@ class LLMAgent:
         - "mood": Humores, atividades, intenções abstratas (ex: "música alegre", "para estudar").
         - "mixed": Uma mistura dos dois (ex: "rock animado", "lofi triste").
 
-        4. Se for uma CHAMADA DE FERRAMENTA (consultas especializadas, pesquisas, cálculos, clima, cotações, git):
+        4. Se for uma CHAMADA DE FERRAMENTA (consultas especializadas, pesquisas, cálculos, clima, cotações, git, vídeos do YouTube):
         {{
             "type": "tool_call",
             "tool_name": "um dos nomes válidos de ferramenta abaixo",
@@ -292,7 +297,7 @@ class LLMAgent:
             "risk_level": "safe"
         }}
         Ferramentas disponíveis: [{tools_names_str}].
-        Use 'tool_call' sempre que a solicitação do usuário puder ser atendida com precisão por uma das ferramentas disponíveis acima.
+        Use 'tool_call' sempre que a solicitação do usuário puder ser atendida com precisão por uma das ferramentas disponíveis acima (exceto pedidos de Spotify ou música sem mencionar YouTube, que devem usar 'type': 'media').
 
         Tiers de Risco:
         - "safe": Consultas, abrir pastas, git status, web search. (Default)
@@ -388,6 +393,7 @@ class LLMAgent:
                         logger.warning("Specialist planner failed to produce steps.")
                         json_data.setdefault("steps", [])
 
+            json_data, _ = self._normalize_media_vs_youtube_routing(text, json_data)
             logger.info(f"LLM Response Parsed: {json_data}")
 
             # Log usage
@@ -408,6 +414,42 @@ class LLMAgent:
         except Exception as e:
             logger.error(f"LLM Error: {e}")
             raise TechnicalError(f"LLM processing failed: {e}") from e
+
+    @staticmethod
+    def _normalize_media_vs_youtube_routing(
+        text: str, decision: dict[str, Any]
+    ) -> tuple[dict[str, Any], bool]:
+        """Redirects misrouted YouTube tool_calls back to Spotify media playback when Spotify is requested."""
+        if (
+            isinstance(decision, dict)
+            and decision.get("type") == "tool_call"
+            and decision.get("tool_name") == "youtube"
+        ):
+            lowered = (text or "").lower()
+            if any(k in lowered for k in ("spotify", "espotifai")) and not any(
+                y in lowered for y in ("youtube", "vídeo", "video")
+            ):
+                params = decision.get("parameters")
+                query = (
+                    str(params.get("query", "")).strip()
+                    if isinstance(params, dict)
+                    else ""
+                )
+                if query:
+                    logger.info(
+                        f"Correcting misrouted YouTube tool_call to Spotify media playback for query: '{query}'"
+                    )
+                    return (
+                        {
+                            "type": "media",
+                            "action": "PLAY_QUERY",
+                            "query": query,
+                            "query_type": "entity",
+                            "description": f"Tocando {query} no Spotify",
+                        },
+                        True,
+                    )
+        return decision, False
 
     def plan_action_steps(
         self, text: str, intent: str, explanation: str, global_risk: str = "low"

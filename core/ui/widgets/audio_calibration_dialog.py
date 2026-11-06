@@ -382,7 +382,7 @@ class AudioCalibrationDialog(QDialog):
                     self._test_feedback_timer = QTimer(self)
                     self._test_feedback_timer.setSingleShot(True)
                     self._test_feedback_timer.timeout.connect(self._reset_test_banner)
-                    self._test_feedback_timer.start(1000)
+                    self._test_feedback_timer.start(2500)
             return
 
         if self.current_step not in (1, 2, 3) or now < self._step_cooldown_until:
@@ -394,14 +394,20 @@ class AudioCalibrationDialog(QDialog):
         if rms > self._current_utterance_max_rms:
             self._current_utterance_max_rms = rms
 
-        # Speech activity detection
-        if rms >= 15.0 or score >= 0.25:
-            self._is_utterance_active = True
-            self.badge_label.setText(
-                f"Voz detectada! (Score atual: {score:.2f} | Volume: {rms:.0f})"
+        utterance_finished = (
+            self._is_utterance_active
+            and score < 0.15
+            and (
+                rms < 12.0
+                or (
+                    self._current_utterance_max_score >= 0.30
+                    and rms < self._current_utterance_max_rms * 0.35
+                )
             )
-            self.badge_label.setStyleSheet("color: #57d9a3; font-weight: 600;")
-        elif self._is_utterance_active and rms < 12.0:
+        )
+
+        # Speech activity detection
+        if utterance_finished:
             # Utterance ended after peak
             if self._current_utterance_max_score >= 0.30:
                 self._record_sample(
@@ -414,8 +420,22 @@ class AudioCalibrationDialog(QDialog):
                 self._current_utterance_max_rms = 0.0
                 self.badge_label.setText("👂 Ouvindo microfone...")
                 self.badge_label.setStyleSheet("color: #4cc2ff; font-weight: 500;")
+        elif rms >= 15.0 or score >= 0.25:
+            self._is_utterance_active = True
+            self.badge_label.setText(
+                f"Voz detectada! (Score atual: {score:.2f} | Volume: {rms:.0f})"
+            )
+            self.badge_label.setStyleSheet("color: #57d9a3; font-weight: 600;")
 
     def _record_sample(self, peak_score: float, peak_rms: float) -> None:
+        if len(self.samples) >= self.TOTAL_STEPS:
+            return
+
+        self._is_utterance_active = False
+        self._current_utterance_max_score = 0.0
+        self._current_utterance_max_rms = 0.0
+        self._step_cooldown_until = time.time() + 1.2
+
         self.samples.append({"score": peak_score, "rms": peak_rms})
         logger.info(
             f"Calibration sample {len(self.samples)}: score={peak_score:.2f}, rms={peak_rms:.1f}"
@@ -427,7 +447,6 @@ class AudioCalibrationDialog(QDialog):
 
         if len(self.samples) < self.TOTAL_STEPS:
             # Short delay before next step
-            self._step_cooldown_until = time.time() + 1.2
             QTimer.singleShot(1000, lambda: self._start_step(len(self.samples) + 1))
         else:
             QTimer.singleShot(800, self._show_results)
@@ -456,7 +475,7 @@ class AudioCalibrationDialog(QDialog):
             rec_gain = 1.4
         elif mean_rms < 30.0:
             rec_gain = 1.2
-        elif mean_rms > 120.0:
+        elif mean_rms > 6000.0 and min_score >= 0.85:
             rec_gain = 0.8
         else:
             rec_gain = 1.0

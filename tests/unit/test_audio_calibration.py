@@ -52,6 +52,41 @@ class TestAudioCalibrationCalculations:
         high_recs = AudioCalibrationDialog.calculate_recommendations(high_samples)
         assert high_recs["threshold"] == 0.80
 
+    def test_real_16bit_pcm_speech_rms_does_not_penalize_gain(self) -> None:
+        samples = [
+            {"score": 0.43, "rms": 1094.2},
+            {"score": 0.35, "rms": 2140.1},
+            {"score": 0.35, "rms": 2001.7},
+        ]
+        recs = AudioCalibrationDialog.calculate_recommendations(samples)
+        assert recs["volume_multiplier"] == 1.0
+        assert recs["threshold"] == 0.29
+
+    def test_record_sample_caps_at_total_steps_and_auto_advances_on_16bit_pcm(
+        self,
+    ) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        _ = QApplication.instance() or QApplication([])
+        dlg = AudioCalibrationDialog()
+        dlg._start_step(1)
+        dlg._step_cooldown_until = 0.0
+
+        # Simulate speaking on a 16-bit PCM mic (peak RMS ~2000, ambient silence RMS ~40)
+        dlg._on_audio_data(score=0.45, rms=2000.0)
+        assert dlg._is_utterance_active is True
+
+        # Utterance ends (score drops to 0.02, RMS drops to ambient 45.0 < 2000 * 0.35)
+        with patch("core.ui.widgets.audio_calibration_dialog.QTimer.singleShot"):
+            dlg._on_audio_data(score=0.02, rms=45.0)
+            assert len(dlg.samples) == 1
+
+            # Record remaining samples and verify 4th sample is ignored
+            dlg._record_sample(0.40, 1800.0)
+            dlg._record_sample(0.38, 1900.0)
+            dlg._record_sample(0.38, 1900.0)  # Extra call during 800ms timer window
+            assert len(dlg.samples) == AudioCalibrationDialog.TOTAL_STEPS
+
 
 class TestAudioInputDeviceDiscovery:
     """Tests enumeration of PyAudio input devices."""

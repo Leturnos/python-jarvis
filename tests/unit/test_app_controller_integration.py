@@ -210,14 +210,80 @@ def test_boot_update_check_notifies_user_when_allowed():
 
             with patch("core.ui.app_controller.UpdateManager") as mock_upd_cls:
                 mock_upd_cls.return_value.check_for_updates.return_value = info
-                with patch.object(QtAppController, "_start_boot_update_check"):
-                    controller = QtAppController(app, MagicMock(), MagicMock())
-                    controller._show_update_notification = MagicMock()
-                    controller._run_boot_update_check()
+                with patch(
+                    "core.ui.app_controller.is_screen_locked", return_value=False
+                ):
+                    with patch.object(QtAppController, "_start_boot_update_check"):
+                        controller = QtAppController(app, MagicMock(), MagicMock())
+                        controller._show_update_notification = MagicMock()
+                        controller._run_boot_update_check()
 
-                    mock_pref.record_check.assert_called_once()
-                    mock_pref.record_notification.assert_called_once_with("v999.0.0")
-                    controller._show_update_notification.assert_called_once_with(info)
+                        mock_pref.record_check.assert_called_once()
+                        mock_pref.record_notification.assert_called_once_with(
+                            "v999.0.0"
+                        )
+                        controller._show_update_notification.assert_called_once_with(
+                            info
+                        )
+
+
+def test_boot_update_check_waits_for_lock_screen_before_notifying():
+    app = QApplication.instance() or QApplication([])
+    from core.infra.updater import ReleaseInfo
+
+    info = ReleaseInfo(
+        version="v999.0.0",
+        title="v999.0.0",
+        body="Notas",
+        html_url="",
+        download_url="https://example.com/asset.zip",
+        asset_name="asset.zip",
+        asset_size=1024,
+        has_update=True,
+    )
+
+    with patch(
+        "core.ui.app_controller.config", {"updates": {"check_on_boot": True}, "llm": {}}
+    ):
+        with patch("core.ui.app_controller.UpdatePreferenceManager") as mock_pref_cls:
+            mock_pref = mock_pref_cls.return_value
+            mock_pref.can_check_on_boot.return_value = True
+            mock_pref.should_notify_version.return_value = True
+
+            with patch("core.ui.app_controller.UpdateManager") as mock_upd_cls:
+                mock_upd_cls.return_value.check_for_updates.return_value = info
+                with patch(
+                    "core.ui.app_controller.is_screen_locked",
+                    side_effect=[True, True, False],
+                ) as mock_locked:
+                    with patch("core.ui.app_controller.time.sleep") as mock_sleep:
+                        with patch.object(QtAppController, "_start_boot_update_check"):
+                            controller = QtAppController(app, MagicMock(), MagicMock())
+                            controller._show_update_notification = MagicMock()
+                            controller._run_boot_update_check()
+
+                            assert mock_locked.call_count == 3
+                            assert mock_sleep.call_count >= 2
+                            mock_pref.record_notification.assert_called_once_with(
+                                "v999.0.0"
+                            )
+                            controller._show_update_notification.assert_called_once_with(
+                                info
+                            )
+
+
+def test_clicking_update_notification_focuses_and_pulses_update_section():
+    app = QApplication.instance() or QApplication([])
+    with patch.object(QtAppController, "_start_boot_update_check"):
+        controller = QtAppController(app, MagicMock(), MagicMock())
+        controller._on_update_tray_message_clicked()
+
+        settings_tab = controller.main_window.settings_tab
+        assert settings_tab.sub_stack.currentWidget() == settings_tab.pane_sys_upd
+        settings_tab._start_update_pulse()
+        assert "#4cc2ff" in settings_tab.check_update_btn.styleSheet()
+        if hasattr(settings_tab, "_update_pulse_timer"):
+            settings_tab._update_pulse_timer.stop()
 
 
 def test_app_controller_applies_update_and_quits(tmp_path):

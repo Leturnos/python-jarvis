@@ -255,3 +255,29 @@ def test_generate_text_uses_fallback(mock_execute):
 
     mock_execute.assert_called_once_with(prompt="Explique o que é Python")
     assert res == "Resposta gerada com sucesso"
+
+
+def test_normalize_media_vs_youtube_routing_redirects_spotify_requests():
+    misrouted = {
+        "type": "tool_call",
+        "tool_name": "youtube",
+        "parameters": {"query": "Linkin Park", "action": "play"},
+        "explanation": "Reproduzindo Linkin Park no YouTube.",
+        "risk_level": "safe",
+    }
+
+    corrected, was_corrected = LLMAgent._normalize_media_vs_youtube_routing(
+        "coloca linkin park no spotify", misrouted
+    )
+    assert was_corrected is True
+    assert corrected["type"] == "media"
+    assert corrected["action"] == "PLAY_QUERY"
+    assert corrected["query"] == "Linkin Park"
+
+    # Explicit YouTube requests must remain untouched
+    unchanged, was_corrected_yt = LLMAgent._normalize_media_vs_youtube_routing(
+        "coloca linkin park no youtube", misrouted
+    )
+    assert was_corrected_yt is False
+    assert unchanged["type"] == "tool_call"
+    assert unchanged["tool_name"] == "youtube"
