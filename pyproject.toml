@@ -1,6 +1,6 @@
 [project]
 name = "python-jarvis"
-version = "0.8.1"
+version = "0.9.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -26,6 +26,7 @@ dependencies = [
     "pywin32>=311",
     "pyyaml>=6.0.3",
     "certifi>=2026.10.18",
+    "piper-onnx>=1.0.6",
 ]
 
 [dependency-groups]
@@ -93,7 +94,13 @@ module = [
     "faster_whisper.*",
     "qdarktheme.*",
     "win32event.*",
-    "winerror.*"
+    "winerror.*",
+    "piper_onnx",
+    "piper_onnx.*",
+    "espeakng_loader",
+    "espeakng_loader.*",
+    "phonemizer",
+    "phonemizer.*",
 ]
 ignore_missing_imports = true
 

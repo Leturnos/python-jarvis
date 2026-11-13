@@ -23,7 +23,18 @@ datas = [
 ]
 
 # Collect essential package data files to prevent FileNotFoundError in frozen binaries
-package_datas = ['litellm', 'openwakeword', 'faster_whisper', 'qdarktheme', 'tiktoken', 'tiktoken_ext']
+package_datas = [
+    'litellm',
+    'openwakeword',
+    'faster_whisper',
+    'qdarktheme',
+    'tiktoken',
+    'tiktoken_ext',
+    'espeakng_loader',
+    'piper_onnx',
+    'phonemizer',
+    'language_tags',
+]
 for pkg in package_datas:
     try:
         datas += collect_data_files(pkg)
@@ -67,6 +78,9 @@ hidden_imports = [
     'win32api',
     'win32process',
     'win32com',
+    'piper_onnx',
+    'espeakng_loader',
+    'phonemizer',
 ]
 
 a = Analysis(
