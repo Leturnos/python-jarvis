@@ -75,4 +75,4 @@ Regras técnicas e convenções que orientam o desenvolvimento assistido por IA:
 
 ## 📜 5. Histórico e Evolução do Projeto
 
-- 📁 **[Superpowers Specs](./superpowers/specs/)**: Especificações técnicas formais de cada funcionalidade desenvolvida (ex: Nova Suíte de Integrações, Redesign de UI/UX frameless, Silero VAD & TTS streaming, Presets de plugins a quente, permissões de Lockscreen no Windows, empacotamento `.exe` e Tool Calling).
+- 📁 **[Superpowers Specs](./superpowers/specs/)**: Especificações técnicas formais de cada funcionalidade desenvolvida (ex: Pacotes de Voz Neurais & DSP Holográfico, Calibração Acústica Interativa, Nova Suíte de Integrações, Redesign de UI/UX frameless, Silero VAD & TTS streaming, Presets de plugins a quente, permissões de Lockscreen no Windows, empacotamento `.exe` e Tool Calling).

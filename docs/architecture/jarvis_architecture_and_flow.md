@@ -62,7 +62,7 @@ flowchart TD
 
     %% Feedback & Persistência
     subgraph FEEDBACK["📢 7. Feedback & Auditoria"]
-        TTS["🔊 Síntese de Voz (TTS)<br/><code>TTSEngine (SAPI5)</code>"]
+        TTS["🔊 Síntese de Voz Híbrida (TTS)<br/><code>TTSEngine (Piper ONNX + DSP / SAPI5)</code>"]
         TRAY_NOTIF["🔔 Notificações Windows<br/><code>JarvisNotifier</code> / Tray Icon"]
         HIST_DB[("💾 Banco SQLite<br/><code>HistoryManager (history_db.py)</code>")]
         STATE_MGR["🔄 <code>state_manager</code><br/>Transições & Limpeza"]
@@ -167,7 +167,9 @@ classDiagram
         +OpenWakeWordModel (Local ML)
         +ActivationManager (PTT & Fullscreen)
         +STTEngine (faster-whisper)
-        +TTSEngine (Windows SAPI5)
+        +TTSEngine (Piper ONNX + DSP / SAPI5)
+        +VoiceManager (Secure Model Downloader)
+        +VoiceDSP (Mark III & Mark L Filters)
     }
 
     class IntentAndAI {
@@ -235,6 +237,9 @@ classDiagram
 | **Orquestrador de Áudio** | [`core/controller.py`](../../core/controller.py) | Loop de áudio em tempo real, detecção de wake words e gestão de estados de escuta. |
 | **Gerenciador de Ativação** | [`core/activation.py`](../../core/activation.py) | Avaliação híbrida de ativação (PTT, wake word, supressão em jogos fullscreen via Win32 `WS_CAPTION`). |
 | **Speech-to-Text** | [`core/audio/stt_engine.py`](../../core/audio/stt_engine.py) | Transcrição de áudio ultrarrápida usando `faster-whisper` com lazy-load e priming contextual de `initial_prompt`. |
+| **Síntese de Voz (TTS)** | [`core/audio/tts_engine.py`](../../core/audio/tts_engine.py) | Motor híbrido de síntese de voz (neural offline via `piper-onnx` + `espeakng-loader` com fallback SAPI5) e pipeline de sentenças interrompível. |
+| **Gerenciador de Vozes** | [`core/audio/voice_manager.py`](../../core/audio/voice_manager.py) | Download seguro de pacotes de voz via HTTPS allowlist, verificação criptográfica (`SHA-256`/`MD5`) e limpeza de modelos não utilizados. |
+| **Catálogo & DSP de Voz** | [`core/audio/voice_catalog.py`](../../core/audio/voice_catalog.py), [`core/audio/voice_dsp.py`](../../core/audio/voice_dsp.py) | Catálogo curado de 9 vozes (masculinas/femininas), kits de frases por etapa e filtros acústicos holográficos (`jarvis_mk3` e `friday_mk50`). |
 | **Resolução de Comandos** | [`core/ai/command_resolver.py`](../../core/ai/command_resolver.py) | Match exato e fuzzy local com normalização simétrica, homófonos fonéticos e portas de rede faladas. |
 | **Agente Inteligente** | [`core/ai/llm_agent.py`](../../core/ai/llm_agent.py) | Conexão com LLMs via `LiteLLMProvider` com cache SQLite, tolerância fonética e guardrails anti-alucinação. |
 | **Guarda de Segurança** | [`core/ai/prompt_guard.py`](../../core/ai/prompt_guard.py) | Validação contra injeção de prompt e sanitização de planos de execução. |

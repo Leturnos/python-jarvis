@@ -38,7 +38,7 @@ Utilizamos uma abordagem de estilização em camadas:
 - **`MainWindow` ("Painel do Jarvis")**: Janela principal com navegação moderna Fluent (`Pivot`). Hospeda três abas modulares:
   - **Aba Status (`StatusCardWidget`)**: Exibe o status do motor, modos de ativação ("Híbrido", "Aperte para Falar", "Silenciado", "Dormindo"), níveis de decibéis e pontuação de escuta.
   - **Aba Histórico (`HistoryTab`)**: Tabela de auditoria do SQLite com busca e atualização dinâmica dos comandos executados.
-  - **Aba Configurações (`SettingsTab`)**: Configuração de perfil de performance, seleção de provedor LLM, cadastro direto de chave de API no Windows Keyring com re-inicialização em memória e controle de Autostart.
+  - **Aba Configurações (`SettingsTab`)**: Dividida em 3 sub-abas limpas (*Tela & Voz*, *IA & Ferramentas* e *Sistema*), com calibração de microfone, seletor de pacotes de voz em 2 colunas (`TwoColumnVoiceComboBox`: Nome da Voz | Peso em MB), limpeza de vozes não usadas, kits de frases para 4 etapas do ciclo de vida, cadastro de chaves de API no Windows Keyring, seleção de perfil de desempenho e controle de atualizações.
 - **`CommandPalette`**: Interface rápida estilo Spotlight (`Ctrl+Shift+P`) para comandos manuais por teclado.
 - **`VoiceOverlay`**: HUD flutuante semi-transparente que exibe feedback visual do microfone durante a fala.
 - **`SecurityDialog`**: Modal de autorização de segurança para comandos classificados com nível de risco elevado (`dangerous`).
