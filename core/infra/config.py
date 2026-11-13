@@ -70,6 +70,9 @@ def load_config() -> dict[str, Any]:
             "volume_multiplier": 1.0,
             "cooldown_seconds": 2.5,
             "response_phrase": "Sim?",
+            "completion_phrase": "Pronto!",
+            "no_speech_phrase": "Desculpe, não ouvi nada.",
+            "not_understood_phrase": "Desculpe, não entendi.",
             "push_to_talk": {"key": "ctrl+alt", "behavior": "hold"},
             "wake_word": {"enabled": True, "keyword": "hey_jarvis", "threshold": 0.5},
             "auto_suspend": {"fullscreen": True},
@@ -106,6 +109,7 @@ def load_config() -> dict[str, Any]:
         },
         "tts": {
             "provider": "sapi5",
+            "active_voice_id": "sapi5_default",
             "voice_keyword": "maria",
             "rate": 2,
             "volume": 100,
@@ -772,3 +776,27 @@ def update_yaml_device_index(device_index: int | None) -> None:
         logger.warning(
             f"Failed to update in-memory config for voice_activation.device_index: {e}"
         )
+
+
+def update_yaml_int_setting(
+    section: str,
+    key: str,
+    value: int,
+    subsection: str | None = None,
+) -> None:
+    """Updates an integer key inside a section in config.yaml preserving comments."""
+    int_val = int(value)
+    update_yaml_float_setting(
+        section=section,
+        key=key,
+        value=float(int_val),
+        subsection=subsection,
+        precision=0,
+    )
+    try:
+        target = config.setdefault(section, {})
+        if subsection:
+            target = target.setdefault(subsection, {})
+        target[key] = int_val
+    except Exception as e:
+        logger.warning(f"Failed to update in-memory config for {section}.{key}: {e}")

@@ -285,14 +285,25 @@ class ActionDispatcher:
                 action_json=action_json,
             )
 
+            raw_completion = (
+                self.config.get("voice_activation", {}).get("completion_phrase")
+                if isinstance(self.config, dict)
+                else None
+            )
+            completion_phrase = (
+                raw_completion.strip()
+                if isinstance(raw_completion, str) and raw_completion.strip()
+                else "Pronto!"
+            )
+
             conversation_memory.record_turn(
                 user_query=self.last_input_text,
-                assistant_response=plan.explanation or "Pronto!",
+                assistant_response=plan.explanation or completion_phrase,
                 intent=plan.intent,
             )
             if self.audio_cue_manager:
                 self.audio_cue_manager.play_cue(CueType.ACTION_COMPLETED)
-            self.tts_engine.speak("Pronto!")
+            self.tts_engine.speak(completion_phrase)
             state_manager.set_state(JarvisState.IDLE)
             return True
         except Exception as e:

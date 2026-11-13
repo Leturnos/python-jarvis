@@ -45,7 +45,18 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
         pcm = np.frombuffer(audio_bytes, dtype=np.int16)
         if len(pcm) == 0 or np.max(np.abs(pcm)) < 50:
             logger.warning("Áudio silencioso detectado.")
-            dispatcher.tts_engine.speak("Desculpe, não ouvi nada.")
+            disp_cfg = getattr(dispatcher, "config", None)
+            raw_no_speech = (
+                disp_cfg.get("voice_activation", {}).get("no_speech_phrase")
+                if isinstance(disp_cfg, dict)
+                else None
+            )
+            no_speech_phrase = (
+                raw_no_speech.strip()
+                if isinstance(raw_no_speech, str) and raw_no_speech.strip()
+                else "Desculpe, não ouvi nada."
+            )
+            dispatcher.tts_engine.speak(no_speech_phrase)
             return True  # Final state for silence
 
         try:
@@ -58,7 +69,18 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
             raise  # Let worker handle retry for STT failure
 
         if not job.payload_text:
-            dispatcher.tts_engine.speak("Desculpe, não entendi.")
+            disp_cfg = getattr(dispatcher, "config", None)
+            raw_not_understood = (
+                disp_cfg.get("voice_activation", {}).get("not_understood_phrase")
+                if isinstance(disp_cfg, dict)
+                else None
+            )
+            not_understood_phrase = (
+                raw_not_understood.strip()
+                if isinstance(raw_not_understood, str) and raw_not_understood.strip()
+                else "Desculpe, não entendi."
+            )
+            dispatcher.tts_engine.speak(not_understood_phrase)
             return True
 
         notifier.notify("Jarvis", f"Entendi: '{job.payload_text}'.")

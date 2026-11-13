@@ -14,6 +14,9 @@ paths:
 voice_activation:
   mode: "hybrid"                      # hybrid, push_to_talk, always_listening
   response_phrase: "Sim?"             # Frase falada pelo Jarvis ao ser ativado
+  completion_phrase: "Pronto!"        # Frase falada ao concluir uma tarefa do sistema
+  no_speech_phrase: "Desculpe, não ouvi nada."   # Frase falada quando o áudio estiver vazio
+  not_understood_phrase: "Desculpe, não entendi." # Frase falada quando não compreender o comando
   volume_multiplier: 1.0              # Ganho do microfone (1.0 = padrão, >1.0 amplifica)
   device_index: null                  # Índice do microfone (null = microfone padrão do Windows)
   auto_suspend:
@@ -41,6 +44,7 @@ ui:
 # Sintetizador de Voz (TTS)
 tts:
   provider: "sapi5"
+  active_voice_id: "sapi5_default"    # sapi5_default, jarvis_mk3, friday_mk50, piper_dii, piper_sage, piper_faber, piper_cadu, piper_jeff, piper_edresson
   voice_keyword: "maria"              # Nome ou parte do nome da voz instalada no Windows
   rate: 2                             # Velocidade da fala (-10 a 10)
   volume: 100                         # Volume da fala (0 a 100)
