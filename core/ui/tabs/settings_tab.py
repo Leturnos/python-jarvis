@@ -40,12 +40,21 @@ from qfluentwidgets import (
 
 from core.ai.llm_agent import llm_agent
 from core.audio.audio_engine import get_input_devices
+from core.audio.voice_catalog import (
+    DEFAULT_STAGE_PHRASES,
+    DEFAULT_VOICE_ID,
+    STAGE_PHRASE_PRESETS,
+    VOICE_CATALOG,
+    get_voice_preset,
+)
+from core.audio.voice_manager import VoiceManager
 from core.infra.config import (
     config,
     update_yaml_active_provider,
     update_yaml_bool_setting,
     update_yaml_device_index,
     update_yaml_float_setting,
+    update_yaml_int_setting,
     update_yaml_performance_profile,
     update_yaml_str_setting,
     update_yaml_ui_position,
@@ -64,6 +73,7 @@ from core.ui.screen_position import SCREEN_POSITION_LABELS, SCREEN_POSITIONS_ORD
 from core.ui.widgets.audio_calibration_dialog import AudioCalibrationDialog
 from core.ui.widgets.hotkey_recorder import HotkeyRecorder
 from core.ui.widgets.safe_slider import SafeSlider
+from core.ui.widgets.voice_combo_box import TwoColumnVoiceComboBox
 
 
 class MiniMonitorPreview(QFrame):
@@ -182,6 +192,9 @@ class SettingsTab(QWidget):
     update_extracting = Signal()
     update_download_finished = Signal(object)
     update_failed = Signal(str)
+    voice_download_progress = Signal(int, int)
+    voice_download_finished = Signal(str)
+    voice_download_failed = Signal(str)
 
     PROFILES_ORDER = [
         "auto",
@@ -202,9 +215,15 @@ class SettingsTab(QWidget):
         super().__init__(parent)
 
         self.ui_adapter = ui_adapter
+        self.voice_mgr = VoiceManager()
+        self._is_downloading_voice = False
         self._active_recorder: HotkeyRecorder | None = None
         self._active_field: str | None = None
         self._prev_recorded_val: str = ""
+
+        self.voice_download_progress.connect(self._on_voice_download_progress)
+        self.voice_download_finished.connect(self._on_voice_download_finished)
+        self.voice_download_failed.connect(self._on_voice_download_failed)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(8, 6, 8, 6)
@@ -533,6 +552,8 @@ class SettingsTab(QWidget):
         dev_row.addWidget(dev_lbl)
 
         self.input_device_combo = ComboBox(mic_card)
+        self.input_device_combo.setMinimumWidth(180)
+        self.input_device_combo.setMaximumWidth(375)
         self.input_device_combo.addItem("Padrão do Sistema (Windows)", userData=None)
 
         try:
@@ -626,6 +647,135 @@ class SettingsTab(QWidget):
 
         mic_layout.addLayout(mic_btns_row)
         layout.addWidget(mic_card)
+
+        # Card 2.8: Assistant Voice & Downloadable Neural Voice Packs
+        voice_card = SimpleCardWidget(scroll_content)
+        self._style_card(voice_card)
+        voice_layout = QVBoxLayout(voice_card)
+        voice_layout.setContentsMargins(16, 12, 16, 12)
+        voice_layout.setSpacing(10)
+
+        voice_title = StrongBodyLabel(
+            "🗣️ Voz do Assistente (Pacotes de Voz)", voice_card
+        )
+        voice_layout.addWidget(voice_title)
+
+        voice_sub = CaptionLabel(
+            "Escolha a voz do Jarvis (incluindo J.A.R.V.I.S. Mark III e F.R.I.D.A.Y.), ajuste velocidade/volume ou limpe pacotes não usados.",
+            voice_card,
+        )
+        voice_sub.setWordWrap(True)
+        voice_sub.setStyleSheet("color: #82828e;")
+        voice_layout.addWidget(voice_sub)
+
+        # Row 1: Voice Preset Selector (2-column aligned: Name | Model Weight)
+        v_sel_row = QHBoxLayout()
+        v_sel_row.setSpacing(8)
+        v_sel_lbl = BodyLabel("Voz / Persona:", voice_card)
+        v_sel_lbl.setFixedWidth(165)
+        v_sel_row.addWidget(v_sel_lbl)
+
+        self.voice_combo = TwoColumnVoiceComboBox(voice_card)
+        self.voice_ids = [preset.voice_id for preset in VOICE_CATALOG]
+        v_sel_row.addWidget(self.voice_combo, 1)
+        voice_layout.addLayout(v_sel_row)
+
+        self.voice_desc_label = CaptionLabel("", voice_card)
+        self.voice_desc_label.setWordWrap(True)
+        self.voice_desc_label.setStyleSheet("color: #9da3b4;")
+        voice_layout.addWidget(self.voice_desc_label)
+
+        # Row 2: Speech Rate Slider (-6 to +6)
+        rate_row = QHBoxLayout()
+        rate_row.setSpacing(8)
+        rate_lbl = BodyLabel("Velocidade da Fala:", voice_card)
+        rate_lbl.setFixedWidth(165)
+        rate_row.addWidget(rate_lbl)
+
+        cur_rate = int(config.get("tts", {}).get("rate", 2))
+        cur_rate = max(-6, min(6, cur_rate))
+        self.tts_rate_val_lbl = StrongBodyLabel(f"{cur_rate:+d}", voice_card)
+        self.tts_rate_val_lbl.setStyleSheet("color: #4cc2ff;")
+        self.tts_rate_val_lbl.setFixedWidth(40)
+        self.tts_rate_val_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        self.tts_rate_slider = SafeSlider(Qt.Orientation.Horizontal, voice_card)
+        self.tts_rate_slider.setRange(-6, 6)
+        self.tts_rate_slider.setValue(cur_rate)
+        self.tts_rate_slider.valueChanged.connect(
+            lambda v: self.tts_rate_val_lbl.setText(f"{int(v):+d}")
+        )
+        rate_row.addWidget(self.tts_rate_slider, 1)
+        rate_row.addWidget(self.tts_rate_val_lbl)
+        voice_layout.addLayout(rate_row)
+
+        # Row 3: Speech Volume Slider (10 to 100)
+        vol_row = QHBoxLayout()
+        vol_row.setSpacing(8)
+        vol_lbl = BodyLabel("Volume da Voz:", voice_card)
+        vol_lbl.setFixedWidth(165)
+        vol_row.addWidget(vol_lbl)
+
+        cur_vol = int(config.get("tts", {}).get("volume", 100))
+        cur_vol = max(10, min(100, cur_vol))
+        self.tts_volume_val_lbl = StrongBodyLabel(f"{cur_vol}%", voice_card)
+        self.tts_volume_val_lbl.setStyleSheet("color: #4cc2ff;")
+        self.tts_volume_val_lbl.setFixedWidth(40)
+        self.tts_volume_val_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        self.tts_volume_slider = SafeSlider(Qt.Orientation.Horizontal, voice_card)
+        self.tts_volume_slider.setRange(10, 100)
+        self.tts_volume_slider.setValue(cur_vol)
+        self.tts_volume_slider.valueChanged.connect(
+            lambda v: self.tts_volume_val_lbl.setText(f"{int(v)}%")
+        )
+        vol_row.addWidget(self.tts_volume_slider, 1)
+        vol_row.addWidget(self.tts_volume_val_lbl)
+        voice_layout.addLayout(vol_row)
+
+        # Progress bar for voice downloads (hidden by default)
+        self.voice_dl_progress = ProgressBar(voice_card)
+        self.voice_dl_progress.setRange(0, 100)
+        self.voice_dl_progress.setValue(0)
+        self.voice_dl_progress.setVisible(False)
+        voice_layout.addWidget(self.voice_dl_progress)
+
+        self.voice_dl_status_lbl = CaptionLabel("", voice_card)
+        self.voice_dl_status_lbl.setWordWrap(True)
+        self.voice_dl_status_lbl.setStyleSheet("color: #4cc2ff;")
+        self.voice_dl_status_lbl.setVisible(False)
+        voice_layout.addWidget(self.voice_dl_status_lbl)
+
+        # Action Buttons Row
+        v_btns_row = QHBoxLayout()
+        v_btns_row.setSpacing(8)
+
+        self.voice_action_btn = PrimaryPushButton("Definir como Voz Ativa", voice_card)
+        self.voice_action_btn.clicked.connect(self._on_voice_primary_action)
+        v_btns_row.addWidget(self.voice_action_btn)
+
+        self.voice_preview_btn = PushButton("🔊 Ouvir Amostra", voice_card)
+        self.voice_preview_btn.clicked.connect(self._on_preview_selected_voice)
+        v_btns_row.addWidget(self.voice_preview_btn)
+
+        v_btns_row.addStretch(1)
+
+        self.cleanup_voices_btn = PushButton("🧹 Enxugar Vozes Não Usadas", voice_card)
+        self.cleanup_voices_btn.setToolTip(
+            "Apaga pacotes de voz baixados que não estão em uso (preserva a voz ativa e a voz nativa do Windows)."
+        )
+        self.cleanup_voices_btn.clicked.connect(self._on_cleanup_unused_voices)
+        v_btns_row.addWidget(self.cleanup_voices_btn)
+
+        voice_layout.addLayout(v_btns_row)
+        layout.addWidget(voice_card)
+
+        self._refresh_voice_selector_ui()
+        self.voice_combo.currentIndexChanged.connect(self._on_voice_selection_changed)
 
         # Card 3: Behavior Toggles (Uniform Switch Alignment)
         beh_card = SimpleCardWidget(scroll_content)
@@ -842,20 +992,132 @@ class SettingsTab(QWidget):
         pro_row.addWidget(self.proactivity_combo, 1)
         ai_layout.addLayout(pro_row)
 
-        # Response Phrase row
+        # Quick Phrase Kit presets row
+        kit_row = QHBoxLayout()
+        kit_row.setSpacing(6)
+        kit_lbl = BodyLabel("Kits de Frases:", ai_card)
+        kit_lbl.setFixedWidth(155)
+        kit_row.addWidget(kit_lbl)
+
+        self.phrase_kit_buttons: dict[str, PushButton] = {}
+        for kit_name in STAGE_PHRASE_PRESETS:
+            kit_btn = PushButton(kit_name, ai_card)
+            kit_btn.setToolTip(f"Preencher frases das etapas com o estilo '{kit_name}'")
+            kit_btn.clicked.connect(
+                lambda checked=False, k=kit_name: self._apply_phrase_kit(k)
+            )
+            self.phrase_kit_buttons[kit_name] = kit_btn
+            kit_row.addWidget(kit_btn)
+        kit_row.addStretch(1)
+        ai_layout.addLayout(kit_row)
+
+        va_cfg = config.get("voice_activation", {})
+
+        # Stage 1: Response Phrase (Wake Word / Activation)
         resp_row = QHBoxLayout()
         resp_row.setSpacing(8)
-        resp_lbl = BodyLabel("Frase de Resposta:", ai_card)
+        resp_lbl = BodyLabel("Ao Ativar (Wake Word):", ai_card)
         resp_lbl.setFixedWidth(155)
         resp_row.addWidget(resp_lbl)
 
         self.response_phrase_input = FluentLineEdit(ai_card)
-        cur_phrase = config.get("voice_activation", {}).get("response_phrase", "Sim?")
+        cur_phrase = va_cfg.get(
+            "response_phrase", DEFAULT_STAGE_PHRASES["response_phrase"]
+        )
         self.response_phrase_input.setText(str(cur_phrase))
-        self.response_phrase_input.setPlaceholderText("Ex: Sim?, Às ordens!")
+        self.response_phrase_input.setPlaceholderText(
+            "Ex: Sim?, Às suas ordens, senhor."
+        )
         self.response_phrase_input.setClearButtonEnabled(True)
         resp_row.addWidget(self.response_phrase_input, 1)
+
+        self.preview_resp_btn = PushButton("🔊", ai_card)
+        self.preview_resp_btn.setFixedWidth(40)
+        self.preview_resp_btn.setToolTip("Ouvir frase de ativação")
+        self.preview_resp_btn.clicked.connect(
+            lambda: self._speak_sample_text(self.response_phrase_input.text())
+        )
+        resp_row.addWidget(self.preview_resp_btn)
         ai_layout.addLayout(resp_row)
+
+        # Stage 2: Completion Phrase (When a task finishes)
+        comp_row = QHBoxLayout()
+        comp_row.setSpacing(8)
+        comp_lbl = BodyLabel("Ao Concluir Tarefa:", ai_card)
+        comp_lbl.setFixedWidth(155)
+        comp_row.addWidget(comp_lbl)
+
+        self.completion_phrase_input = FluentLineEdit(ai_card)
+        cur_comp = va_cfg.get(
+            "completion_phrase", DEFAULT_STAGE_PHRASES["completion_phrase"]
+        )
+        self.completion_phrase_input.setText(str(cur_comp))
+        self.completion_phrase_input.setPlaceholderText(
+            "Ex: Pronto!, Concluído, senhor."
+        )
+        self.completion_phrase_input.setClearButtonEnabled(True)
+        comp_row.addWidget(self.completion_phrase_input, 1)
+
+        self.preview_comp_btn = PushButton("🔊", ai_card)
+        self.preview_comp_btn.setFixedWidth(40)
+        self.preview_comp_btn.setToolTip("Ouvir frase de conclusão")
+        self.preview_comp_btn.clicked.connect(
+            lambda: self._speak_sample_text(self.completion_phrase_input.text())
+        )
+        comp_row.addWidget(self.preview_comp_btn)
+        ai_layout.addLayout(comp_row)
+
+        # Stage 3: No Speech Phrase (Silence detected)
+        ns_row = QHBoxLayout()
+        ns_row.setSpacing(8)
+        ns_lbl = BodyLabel("Quando Não Ouvir:", ai_card)
+        ns_lbl.setFixedWidth(155)
+        ns_row.addWidget(ns_lbl)
+
+        self.no_speech_phrase_input = FluentLineEdit(ai_card)
+        cur_ns = va_cfg.get(
+            "no_speech_phrase", DEFAULT_STAGE_PHRASES["no_speech_phrase"]
+        )
+        self.no_speech_phrase_input.setText(str(cur_ns))
+        self.no_speech_phrase_input.setPlaceholderText("Ex: Desculpe, não ouvi nada.")
+        self.no_speech_phrase_input.setClearButtonEnabled(True)
+        ns_row.addWidget(self.no_speech_phrase_input, 1)
+
+        self.preview_ns_btn = PushButton("🔊", ai_card)
+        self.preview_ns_btn.setFixedWidth(40)
+        self.preview_ns_btn.setToolTip("Ouvir frase de silêncio")
+        self.preview_ns_btn.clicked.connect(
+            lambda: self._speak_sample_text(self.no_speech_phrase_input.text())
+        )
+        ns_row.addWidget(self.preview_ns_btn)
+        ai_layout.addLayout(ns_row)
+
+        # Stage 4: Not Understood Phrase (STT empty / unrecognized)
+        nu_row = QHBoxLayout()
+        nu_row.setSpacing(8)
+        nu_lbl = BodyLabel("Quando Não Entender:", ai_card)
+        nu_lbl.setFixedWidth(155)
+        nu_row.addWidget(nu_lbl)
+
+        self.not_understood_phrase_input = FluentLineEdit(ai_card)
+        cur_nu = va_cfg.get(
+            "not_understood_phrase", DEFAULT_STAGE_PHRASES["not_understood_phrase"]
+        )
+        self.not_understood_phrase_input.setText(str(cur_nu))
+        self.not_understood_phrase_input.setPlaceholderText(
+            "Ex: Desculpe, não entendi., Poderia repetir, senhor?"
+        )
+        self.not_understood_phrase_input.setClearButtonEnabled(True)
+        nu_row.addWidget(self.not_understood_phrase_input, 1)
+
+        self.preview_nu_btn = PushButton("🔊", ai_card)
+        self.preview_nu_btn.setFixedWidth(40)
+        self.preview_nu_btn.setToolTip("Ouvir frase de não compreendido")
+        self.preview_nu_btn.clicked.connect(
+            lambda: self._speak_sample_text(self.not_understood_phrase_input.text())
+        )
+        nu_row.addWidget(self.preview_nu_btn)
+        ai_layout.addLayout(nu_row)
 
         # Web search provider row
         ws_row = QHBoxLayout()
@@ -1363,7 +1625,22 @@ class SettingsTab(QWidget):
 
     def _save_ai_preferences(self) -> None:
         proact = self.proactivity_options[self.proactivity_combo.currentIndex()]
-        phrase = self.response_phrase_input.text().strip() or "Sim?"
+        phrase = (
+            self.response_phrase_input.text().strip()
+            or DEFAULT_STAGE_PHRASES["response_phrase"]
+        )
+        comp_phrase = (
+            self.completion_phrase_input.text().strip()
+            or DEFAULT_STAGE_PHRASES["completion_phrase"]
+        )
+        ns_phrase = (
+            self.no_speech_phrase_input.text().strip()
+            or DEFAULT_STAGE_PHRASES["no_speech_phrase"]
+        )
+        nu_phrase = (
+            self.not_understood_phrase_input.text().strip()
+            or DEFAULT_STAGE_PHRASES["not_understood_phrase"]
+        )
         ws_prov = self.web_search_options[self.web_search_combo.currentIndex()]
         city = self.city_input.text().strip() or "São Paulo"
         notes_dir = self.notes_dir_input.text().strip()
@@ -1375,7 +1652,11 @@ class SettingsTab(QWidget):
         config.setdefault("tools", {}).setdefault("calendar", {})["ics_url"] = cal_url
 
         config.setdefault("ai", {})["proactivity"] = proact
-        config.setdefault("voice_activation", {})["response_phrase"] = phrase
+        va_dict = config.setdefault("voice_activation", {})
+        va_dict["response_phrase"] = phrase
+        va_dict["completion_phrase"] = comp_phrase
+        va_dict["no_speech_phrase"] = ns_phrase
+        va_dict["not_understood_phrase"] = nu_phrase
         config.setdefault("tools", {}).setdefault("web_search", {})["provider"] = (
             ws_prov
         )
@@ -1384,6 +1665,13 @@ class SettingsTab(QWidget):
         try:
             update_yaml_str_setting("ai", "proactivity", proact)
             update_yaml_str_setting("voice_activation", "response_phrase", phrase)
+            update_yaml_str_setting(
+                "voice_activation", "completion_phrase", comp_phrase
+            )
+            update_yaml_str_setting("voice_activation", "no_speech_phrase", ns_phrase)
+            update_yaml_str_setting(
+                "voice_activation", "not_understood_phrase", nu_phrase
+            )
             update_yaml_str_setting(
                 "tools", "provider", ws_prov, subsection="web_search"
             )
@@ -1397,12 +1685,12 @@ class SettingsTab(QWidget):
 
         InfoBar.success(
             title="Preferências Salvas",
-            content=f"Configurações de IA salvas com sucesso (Cidade: '{city}', Proatividade: '{proact}').",
+            content=f"Configurações de IA e frases salvas com sucesso (Cidade: '{city}', Proatividade: '{proact}').",
             parent=self.window(),
             duration=3000,
         )
         logger.info(
-            f"Saved AI preferences: proactivity='{proact}', phrase='{phrase}', web_search='{ws_prov}', city='{city}'."
+            f"Saved AI preferences: proactivity='{proact}', phrase='{phrase}', completion='{comp_phrase}', web_search='{ws_prov}', city='{city}'."
         )
 
     def _save_city(self) -> None:
@@ -1790,3 +2078,271 @@ class SettingsTab(QWidget):
         timer.timeout.connect(_tick)
         _tick()
         timer.start(240)
+
+    # ------------------------------------------------------------------
+    # Assistant Voice Catalog, Download, Preview & Cleanup Handlers
+    # ------------------------------------------------------------------
+    def _get_tts_engine(self) -> Any:
+        """Returns the live TTSEngine from ui_adapter.controller if available."""
+        ctrl = getattr(self.ui_adapter, "controller", None)
+        if ctrl is not None:
+            return getattr(ctrl, "tts_engine", None)
+        return None
+
+    def _refresh_voice_selector_ui(self, select_voice_id: str | None = None) -> None:
+        """Populates the voice combo box with installation badges and updates button states."""
+        active_voice_id = str(
+            config.get("tts", {}).get("active_voice_id", DEFAULT_VOICE_ID)
+        )
+        target_voice_id = select_voice_id or (
+            self.voice_ids[self.voice_combo.currentIndex()]
+            if self.voice_combo.count() == len(self.voice_ids)
+            and 0 <= self.voice_combo.currentIndex() < len(self.voice_ids)
+            else active_voice_id
+        )
+
+        self.voice_combo.blockSignals(True)
+        self.voice_combo.clear()
+        for preset in VOICE_CATALOG:
+            if preset.provider == "sapi5" or preset.model_asset is None:
+                badge = "0 MB · Nativa"
+            elif self.voice_mgr.is_voice_installed(preset.voice_id):
+                badge = f"✓ {preset.model_asset.approx_size_mb:.1f} MB"
+            else:
+                badge = f"⬇ {preset.model_asset.approx_size_mb:.1f} MB"
+
+            active_prefix = "★ " if preset.voice_id == active_voice_id else ""
+            self.voice_combo.addItem(f"{active_prefix}{preset.display_name}\t{badge}")
+
+        if target_voice_id in self.voice_ids:
+            self.voice_combo.setCurrentIndex(self.voice_ids.index(target_voice_id))
+        else:
+            self.voice_combo.setCurrentIndex(0)
+        self.voice_combo.blockSignals(False)
+
+        self._update_voice_action_controls()
+
+    def _on_voice_selection_changed(self, _index: int) -> None:
+        if not self._is_downloading_voice:
+            self.voice_dl_status_lbl.setVisible(False)
+        self._update_voice_action_controls()
+
+    def _update_voice_action_controls(self) -> None:
+        idx = self.voice_combo.currentIndex()
+        if idx < 0 or idx >= len(self.voice_ids):
+            return
+
+        selected_id = self.voice_ids[idx]
+        preset = get_voice_preset(selected_id)
+        active_id = str(config.get("tts", {}).get("active_voice_id", DEFAULT_VOICE_ID))
+        installed = self.voice_mgr.is_voice_installed(selected_id)
+
+        self.voice_desc_label.setText(preset.description)
+
+        if self._is_downloading_voice:
+            self.voice_action_btn.setEnabled(False)
+            self.voice_preview_btn.setEnabled(False)
+            self.cleanup_voices_btn.setEnabled(False)
+            return
+
+        self.voice_action_btn.setEnabled(True)
+        self.voice_preview_btn.setEnabled(installed)
+        if installed:
+            self.voice_preview_btn.setToolTip(
+                "Ouvir amostra real desta voz com a velocidade e volume atuais."
+            )
+        else:
+            self.voice_preview_btn.setToolTip(
+                "Baixe o pacote desta voz primeiro para ouvir a amostra (você pode enxugar/apagar depois se não usar)."
+            )
+
+        if installed:
+            if selected_id == active_id:
+                self.voice_action_btn.setText("Salvar Ajustes")
+            else:
+                self.voice_action_btn.setText("Definir como Ativa")
+        else:
+            mb = preset.model_asset.approx_size_mb if preset.model_asset else 60.0
+            self.voice_action_btn.setText(f"⬇️ Baixar e Ativar ({mb:.0f} MB)")
+
+        unused_count, unused_bytes = self.voice_mgr.get_unused_downloaded_stats(
+            active_id
+        )
+        if unused_count > 0:
+            unused_mb = unused_bytes / (1024 * 1024)
+            self.cleanup_voices_btn.setText(
+                f"🧹 Enxugar ({unused_count} · {unused_mb:.0f} MB)"
+            )
+            self.cleanup_voices_btn.setEnabled(True)
+        else:
+            self.cleanup_voices_btn.setText("🧹 Enxugar Não Usadas")
+            self.cleanup_voices_btn.setEnabled(False)
+
+    def _save_active_voice_and_sliders(self, voice_id: str) -> None:
+        """Persists active_voice_id, rate, and volume to config and config.yaml."""
+        rate_val = int(self.tts_rate_slider.value())
+        vol_val = int(self.tts_volume_slider.value())
+        preset = get_voice_preset(voice_id)
+
+        tts_cfg = config.setdefault("tts", {})
+        tts_cfg["active_voice_id"] = preset.voice_id
+        tts_cfg["rate"] = rate_val
+        tts_cfg["volume"] = vol_val
+
+        try:
+            update_yaml_str_setting("tts", "active_voice_id", preset.voice_id)
+            update_yaml_int_setting("tts", "rate", rate_val)
+            update_yaml_int_setting("tts", "volume", vol_val)
+        except Exception as e:
+            logger.warning(f"Could not persist TTS settings to yaml: {e}")
+
+        self._refresh_voice_selector_ui(select_voice_id=preset.voice_id)
+        InfoBar.success(
+            title="Voz Atualizada!",
+            content=f"Voz ativa: {preset.display_name} (Velocidade: {rate_val:+d}, Volume: {vol_val}%).",
+            parent=self.window(),
+            duration=3500,
+        )
+
+    def _on_voice_primary_action(self) -> None:
+        idx = self.voice_combo.currentIndex()
+        if idx < 0 or idx >= len(self.voice_ids):
+            return
+
+        selected_id = self.voice_ids[idx]
+        if self.voice_mgr.is_voice_installed(selected_id):
+            self._save_active_voice_and_sliders(selected_id)
+            return
+
+        # Trigger secure background download
+        preset = get_voice_preset(selected_id)
+        self._is_downloading_voice = True
+        self.voice_dl_progress.setValue(0)
+        self.voice_dl_progress.setVisible(True)
+        self.voice_dl_status_lbl.setStyleSheet("color: #4cc2ff;")
+        self.voice_dl_status_lbl.setText(
+            f"Baixando pacote seguro para '{preset.display_name}'..."
+        )
+        self.voice_dl_status_lbl.setVisible(True)
+        self._update_voice_action_controls()
+
+        def _dl_worker() -> None:
+            try:
+
+                def _prog(down: int, total: int) -> None:
+                    if total > 0:
+                        self.voice_download_progress.emit(down, total)
+
+                self.voice_mgr.download_voice_model(
+                    selected_id, progress_callback=_prog
+                )
+                self.voice_download_finished.emit(selected_id)
+            except Exception as exc:
+                logger.error(f"Voice download failed for '{selected_id}': {exc}")
+                friendly_msg = self.voice_mgr.format_user_error(exc)
+                self.voice_download_failed.emit(friendly_msg)
+
+        threading.Thread(target=_dl_worker, daemon=True).start()
+
+    def _on_voice_download_progress(self, downloaded: int, total: int) -> None:
+        pct = int((downloaded / total) * 100) if total > 0 else 0
+        self.voice_dl_progress.setValue(pct)
+        mb_down = downloaded / (1024 * 1024)
+        mb_total = total / (1024 * 1024)
+        self.voice_dl_status_lbl.setText(
+            f"Baixando e verificando integridade: {mb_down:.1f} MB / {mb_total:.1f} MB ({pct}%)"
+        )
+
+    def _on_voice_download_finished(self, voice_id: str) -> None:
+        self._is_downloading_voice = False
+        self.voice_dl_progress.setVisible(False)
+        self.voice_dl_status_lbl.setVisible(False)
+        self._save_active_voice_and_sliders(voice_id)
+        preset = get_voice_preset(voice_id)
+        self._speak_sample_text(preset.sample_text, voice_id=voice_id)
+
+    def _on_voice_download_failed(self, err_msg: str) -> None:
+        self._is_downloading_voice = False
+        self.voice_dl_progress.setVisible(False)
+        friendly = self.voice_mgr.format_user_error(err_msg)
+        self.voice_dl_status_lbl.setStyleSheet("color: #ff7b72;")
+        self.voice_dl_status_lbl.setText(f"⚠️ {friendly}")
+        self.voice_dl_status_lbl.setVisible(True)
+        self._update_voice_action_controls()
+        InfoBar.error(
+            title="Não foi possível baixar a voz",
+            content=friendly,
+            parent=self.window(),
+            duration=5000,
+        )
+
+    def _on_preview_selected_voice(self) -> None:
+        idx = self.voice_combo.currentIndex()
+        if idx < 0 or idx >= len(self.voice_ids):
+            return
+        selected_id = self.voice_ids[idx]
+        if not self.voice_mgr.is_voice_installed(selected_id):
+            return
+        preset = get_voice_preset(selected_id)
+
+        # Apply current slider values in memory before speaking sample
+        tts_cfg = config.setdefault("tts", {})
+        tts_cfg["rate"] = int(self.tts_rate_slider.value())
+        tts_cfg["volume"] = int(self.tts_volume_slider.value())
+        self._speak_sample_text(preset.sample_text, voice_id=selected_id)
+
+    def _speak_sample_text(self, text: str, voice_id: str | None = None) -> None:
+        clean = text.strip()
+        if not clean:
+            return
+        tts_engine = self._get_tts_engine()
+        if tts_engine is not None and hasattr(tts_engine, "speak_preview"):
+            tts_engine.speak_preview(clean, voice_id=voice_id)
+        else:
+            InfoBar.info(
+                "Amostra de Voz",
+                f'"{clean}"',
+                parent=self.window(),
+                duration=2500,
+            )
+
+    def _on_cleanup_unused_voices(self) -> None:
+        active_id = str(config.get("tts", {}).get("active_voice_id", DEFAULT_VOICE_ID))
+        tts_engine = self._get_tts_engine()
+        if tts_engine is not None and hasattr(tts_engine, "evict_cached_models"):
+            tts_engine.evict_cached_models()
+
+        removed_count, freed_bytes = self.voice_mgr.cleanup_unused_voices(active_id)
+        self._refresh_voice_selector_ui()
+
+        if removed_count > 0:
+            freed_mb = freed_bytes / (1024 * 1024)
+            InfoBar.success(
+                title="Limpeza Concluída!",
+                content=f"{removed_count} pacote(s) não usado(s) removido(s) ({freed_mb:.1f} MB liberados).",
+                parent=self.window(),
+                duration=4000,
+            )
+        else:
+            InfoBar.info(
+                title="Nada para Limpar",
+                content="Nenhum pacote de voz não utilizado foi encontrado em disco.",
+                parent=self.window(),
+                duration=3000,
+            )
+
+    def _apply_phrase_kit(self, kit_name: str) -> None:
+        """Fills the 4 stage phrase inputs with a thematic preset kit."""
+        kit = STAGE_PHRASE_PRESETS.get(kit_name)
+        if not kit:
+            return
+        self.response_phrase_input.setText(kit["response_phrase"])
+        self.completion_phrase_input.setText(kit["completion_phrase"])
+        self.no_speech_phrase_input.setText(kit["no_speech_phrase"])
+        self.not_understood_phrase_input.setText(kit["not_understood_phrase"])
+        InfoBar.info(
+            title=f"Kit '{kit_name}' Aplicado",
+            content="Clique em 'Salvar Preferências da IA' para gravar as frases.",
+            parent=self.window(),
+            duration=2800,
+        )
