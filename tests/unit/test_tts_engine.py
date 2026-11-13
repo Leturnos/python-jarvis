@@ -31,10 +31,22 @@ def test_tts_engine_clear_queue():
     config = {"tts": {"voice_keyword": "maria"}}
     with patch("core.audio.tts_engine.threading.Thread"):
         engine = TTSEngine(config)
+        engine._preview_voice_override = "jarvis_mk3"
         engine.speak("Frase um. Frase dois.")
         assert not engine._speech_queue.empty()
         engine.clear_queue()
         assert engine._speech_queue.empty()
+        assert engine._preview_voice_override is None
+
+
+def test_tts_engine_evict_cached_models():
+    config = {"tts": {"voice_keyword": "maria"}}
+    with patch("core.audio.tts_engine.threading.Thread"):
+        engine = TTSEngine(config)
+        engine._piper_cache["test_model"] = object()
+        assert "test_model" in engine._piper_cache
+        engine.evict_cached_models()
+        assert len(engine._piper_cache) == 0
 
 
 def test_tts_engine_debounce_duplicate_speech():
@@ -52,3 +64,19 @@ def test_tts_engine_debounce_duplicate_speech():
         # Call with different text is queued
         engine.speak("Outra fala")
         assert engine._speech_queue.qsize() == 2
+
+
+def test_tts_engine_rate_to_length_scale_and_preview():
+    config = {"tts": {"voice_keyword": "maria", "active_voice_id": "sapi5_default"}}
+    with patch("core.audio.tts_engine.threading.Thread"):
+        engine = TTSEngine(config)
+        # Positive rate speeds up speech (smaller length_scale)
+        fast_scale = engine.rate_to_length_scale(5, base_scale=1.0)
+        slow_scale = engine.rate_to_length_scale(-5, base_scale=1.0)
+        assert fast_scale < 1.0 < slow_scale
+
+        engine.speak("Frase antiga")
+        engine.speak_preview("Teste de voz. Segunda parte!", voice_id="jarvis_mk3")
+        assert engine._preview_voice_override == "jarvis_mk3"
+        assert engine._speech_queue.get() == "Teste de voz."
+        assert engine._speech_queue.get() == "Segunda parte!"

@@ -556,11 +556,22 @@ def test_settings_tab_ai_preferences_save():
 
         tab.save_city_btn.click()
 
-        assert mock_str_setting.call_count == 5
+        assert mock_str_setting.call_count == 8
         mock_city_setting.assert_called_once_with("Belo Horizonte")
         calls = [c.args for c in mock_str_setting.call_args_list]
         assert ("ai", "proactivity", "proactive") in calls
         assert ("voice_activation", "response_phrase", "Às ordens!") in calls
+        assert ("voice_activation", "completion_phrase", "Pronto!") in calls
+        assert (
+            "voice_activation",
+            "no_speech_phrase",
+            "Desculpe, não ouvi nada.",
+        ) in calls
+        assert (
+            "voice_activation",
+            "not_understood_phrase",
+            "Desculpe, não entendi.",
+        ) in calls
         assert ("tools", "provider", "duckduckgo") in calls
         assert ("tools", "markdown_dir", "C:/Notes") in calls
         assert ("tools", "ics_url", "https://example.com/calendar.ics") in calls
