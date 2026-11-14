@@ -308,17 +308,23 @@ def test_create_release_zip_packages_cleanly(tmp_path):
     fake_jarvis = fake_dist / "Jarvis"
     fake_jarvis.mkdir(parents=True)
 
-    # Valid files
+    # Valid files (including nested package data inside _internal)
     (fake_jarvis / "Jarvis.exe").write_bytes(b"binary")
     (fake_jarvis / "config.yaml").write_text("model: test", encoding="utf-8")
+    nested_pkg_data = fake_jarvis / "_internal" / "language_tags" / "data" / "json"
+    nested_pkg_data.mkdir(parents=True)
+    (nested_pkg_data / "index.json").write_text("{}", encoding="utf-8")
 
-    # Excluded files and directories
+    # Excluded files and root runtime directories
     (fake_jarvis / ".env").write_text("KEY=SECRET", encoding="utf-8")
     (fake_jarvis / "test.log").write_text("log content", encoding="utf-8")
     (fake_jarvis / "test.pyc").write_bytes(b"bytecode")
     logs_dir = fake_jarvis / "logs"
     logs_dir.mkdir()
     (logs_dir / "app.log").write_text("nested log", encoding="utf-8")
+    runtime_data_dir = fake_jarvis / "data"
+    runtime_data_dir.mkdir()
+    (runtime_data_dir / "history.db").write_bytes(b"sqlite")
 
     zip_file = create_release_zip(dist_dir=fake_dist)
 
@@ -330,7 +336,9 @@ def test_create_release_zip_packages_cleanly(tmp_path):
         namelist = zf.namelist()
         assert "Jarvis/Jarvis.exe" in namelist
         assert "Jarvis/config.yaml" in namelist
+        assert "Jarvis/_internal/language_tags/data/json/index.json" in namelist
         assert not any(".env" in name for name in namelist)
         assert not any(".log" in name for name in namelist)
         assert not any(".pyc" in name for name in namelist)
-        assert not any("logs/" in name for name in namelist)
+        assert not any(name.startswith("Jarvis/logs/") for name in namelist)
+        assert not any(name.startswith("Jarvis/data/") for name in namelist)

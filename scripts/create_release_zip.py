@@ -42,7 +42,8 @@ def create_release_zip(
 
     zip_path = base_dist / zip_filename
 
-    exclude_dirs = {"data", "logs", "__pycache__"}
+    exclude_root_dirs = {"data", "logs"}
+    exclude_anywhere_dirs = {"__pycache__"}
     exclude_files = {".env", ".gitignore", ".first_run_completed"}
     exclude_extensions = {".log", ".db", ".db-wal", ".db-shm", ".pyc"}
 
@@ -58,7 +59,9 @@ def create_release_zip(
             if path.name in exclude_files or path.suffix.lower() in exclude_extensions:
                 continue
             rel = path.relative_to(jarvis_dir)
-            if any(part in exclude_dirs for part in rel.parts):
+            if rel.parts and rel.parts[0] in exclude_root_dirs:
+                continue
+            if any(part in exclude_anywhere_dirs for part in rel.parts):
                 continue
             arcname = Path("Jarvis") / rel
             zf.write(path, arcname=str(arcname))

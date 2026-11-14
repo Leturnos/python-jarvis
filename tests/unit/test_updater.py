@@ -183,7 +183,10 @@ def test_generate_updater_script(tmp_path):
     assert str(source_dir) in content
     assert str(dest_dir) in content
     assert str(exe_path) in content
-    assert "/XD data logs" in content
+    assert (
+        f'/XD "{source_dir}\\data" "{dest_dir}\\data" "{source_dir}\\logs" "{dest_dir}\\logs" .git'
+        in content
+    )
 
 
 def test_generate_updater_script_hardening(tmp_path):

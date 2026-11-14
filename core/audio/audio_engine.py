@@ -8,6 +8,7 @@ import openwakeword
 import pyaudio
 from openwakeword.model import Model
 
+from core.audio.portaudio_lock import create_pyaudio, terminate_pyaudio
 from core.infra.config import config as global_config
 from core.infra.logger_config import logger
 from core.shared.paths import get_app_root
@@ -52,7 +53,7 @@ def get_input_devices() -> list[tuple[int, str]]:
     seen_names: set[str] = set()
     pa = None
     try:
-        pa = pyaudio.PyAudio()
+        pa = create_pyaudio()
         device_count = pa.get_device_count()
         for i in range(device_count):
             try:
@@ -78,7 +79,7 @@ def get_input_devices() -> list[tuple[int, str]]:
     finally:
         if pa is not None:
             try:
-                pa.terminate()
+                terminate_pyaudio(pa)
             except Exception:
                 pass
     return devices
@@ -95,7 +96,7 @@ def get_audio_stream(
     device_index = voice_act.get("device_index")
     frames_per_buffer = voice_act.get("frames_per_buffer", 1280)
 
-    pa = pyaudio.PyAudio()
+    pa = create_pyaudio()
     stream_kwargs = {
         "rate": 16000,
         "channels": 1,
@@ -186,7 +187,7 @@ def safe_reset_audio(
             stream.stop_stream()
             stream.close()
         if pa:
-            pa.terminate()
+            terminate_pyaudio(pa)
     except Exception as e:
         logger.error(f"Error during audio cleanup: {e}")
 

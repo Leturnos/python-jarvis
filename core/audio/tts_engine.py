@@ -10,7 +10,6 @@ from typing import Any
 
 import espeakng_loader
 import numpy as np
-import pyaudio
 import pythoncom
 import win32com.client
 from numpy.typing import NDArray
@@ -18,6 +17,7 @@ from phonemizer import phonemize
 from phonemizer.backend.espeak.wrapper import EspeakWrapper
 from piper_onnx import Piper
 
+from core.audio.portaudio_lock import create_pyaudio, terminate_pyaudio
 from core.audio.voice_catalog import DEFAULT_VOICE_ID, get_voice_preset
 from core.audio.voice_dsp import apply_voice_dsp
 from core.audio.voice_manager import VoiceManager
@@ -153,7 +153,7 @@ class TTSEngine:
         owned_pa = False
         try:
             if pa is None:
-                pa = pyaudio.PyAudio()
+                pa = create_pyaudio()
                 owned_pa = True
 
             stream = None
@@ -183,7 +183,7 @@ class TTSEngine:
                     except Exception:
                         pass
                 if owned_pa and pa is not None:
-                    pa.terminate()
+                    terminate_pyaudio(pa)
         except Exception as e:
             if self._abort_current.is_set() or self._stop_tts.is_set():
                 return
@@ -232,7 +232,7 @@ class TTSEngine:
             self._configure_sapi_voice(voice, voice_keyword)
 
             try:
-                pa = pyaudio.PyAudio()
+                pa = create_pyaudio()
             except Exception as e:
                 logger.debug(f"PyAudio unavailable in TTS worker: {e}")
 
@@ -291,7 +291,7 @@ class TTSEngine:
         finally:
             if pa is not None:
                 try:
-                    pa.terminate()
+                    terminate_pyaudio(pa)
                 except Exception:
                     pass
             pythoncom.CoUninitialize()

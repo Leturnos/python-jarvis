@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from core.audio.audio_engine import safe_reset_audio
+from core.audio.portaudio_lock import terminate_pyaudio
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,6 @@ class AudioLoopManager:
         try:
             self.stream.stop_stream()
             self.stream.close()
-            self.pa.terminate()
+            terminate_pyaudio(self.pa)
         except Exception as e:
             logger.debug(f"Error terminating PyAudio: {e}")
