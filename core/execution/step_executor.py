@@ -97,8 +97,8 @@ class StepExecutor:
             logger.info(
                 "Lazy-loading SpotifyAutomator and TemplateMatcher dependencies..."
             )
-            from core.media.cv_matcher import TemplateMatcher
-            from core.media.spotify_automator import SpotifyAutomator
+            from core.media.cv_matcher import TemplateMatcher  # noqa: PLC0415
+            from core.media.spotify_automator import SpotifyAutomator  # noqa: PLC0415
 
             template_matcher = TemplateMatcher()
             self._spotify_automator = SpotifyAutomator(

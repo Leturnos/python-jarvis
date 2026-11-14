@@ -60,7 +60,7 @@ def time_it[F: Callable[..., Any]](func: F) -> F:
             try:
                 hm = history_manager
                 if hm is None:
-                    from core.persistence.history_db import (
+                    from core.persistence.history_db import (  # noqa: PLC0415
                         history_manager as default_history_manager,
                     )
 

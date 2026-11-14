@@ -84,8 +84,8 @@ class ActionDispatcher:
         if self._callbacks_bound:
             return
         try:
-            from core.tools.timer_tool import TimerTool
-            from core.tools.tool_registry import tool_registry
+            from core.tools.timer_tool import TimerTool  # noqa: PLC0415
+            from core.tools.tool_registry import tool_registry  # noqa: PLC0415
 
             timer = tool_registry.get_tool("timer")
             if isinstance(timer, TimerTool):
@@ -601,13 +601,13 @@ class ActionDispatcher:
 
     def handle_media(self, action_json: dict[str, Any]) -> bool:
         """Resolves and dispatches media automation plans (Spotify and OS Media)."""
-        from core.media.models import (
+        from core.media.models import (  # noqa: PLC0415
             AutoplayStrategy,
             MediaAction,
             MediaIntent,
             QueryType,
         )
-        from core.media.resolver import MediaResolver
+        from core.media.resolver import MediaResolver  # noqa: PLC0415
 
         raw_action = str(action_json.get("action", "")).strip().lower()
         if raw_action == "prev":
@@ -670,8 +670,10 @@ class ActionDispatcher:
 
     def handle_local_media_command(self, intent_name: str) -> bool:
         """Executes instantaneous OS-level media control commands without LLM."""
-        from core.media.models import MediaAction
-        from core.media.providers.os_controller import OSMediaController
+        from core.media.models import MediaAction  # noqa: PLC0415
+        from core.media.providers.os_controller import (  # noqa: PLC0415
+            OSMediaController,
+        )
 
         action_map = {
             "media_pause": (MediaAction.PAUSE, "Mídia pausada."),

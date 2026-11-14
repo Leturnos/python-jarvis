@@ -16,7 +16,7 @@ def get_app_version() -> str:
     pyproject_path = get_app_root() / "pyproject.toml"
     if pyproject_path.exists():
         try:
-            import tomllib
+            import tomllib  # noqa: PLC0415
 
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
@@ -27,7 +27,7 @@ def get_app_version() -> str:
             pass
 
     try:
-        from importlib.metadata import version
+        from importlib.metadata import version  # noqa: PLC0415
 
         return str(version("python-jarvis"))
     except Exception:

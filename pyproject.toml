@@ -54,8 +54,14 @@ select = [
     "N",
     "B",   # bugbear
     "UP",  # pyupgrade
+    "PLC0415",  # import-outside-top-level
 ]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["PLC0415"]
+"scripts/**/*.py" = ["PLC0415"]
+"core/tools/tool_registry.py" = ["PLC0415"]
 
 [tool.mypy]
 files = ["core", "main.py"]

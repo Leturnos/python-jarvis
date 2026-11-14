@@ -277,8 +277,8 @@ class TimerTool(BaseTool):
 
         # Fallback direct speech in isolated thread with proper COM initialization and teardown
         try:
-            import pythoncom
-            import win32com.client
+            import pythoncom  # noqa: PLC0415
+            import win32com.client  # noqa: PLC0415
 
             pythoncom.CoInitialize()
             try:

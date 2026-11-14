@@ -25,7 +25,7 @@ def _call_dispatcher(
     dispatcher: Any, method_name: str, *args: Any, **kwargs: Any
 ) -> bool:
     """Invokes method on dispatcher instance, falling back to ActionDispatcher class implementation for bare test mocks."""
-    from core.execution.dispatcher import ActionDispatcher
+    from core.execution.dispatcher import ActionDispatcher  # noqa: PLC0415
 
     if isinstance(dispatcher, ActionDispatcher):
         method = getattr(dispatcher, method_name)

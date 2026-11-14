@@ -107,7 +107,7 @@ class LLMAgent:
 
         win_ctx = "Área de Trabalho / Nenhuma janela ativa"
         try:
-            from core.execution.window_manager import WindowManager
+            from core.execution.window_manager import WindowManager  # noqa: PLC0415
 
             win = WindowManager.get_active_window()
             if win and win.title:
