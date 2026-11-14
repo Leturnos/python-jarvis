@@ -86,6 +86,20 @@ def test_apply_dsp_handles_empty_and_silent_buffers():
     assert out.shape == (1024,)
     assert float(np.max(np.abs(out))) == 0.0
 
+    quiet = (0.12 * np.sin(2 * np.pi * 220.0 * np.linspace(0, 0.2, 4410))).astype(
+        np.float32
+    )
+    boosted = apply_voice_dsp(quiet, 22050, "natural")
+    assert 0.80 <= float(np.max(np.abs(boosted))) <= 0.90
+    assert float(np.max(np.abs(apply_voice_dsp(silent, 22050, "natural")))) == 0.0
+
+
+def test_sage_preset_substitutes_vocalized_period_token():
+    from core.audio.voice_catalog import get_voice_preset
+
+    assert get_voice_preset("piper_sage").period_phoneme_substitute == ":"
+    assert get_voice_preset("piper_faber").period_phoneme_substitute is None
+
 
 def test_settings_tab_phrase_kits_and_voice_selector_ui():
     _app = QApplication.instance() or QApplication([])

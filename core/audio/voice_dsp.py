@@ -106,6 +106,18 @@ def apply_friday_mk50_dsp(
     )
 
 
+def apply_natural_dsp(samples: NDArray[np.float32]) -> NDArray[np.float32]:
+    """Preserves natural timbre while boosting quiet neural models to a clear level."""
+    mono = np.asarray(samples, dtype=np.float32).reshape(-1)
+    if mono.size == 0:
+        return mono
+    peak = float(np.max(np.abs(mono)))
+    if 1e-4 < peak < 0.72:
+        gain = min(8.0, 0.85 / peak)
+        mono = mono * gain
+    return np.clip(mono, -1.0, 1.0).astype(np.float32)
+
+
 def apply_voice_dsp(
     samples: NDArray[np.float32], sample_rate: int, dsp_profile: str
 ) -> NDArray[np.float32]:
@@ -114,4 +126,6 @@ def apply_voice_dsp(
         return apply_jarvis_mk3_dsp(samples, sample_rate)
     if dsp_profile == "friday_mk50":
         return apply_friday_mk50_dsp(samples, sample_rate)
+    if dsp_profile == "natural":
+        return apply_natural_dsp(samples)
     return np.clip(np.asarray(samples, dtype=np.float32).reshape(-1), -1.0, 1.0)

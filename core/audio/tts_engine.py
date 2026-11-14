@@ -114,19 +114,49 @@ class TTSEngine:
             preserve_punctuation=True,
             with_stress=True,
         )
-        if not phonemes or not str(phonemes).strip():
+        phonemes_str = str(phonemes).strip() if phonemes else ""
+        if not phonemes_str:
             return None
+        if preset.period_phoneme_substitute:
+            phonemes_str = phonemes_str.replace(".", preset.period_phoneme_substitute)
+            if len(phonemes_str) <= 8 and phonemes_str.endswith("?"):
+                phonemes_str = phonemes_str[:-1] + preset.period_phoneme_substitute
 
         base_length_scale = float(
             piper.config.get("inference", {}).get("length_scale", 1.0)
         )
         length_scale = self.rate_to_length_scale(rate, base_length_scale)
+        if len(phonemes_str) <= 8:
+            length_scale = max(length_scale, base_length_scale * 1.12)
 
-        samples, sample_rate = piper.create(
-            str(phonemes),
-            is_phonemes=True,
-            length_scale=length_scale,
-        )
+        padded_phonemes = " " + phonemes_str
+        pmap = getattr(piper, "phoneme_id_map", None)
+        if (
+            isinstance(pmap, dict)
+            and "^" in pmap
+            and "_" in pmap
+            and "$" in pmap
+            and hasattr(piper, "_create_input")
+            and hasattr(piper, "sess")
+        ):
+            ids: list[int] = list(pmap["^"])
+            for ch in padded_phonemes:
+                if ch in pmap:
+                    ids.extend(pmap[ch])
+                    ids.extend(pmap["_"])
+            ids.extend(pmap["$"])
+            inputs = piper._create_input(ids, length_scale, 0.333, 0.333, 0)
+            raw_samples = piper.sess.run(None, inputs)[0].squeeze((0, 1)).squeeze()
+            samples = np.asarray(raw_samples, dtype=np.float32)
+            sample_rate = int(piper.sample_rate)
+        else:
+            samples, sample_rate = piper.create(
+                padded_phonemes,
+                is_phonemes=True,
+                length_scale=length_scale,
+                noise_scale=0.333,
+                noise_w=0.333,
+            )
 
         processed = apply_voice_dsp(
             np.asarray(samples, dtype=np.float32),
@@ -150,6 +180,26 @@ class TTSEngine:
         if pcm_int16.size == 0:
             return
 
+        # Each sentence opens a fresh output stream; Windows drivers drop the first
+        # milliseconds while the stream warms up, so lead with silence and a short
+        # fade-in. A fade-out plus trailing silence lets the driver drain the full
+        # utterance before stream.stop_stream() closes.
+        padded_pcm = pcm_int16.copy()
+        fade_samples = min(padded_pcm.size, max(1, int(sample_rate * 0.015)))
+        if padded_pcm.size > fade_samples * 2:
+            fade_in_samples = max(1, int(sample_rate * 0.005))
+            fade_in = np.linspace(0.0, 1.0, fade_in_samples, dtype=np.float32)
+            padded_pcm[:fade_in_samples] = (
+                padded_pcm[:fade_in_samples].astype(np.float32) * fade_in
+            ).astype(np.int16)
+            fade_curve = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
+            padded_pcm[-fade_samples:] = (
+                padded_pcm[-fade_samples:].astype(np.float32) * fade_curve
+            ).astype(np.int16)
+        lead_silence = np.zeros(max(1, int(sample_rate * 0.05)), dtype=np.int16)
+        tail_silence = np.zeros(max(1, int(sample_rate * 0.20)), dtype=np.int16)
+        playback_pcm = np.concatenate([lead_silence, padded_pcm, tail_silence])
+
         owned_pa = False
         try:
             if pa is None:
@@ -165,14 +215,14 @@ class TTSEngine:
                     output=True,
                 )
                 chunk_samples = 2048
-                total = pcm_int16.size
+                total = playback_pcm.size
                 idx = 0
                 while (
                     idx < total
                     and not self._stop_tts.is_set()
                     and not self._abort_current.is_set()
                 ):
-                    sub = pcm_int16[idx : idx + chunk_samples]
+                    sub = playback_pcm[idx : idx + chunk_samples]
                     stream.write(sub.tobytes())
                     idx += chunk_samples
             finally:

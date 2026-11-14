@@ -81,6 +81,9 @@ class VoicePreset:
     dsp_profile: str  # "none" | "natural" | "jarvis_mk3" | "friday_mk50"
     sample_text: str
     model_asset: VoiceModelAsset | None = None
+    # Some community checkpoints vocalize the "." token as an audible burst;
+    # replacing it with a cleanly-decaying punctuation token avoids clipped endings.
+    period_phoneme_substitute: str | None = None
 
 
 # Immutable model assets (1-to-1 per neural voice preset so each voice installs/cleans up independently)
@@ -221,6 +224,7 @@ VOICE_CATALOG: tuple[VoicePreset, ...] = (
         dsp_profile="natural",
         sample_text="Mantenha a calma. Estou pronta para ajudar no seu fluxo de trabalho.",
         model_asset=MODEL_ASSETS["sage"],
+        period_phoneme_substitute=":",
     ),
     VoicePreset(
         voice_id="piper_faber",
