@@ -8,7 +8,7 @@ from faster_whisper import WhisperModel
 from core.infra.config import config
 from core.infra.logger_config import logger
 from core.shared.errors import TechnicalError
-from core.shared.utils import post_process_stt_text
+from core.shared.utils import post_process_stt_text, trim_working_set
 
 DEFAULT_SPEECH_KEYWORDS: list[str] = [
     "Jarvis",
@@ -99,8 +99,6 @@ class STTEngine:
                 gc.collect()
 
                 # Trim process working set on Windows to return freed C++ heap pages to OS
-                from core.shared.utils import trim_working_set
-
                 trim_working_set()
 
     def _reset_unload_timer(self) -> None:

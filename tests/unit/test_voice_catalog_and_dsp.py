@@ -1,4 +1,5 @@
 import numpy as np
+from PySide6.QtWidgets import QApplication
 
 from core.audio.voice_catalog import (
     DEFAULT_STAGE_PHRASES,
@@ -12,6 +13,7 @@ from core.audio.voice_dsp import (
     apply_jarvis_mk3_dsp,
     apply_voice_dsp,
 )
+from core.ui.tabs.settings_tab import SettingsTab
 
 
 def test_voice_catalog_has_balanced_male_and_female_options_within_limit():
@@ -86,10 +88,6 @@ def test_apply_dsp_handles_empty_and_silent_buffers():
 
 
 def test_settings_tab_phrase_kits_and_voice_selector_ui():
-    from PySide6.QtWidgets import QApplication
-
-    from core.ui.tabs.settings_tab import SettingsTab
-
     _app = QApplication.instance() or QApplication([])
     tab = SettingsTab()
 

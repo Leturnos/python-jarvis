@@ -8,7 +8,9 @@ import openwakeword
 import pyaudio
 from openwakeword.model import Model
 
+from core.infra.config import config as global_config
 from core.infra.logger_config import logger
+from core.shared.paths import get_app_root
 
 IGNORED_DEVICE_PATTERNS = (
     "mapeador de som",
@@ -87,8 +89,6 @@ def get_audio_stream(
 ) -> tuple[pyaudio.PyAudio, pyaudio.Stream]:
     """Initializes and returns the PyAudio stream."""
     if config is None:
-        from core.infra.config import config as global_config
-
         config = global_config
 
     voice_act = config.get("voice_activation", {})
@@ -126,8 +126,6 @@ def load_wakeword_model(
 ) -> tuple[Model | None, list[str]]:
     """Loads openWakeWord models (defaults and custom from models/ folder)."""
     if config is None:
-        from core.infra.config import config as global_config
-
         config = global_config
 
     voice_act = config.get("voice_activation", {})
@@ -136,8 +134,6 @@ def load_wakeword_model(
 
     # Pre-trained paths from openwakeword package
     pretrained_paths = openwakeword.get_pretrained_model_paths()
-
-    from core.shared.paths import get_app_root
 
     models_dir_cfg = config.get("paths", {}).get("models_dir", "models")
     models_dir = str(get_app_root() / models_dir_cfg)

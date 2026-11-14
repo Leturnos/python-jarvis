@@ -1,3 +1,4 @@
+import gc
 import io
 import queue
 import re
@@ -7,10 +8,15 @@ import wave
 import winsound
 from typing import Any
 
+import espeakng_loader
 import numpy as np
+import pyaudio
 import pythoncom
 import win32com.client
 from numpy.typing import NDArray
+from phonemizer import phonemize
+from phonemizer.backend.espeak.wrapper import EspeakWrapper
+from piper_onnx import Piper
 
 from core.audio.voice_catalog import DEFAULT_VOICE_ID, get_voice_preset
 from core.audio.voice_dsp import apply_voice_dsp
@@ -23,6 +29,12 @@ from core.shared.constants import (
     DEFAULT_TTS_VOLUME,
     Timing,
 )
+
+try:
+    EspeakWrapper.set_library(espeakng_loader.get_library_path())
+    EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
+except Exception as e:
+    logger.debug(f"Failed to configure espeakng library paths: {e}")
 
 
 class TTSEngine:
@@ -48,8 +60,6 @@ class TTSEngine:
 
     def evict_cached_models(self, model_key: str | None = None) -> None:
         """Releases cached ONNX sessions so model files can be safely deleted on Windows."""
-        import gc
-
         with self._cache_lock:
             if model_key is None:
                 self._piper_cache.clear()
@@ -63,8 +73,6 @@ class TTSEngine:
             cached = self._piper_cache.get(model_key)
             if cached is not None:
                 return cached
-
-            from piper_onnx import Piper
 
             instance = Piper(model_path=onnx_path, config_path=json_path)
             self._piper_cache[model_key] = instance
@@ -93,13 +101,6 @@ class TTSEngine:
         piper = self._get_or_load_piper(
             preset.model_asset.model_key, str(onnx_path), str(json_path)
         )
-
-        import espeakng_loader
-        from phonemizer import phonemize
-        from phonemizer.backend.espeak.wrapper import EspeakWrapper
-
-        EspeakWrapper.set_library(espeakng_loader.get_library_path())
-        EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
 
         espeak_voice = (
             piper.config.get("espeak", {}).get("voice", "pt-br")
@@ -152,8 +153,6 @@ class TTSEngine:
         owned_pa = False
         try:
             if pa is None:
-                import pyaudio
-
                 pa = pyaudio.PyAudio()
                 owned_pa = True
 
@@ -233,8 +232,6 @@ class TTSEngine:
             self._configure_sapi_voice(voice, voice_keyword)
 
             try:
-                import pyaudio
-
                 pa = pyaudio.PyAudio()
             except Exception as e:
                 logger.debug(f"PyAudio unavailable in TTS worker: {e}")
