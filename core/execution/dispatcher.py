@@ -76,6 +76,7 @@ class ActionDispatcher:
             None  # Access for main.py voice confirmation
         )
         self.last_plan: ExecutionPlan | None = None
+        self._active_tool_replay: dict[str, Any] | None = None
         self._callbacks_bound = False
         self._bind_tool_callbacks()
 
@@ -333,6 +334,34 @@ class ActionDispatcher:
 
         try:
             data = json.loads(last_json)
+            replay_type = data.get("type")
+
+            if replay_type == "tool_call":
+                tool_name = str(data.get("tool_name", ""))
+                original_query = str(data.get("original_query") or self.last_input_text)
+                logger.info(f"Replaying tool_call: {tool_name} ({original_query})")
+                return self.handle_tool_call(
+                    original_query=original_query,
+                    action_json=data,
+                )
+
+            if replay_type == "chat":
+                logger.info("Replaying last chat response.")
+                if data.get("original_query"):
+                    self.last_input_text = str(data["original_query"])
+                self.handle_dynamic(
+                    {
+                        "type": "chat",
+                        "message": data.get("message", "Sem resposta."),
+                    }
+                )
+                return True
+
+            if replay_type == "local_media":
+                intent_name = str(data.get("intent", ""))
+                logger.info(f"Replaying local media command: {intent_name}")
+                return self.handle_local_media_command(intent_name)
+
             plan = ExecutionPlan.from_dict(data)
             logger.info(f"Reconstructing plan for replay: {plan.intent}")
 
@@ -518,18 +547,34 @@ class ActionDispatcher:
             msg = action_config.get("message", "Sem resposta.")
             self.tts_engine.speak(msg)
 
+            active_tool = getattr(self, "_active_tool_replay", None)
+            if isinstance(active_tool, dict):
+                logged_intent = str(active_tool.get("intent") or "tool_call")
+                action_payload = active_tool
+            else:
+                logged_intent = "chat"
+                action_payload = {
+                    "schema_version": "1.0",
+                    "type": "chat",
+                    "intent": "chat",
+                    "explanation": msg,
+                    "message": msg,
+                    "original_query": self.last_input_text,
+                }
+
             conversation_memory.record_turn(
                 user_query=self.last_input_text,
                 assistant_response=msg,
-                intent="chat",
+                intent=logged_intent,
             )
             history_manager.log_execution(
                 self.last_input_text,
                 self.last_input_source,
-                "chat",
+                logged_intent,
                 "safe",
                 "success",
                 confidence=self.last_confidence,
+                action_json=json.dumps(action_payload, ensure_ascii=False),
             )
             return
 
@@ -588,16 +633,27 @@ class ActionDispatcher:
             tool_result=tool_result,
         )
 
-        if synthesized.get("type") == "chat":
-            self.handle_dynamic(synthesized)
-            return True
-        elif synthesized.get("type") == "action":
+        if synthesized.get("type") == "action":
             plan = ExecutionPlan.from_dict(synthesized)
             self.handle_plan(plan)
             return True
-        else:
+
+        tool_replay_payload = {
+            "schema_version": "1.0",
+            "type": "tool_call",
+            "intent": f"tool_{tool_name}" if tool_name else "tool_call",
+            "explanation": explanation,
+            "original_query": original_query,
+            "tool_name": tool_name,
+            "parameters": params,
+            "message": synthesized.get("message", ""),
+        }
+        self._active_tool_replay = tool_replay_payload
+        try:
             self.handle_dynamic(synthesized)
-            return True
+        finally:
+            self._active_tool_replay = None
+        return True
 
     def handle_media(self, action_json: dict[str, Any]) -> bool:
         """Resolves and dispatches media automation plans (Spotify and OS Media)."""
@@ -687,6 +743,12 @@ class ActionDispatcher:
             success = OSMediaController.send_command(action)
             self.tts_engine.speak(msg)
             if success:
+                local_media_payload = {
+                    "schema_version": "1.0",
+                    "type": "local_media",
+                    "intent": intent_name,
+                    "explanation": msg,
+                }
                 history_manager.log_execution(
                     self.last_input_text or intent_name,
                     self.last_input_source or "system",
@@ -696,6 +758,7 @@ class ActionDispatcher:
                     confidence=self.last_confidence
                     if self.last_confidence is not None
                     else 1.0,
+                    action_json=json.dumps(local_media_payload, ensure_ascii=False),
                 )
             return success
         return False
@@ -756,6 +819,10 @@ class ActionDispatcher:
                 elif res_type == "media":
                     return self.handle_media(llm_res)
                 elif res_type == "action":
+                    if llm_res.get("intent") == "replay":
+                        return self.replay_last_command()
+                    if llm_res.get("intent") == "create_macro":
+                        return self.initiate_macro_creation()
                     plan = ExecutionPlan.from_dict(llm_res)
                     return self.handle_plan(plan)
                 elif res_type == "chat":

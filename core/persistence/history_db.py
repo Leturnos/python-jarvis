@@ -142,8 +142,7 @@ class HistoryManager(SQLiteBase):
                     SELECT action_json FROM command_history
                     WHERE execution_status = 'success'
                     AND intent NOT IN ('replay', 'create_macro', 'explain_last_action')
-                    AND action_json IS NOT NULL
-                    ORDER BY timestamp DESC
+                    ORDER BY timestamp DESC, id DESC
                     LIMIT 1
                 """
                 )
@@ -164,7 +163,7 @@ class HistoryManager(SQLiteBase):
                     WHERE execution_status = 'success'
                     AND intent NOT IN ('replay', 'create_macro', 'explain_last_action')
                     AND action_json IS NOT NULL
-                    ORDER BY timestamp DESC
+                    ORDER BY timestamp DESC, id DESC
                     LIMIT ?
                 """,
                     (limit,),
