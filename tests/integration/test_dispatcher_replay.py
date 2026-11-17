@@ -176,3 +176,15 @@ def test_get_last_successful_json_does_not_skip_null_action_json_row(tmp_path):
             dispatcher.replay_last_command()
     finally:
         hm.close()
+
+
+def test_dispatch_replay_with_empty_history_handles_business_error_gracefully(
+    replay_env,
+):
+    dispatcher, _, _, tts_engine = replay_env
+
+    result = dispatcher.dispatch("repete")
+    assert result is False
+    tts_engine.speak.assert_called_once_with(
+        "Não encontrei nenhuma ação recente para repetir."
+    )

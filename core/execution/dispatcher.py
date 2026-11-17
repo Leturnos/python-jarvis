@@ -828,6 +828,9 @@ class ActionDispatcher:
                 elif res_type == "chat":
                     self.handle_dynamic(llm_res)
                     return True
+        except BusinessError as be:
+            logger.warning(f"Business error while dispatching '{text}': {be}")
+            return False
         except Exception as e:
             logger.error(f"Error executing text instruction via LLM: {e}")
             self.tts_engine.speak(
