@@ -84,6 +84,7 @@ def load_config() -> dict[str, Any]:
             "timeouts": {
                 "silence_end_seconds": 1.5,
                 "max_listening_seconds": 10.0,
+                "post_speech_guard_seconds": 0.18,
             },
             "device_index": None,
             "frames_per_buffer": 1280,

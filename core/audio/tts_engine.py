@@ -55,8 +55,19 @@ class TTSEngine:
         self._preview_voice_override: str | None = None
         self._piper_cache: dict[str, Any] = {}
         self._cache_lock = threading.Lock()
+        self._speech_state_lock = threading.Lock()
+        self._queued_count: int = 0
+        self._active_utterance: bool = False
+        self._output_stream: Any = None
+        self._output_stream_rate: int = 0
         self._tts_thread = threading.Thread(target=self._tts_worker, daemon=True)
         self._tts_thread.start()
+
+    @property
+    def has_pending_speech(self) -> bool:
+        """Returns True while any speech item is queued, synthesizing, or playing."""
+        with self._speech_state_lock:
+            return self.is_speaking or self._active_utterance or self._queued_count > 0
 
     def evict_cached_models(self, model_key: str | None = None) -> None:
         """Releases cached ONNX sessions so model files can be safely deleted on Windows."""
@@ -68,15 +79,74 @@ class TTSEngine:
         gc.collect()
 
     def _get_or_load_piper(self, model_key: str, onnx_path: str, json_path: str) -> Any:
-        """Loads and caches a Piper ONNX session for the requested model_key."""
+        """Loads and caches a Piper ONNX session (keeping at most 1 session in RAM)."""
         with self._cache_lock:
             cached = self._piper_cache.get(model_key)
             if cached is not None:
                 return cached
 
+            # Evict inactive ONNX sessions from RAM while leaving files on disk intact
+            if self._piper_cache:
+                self._piper_cache.clear()
+                gc.collect()
+
             instance = Piper(model_path=onnx_path, config_path=json_path)
             self._piper_cache[model_key] = instance
             return instance
+
+    @staticmethod
+    def trim_pcm_silence(
+        pcm_int16: NDArray[np.int16],
+        sample_rate: int,
+        threshold: int = 250,
+        margin_ms: float = 25.0,
+    ) -> NDArray[np.int16]:
+        """Trims leading/trailing silence from synthesized PCM while keeping a safety margin."""
+        if pcm_int16.size == 0 or sample_rate <= 0:
+            return pcm_int16
+
+        active_indices = np.flatnonzero(np.abs(pcm_int16.astype(np.int32)) > threshold)
+        if active_indices.size == 0:
+            return pcm_int16
+
+        margin_samples = max(0, int(round((margin_ms / 1000.0) * sample_rate)))
+        start = max(0, int(active_indices[0]) - margin_samples)
+        end = min(pcm_int16.size, int(active_indices[-1]) + 1 + margin_samples)
+        return pcm_int16[start:end]
+
+    def _prewarm_active_voice_if_configured(self) -> None:
+        """Preloads the active neural TTS model on startup only when lazy loading is disabled."""
+        if not isinstance(self.config, dict):
+            return
+        raw_rt = self.config.get("runtime")
+        rt_conf = raw_rt if isinstance(raw_rt, dict) else {}
+        raw_mem = rt_conf.get("memory_optimization")
+        mem_opt = raw_mem if isinstance(raw_mem, dict) else {}
+        if mem_opt.get("lazy_load_secondary_modules", True):
+            return
+
+        raw_tts = self.config.get("tts")
+        tts_conf = raw_tts if isinstance(raw_tts, dict) else {}
+        active_voice_id = str(tts_conf.get("active_voice_id", DEFAULT_VOICE_ID))
+        preset = get_voice_preset(active_voice_id)
+        if preset.provider != "piper_onnx" or preset.model_asset is None:
+            return
+
+        paths = self.voice_manager.get_model_paths(preset.voice_id)
+        if paths is None:
+            return
+        onnx_path, json_path = paths
+        try:
+            self._get_or_load_piper(
+                preset.model_asset.model_key, str(onnx_path), str(json_path)
+            )
+            logger.info(
+                f"Pre-warmed neural TTS model '{preset.voice_id}' (performance profile)."
+            )
+        except Exception as e:
+            logger.debug(
+                f"Failed to pre-warm neural TTS model '{preset.voice_id}': {e}"
+            )
 
     @staticmethod
     def rate_to_length_scale(rate: int, base_scale: float = 1.0) -> float:
@@ -126,8 +196,8 @@ class TTSEngine:
             piper.config.get("inference", {}).get("length_scale", 1.0)
         )
         length_scale = self.rate_to_length_scale(rate, base_length_scale)
-        if len(phonemes_str) <= 8:
-            length_scale = max(length_scale, base_length_scale * 1.12)
+        if len(phonemes_str) <= 8 and rate <= 0:
+            length_scale = max(length_scale, base_length_scale * 1.04)
 
         padded_phonemes = " " + phonemes_str
         pmap = getattr(piper, "phoneme_id_map", None)
@@ -164,11 +234,29 @@ class TTSEngine:
             preset.dsp_profile,
         )
 
+        unscaled_pcm = np.clip(processed * 32767.0, -32768, 32767).astype(np.int16)
+        trimmed_pcm = self.trim_pcm_silence(unscaled_pcm, int(sample_rate))
+
         vol_factor = max(0.0, min(1.0, float(volume) / 100.0))
-        pcm_int16 = np.clip(processed * vol_factor * 32767.0, -32768, 32767).astype(
-            np.int16
-        )
+        if vol_factor < 1.0:
+            pcm_int16 = np.clip(
+                trimmed_pcm.astype(np.float32) * vol_factor, -32768, 32767
+            ).astype(np.int16)
+        else:
+            pcm_int16 = trimmed_pcm
         return pcm_int16, int(sample_rate)
+
+    def _close_output_stream(self) -> None:
+        """Safely stops and closes the cached PyAudio output stream if open."""
+        stream = self._output_stream
+        self._output_stream = None
+        self._output_stream_rate = 0
+        if stream is not None:
+            try:
+                stream.stop_stream()
+                stream.close()
+            except Exception as e:
+                logger.debug(f"Failed to close cached PyAudio output stream: {e}")
 
     def _play_pcm_int16(
         self,
@@ -176,14 +264,12 @@ class TTSEngine:
         sample_rate: int,
         pa: Any = None,
     ) -> None:
-        """Plays 16-bit mono PCM audio with chunked interruption support."""
+        """Plays 16-bit mono PCM audio with chunked interruption support and stream reuse."""
         if pcm_int16.size == 0:
             return
 
-        # Each sentence opens a fresh output stream; Windows drivers drop the first
-        # milliseconds while the stream warms up, so lead with silence and a short
-        # fade-in. A fade-out plus trailing silence lets the driver drain the full
-        # utterance before stream.stop_stream() closes.
+        # Lead with a brief silence and short fade-in/fade-out, plus a compact
+        # trailing drain margin so Windows audio hardware finishes cleanly without clicks.
         padded_pcm = pcm_int16.copy()
         fade_samples = min(padded_pcm.size, max(1, int(sample_rate * 0.015)))
         if padded_pcm.size > fade_samples * 2:
@@ -197,7 +283,7 @@ class TTSEngine:
                 padded_pcm[-fade_samples:].astype(np.float32) * fade_curve
             ).astype(np.int16)
         lead_silence = np.zeros(max(1, int(sample_rate * 0.05)), dtype=np.int16)
-        tail_silence = np.zeros(max(1, int(sample_rate * 0.20)), dtype=np.int16)
+        tail_silence = np.zeros(max(1, int(sample_rate * 0.07)), dtype=np.int16)
         playback_pcm = np.concatenate([lead_silence, padded_pcm, tail_silence])
 
         owned_pa = False
@@ -207,13 +293,31 @@ class TTSEngine:
                 owned_pa = True
 
             stream = None
+            reusable = not owned_pa
             try:
-                stream = pa.open(
-                    format=pa.get_format_from_width(2),
-                    channels=1,
-                    rate=sample_rate,
-                    output=True,
-                )
+                if reusable:
+                    if (
+                        self._output_stream is not None
+                        and self._output_stream_rate != sample_rate
+                    ):
+                        self._close_output_stream()
+                    if self._output_stream is None:
+                        self._output_stream = pa.open(
+                            format=pa.get_format_from_width(2),
+                            channels=1,
+                            rate=sample_rate,
+                            output=True,
+                        )
+                        self._output_stream_rate = sample_rate
+                    stream = self._output_stream
+                else:
+                    stream = pa.open(
+                        format=pa.get_format_from_width(2),
+                        channels=1,
+                        rate=sample_rate,
+                        output=True,
+                    )
+
                 chunk_samples = 2048
                 total = playback_pcm.size
                 idx = 0
@@ -225,13 +329,35 @@ class TTSEngine:
                     sub = playback_pcm[idx : idx + chunk_samples]
                     stream.write(sub.tobytes())
                     idx += chunk_samples
+
+                # Reusable streams skip stop_stream(), so wait for the OS output buffer
+                # to finish draining before clearing is_speaking.
+                if (
+                    reusable
+                    and not self._stop_tts.is_set()
+                    and not self._abort_current.is_set()
+                ):
+                    try:
+                        latency = stream.get_output_latency()
+                        if isinstance(latency, (int, float)) and latency > 0:
+                            self._abort_current.wait(timeout=min(0.25, float(latency)))
+                    except Exception:
+                        pass
+            except Exception:
+                if reusable:
+                    self._close_output_stream()
+                raise
             finally:
-                if stream is not None:
+                if not reusable and stream is not None:
                     try:
                         stream.stop_stream()
                         stream.close()
                     except Exception:
                         pass
+                elif reusable and (
+                    self._abort_current.is_set() or self._stop_tts.is_set()
+                ):
+                    self._close_output_stream()
                 if owned_pa and pa is not None:
                     terminate_pyaudio(pa)
         except Exception as e:
@@ -274,11 +400,14 @@ class TTSEngine:
         try:
             pythoncom.CoInitialize()
             voice = win32com.client.Dispatch("SAPI.SpVoice")
-            voice_keyword = (
-                self.config.get("tts", {})
-                .get("voice_keyword", DEFAULT_SAPI5_VOICE)
-                .lower()
+            raw_tts_init = (
+                self.config.get("tts") if isinstance(self.config, dict) else {}
             )
+            tts_init = raw_tts_init if isinstance(raw_tts_init, dict) else {}
+            voice_keyword = str(
+                tts_init.get("voice_keyword", DEFAULT_SAPI5_VOICE)
+                or DEFAULT_SAPI5_VOICE
+            ).lower()
             self._configure_sapi_voice(voice, voice_keyword)
 
             try:
@@ -286,51 +415,70 @@ class TTSEngine:
             except Exception as e:
                 logger.debug(f"PyAudio unavailable in TTS worker: {e}")
 
+            self._prewarm_active_voice_if_configured()
+
             while not self._stop_tts.is_set():
                 try:
                     text = self._speech_queue.get(timeout=Timing.UI_STABILIZATION_LONG)
-                    self._abort_current.clear()
-                    self.is_speaking = True
+                    with self._speech_state_lock:
+                        self._queued_count = max(0, self._queued_count - 1)
+                        self._active_utterance = True
+                    try:
+                        self._abort_current.clear()
 
-                    tts_conf = self.config.get("tts", {})
-                    rate = int(tts_conf.get("rate", DEFAULT_TTS_RATE))
-                    volume = int(tts_conf.get("volume", DEFAULT_TTS_VOLUME))
-                    active_voice_id = str(
-                        self._preview_voice_override
-                        or tts_conf.get("active_voice_id", DEFAULT_VOICE_ID)
-                    )
+                        raw_tts = (
+                            self.config.get("tts")
+                            if isinstance(self.config, dict)
+                            else {}
+                        )
+                        tts_conf = raw_tts if isinstance(raw_tts, dict) else {}
+                        rate = int(tts_conf.get("rate", DEFAULT_TTS_RATE))
+                        volume = int(tts_conf.get("volume", DEFAULT_TTS_VOLUME))
+                        active_voice_id = str(
+                            self._preview_voice_override
+                            or tts_conf.get("active_voice_id", DEFAULT_VOICE_ID)
+                        )
 
-                    logger.info(f"Jarvis is speaking ({active_voice_id}): '{text}'")
+                        logger.info(f"Jarvis is speaking ({active_voice_id}): '{text}'")
 
-                    spoken_via_pcm = False
-                    preset = get_voice_preset(active_voice_id)
-                    if preset.provider == "piper_onnx":
-                        try:
-                            synth = self._synthesize_neural(
-                                text=text,
-                                voice_id=preset.voice_id,
-                                rate=rate,
-                                volume=volume,
-                            )
-                            if synth is not None:
-                                pcm_int16, sample_rate = synth
-                                self._play_pcm_int16(pcm_int16, sample_rate, pa=pa)
-                                spoken_via_pcm = True
-                        except Exception as e:
-                            logger.error(
-                                f"Neural/DSP TTS synthesis error for '{active_voice_id}', falling back to SAPI5: {e}"
-                            )
+                        synth: tuple[NDArray[np.int16], int] | None = None
+                        preset = get_voice_preset(active_voice_id)
+                        if preset.provider == "piper_onnx":
+                            try:
+                                synth = self._synthesize_neural(
+                                    text=text,
+                                    voice_id=preset.voice_id,
+                                    rate=rate,
+                                    volume=volume,
+                                )
+                            except Exception as e:
+                                logger.error(
+                                    f"Neural/DSP TTS synthesis error for '{active_voice_id}', falling back to SAPI5: {e}"
+                                )
 
-                    if not spoken_via_pcm and not self._abort_current.is_set():
-                        voice.Rate = rate
-                        voice.Volume = volume
-                        voice.Speak(text, 0)
+                        if (
+                            not self._abort_current.is_set()
+                            and not self._stop_tts.is_set()
+                        ):
+                            self.is_speaking = True
+                            try:
+                                if synth is not None:
+                                    pcm_int16, sample_rate = synth
+                                    self._play_pcm_int16(pcm_int16, sample_rate, pa=pa)
+                                else:
+                                    voice.Rate = rate
+                                    voice.Volume = volume
+                                    voice.Speak(text, 0)
+                            finally:
+                                self.is_speaking = False
 
-                    self.is_speaking = False
-                    self.last_spoken_time = time.time()
-                    self._speech_queue.task_done()
-                    if self._speech_queue.empty():
-                        self._preview_voice_override = None
+                        self.last_spoken_time = time.time()
+                    finally:
+                        with self._speech_state_lock:
+                            self._active_utterance = False
+                        self._speech_queue.task_done()
+                        if self._speech_queue.empty():
+                            self._preview_voice_override = None
                 except queue.Empty:
                     continue
                 except Exception as e:
@@ -339,6 +487,7 @@ class TTSEngine:
         except Exception as e:
             logger.error(f"Failed to initialize TTS worker: {e}")
         finally:
+            self._close_output_stream()
             if pa is not None:
                 try:
                     terminate_pyaudio(pa)
@@ -360,16 +509,30 @@ class TTSEngine:
         """Empties pending speech items to allow immediate interruption."""
         self._abort_current.set()
         self._preview_voice_override = None
+        drained = 0
         while not self._speech_queue.empty():
             try:
                 self._speech_queue.get_nowait()
                 self._speech_queue.task_done()
+                drained += 1
             except (queue.Empty, ValueError):
                 break
+        if drained:
+            with self._speech_state_lock:
+                self._queued_count = max(0, self._queued_count - drained)
+
+    def _enqueue_sentences(self, sentences: list[str]) -> None:
+        """Pushes prepared sentences onto the speech queue while tracking pending count."""
+        with self._speech_state_lock:
+            self._queued_count += len(sentences)
+        for s in sentences:
+            self._speech_queue.put(s)
 
     def speak(self, text: str) -> None:
         now = time.time()
-        cooldown = self.config.get("tts", {}).get("cooldown_seconds", 2.0)
+        raw_tts = self.config.get("tts") if isinstance(self.config, dict) else {}
+        tts_conf = raw_tts if isinstance(raw_tts, dict) else {}
+        cooldown = float(tts_conf.get("cooldown_seconds", 2.0) or 2.0)
         if text == self.last_spoken_text and (
             self.is_speaking
             or (now - self.last_spoken_time) < cooldown
@@ -384,8 +547,7 @@ class TTSEngine:
         if not sentences:
             return
 
-        for s in sentences:
-            self._speech_queue.put(s)
+        self._enqueue_sentences(sentences)
 
     def speak_preview(self, text: str, voice_id: str | None = None) -> None:
         """Interrupts current speech and immediately speaks a sample using voice_id."""
@@ -395,8 +557,9 @@ class TTSEngine:
         self.clear_queue()
         self._preview_voice_override = voice_id
         self.last_spoken_text = ""
-        for s in self.split_into_sentences(clean):
-            self._speech_queue.put(s)
+        sentences = self.split_into_sentences(clean)
+        if sentences:
+            self._enqueue_sentences(sentences)
 
     def stop(self) -> None:
         self._abort_current.set()

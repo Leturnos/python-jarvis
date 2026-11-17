@@ -89,6 +89,7 @@ class JarvisController:
 
         # State Variables
         self.ignore_audio_until = 0.0
+        self._was_speaking = False
         self.cooldown = 0
         self.command_frames: list[bytes] = []
         self.confirmation_frames: list[bytes] = []
@@ -98,13 +99,23 @@ class JarvisController:
         self.confirmation_start_time: float | None = None
 
         # Constants from config or defaults
-        voice_act = config.get("voice_activation", {})
+        raw_voice_act = config.get("voice_activation", {})
+        voice_act = raw_voice_act if isinstance(raw_voice_act, dict) else {}
         wake_word_conf = voice_act.get("wake_word", {})
+        timeouts_conf = voice_act.get("timeouts", {})
         self.threshold = wake_word_conf.get(
             "threshold", config.get("jarvis", {}).get("threshold", 0.5)
         )
         self.cooldown_seconds = voice_act.get(
             "cooldown_seconds", config.get("jarvis", {}).get("cooldown_seconds", 2.5)
+        )
+        raw_guard = (
+            timeouts_conf.get("post_speech_guard_seconds", 0.18)
+            if isinstance(timeouts_conf, dict)
+            else 0.18
+        )
+        self.post_speech_guard_seconds = max(
+            0.0, float(0.18 if raw_guard is None else raw_guard)
         )
 
     @property
@@ -149,10 +160,19 @@ class JarvisController:
 
                     self.ui.update(volume=pcm)
 
-                    # Update ignore window if Jarvis is speaking
+                    # Update ignore window if Jarvis is speaking (and flush wakeword window when speech ends)
                     if self.tts_engine.is_speaking:
-                        self.ignore_audio_until = now + 0.4
+                        self.ignore_audio_until = now + self.post_speech_guard_seconds
                         self.model.reset()
+                        self._was_speaking = True
+                    elif self._was_speaking:
+                        self.model.reset()
+                        self.ignore_audio_until = max(
+                            self.ignore_audio_until,
+                            now + self.post_speech_guard_seconds,
+                        )
+                        self._was_speaking = False
+                        self._reset_capture_windows()
 
                     # Self-healing check using isolated AudioManager
                     if self.audio_manager.check_dead_silence(rms, self.model):
@@ -191,17 +211,10 @@ class JarvisController:
                             ):
                                 logger.info("Waking up from Sleep via PTT!")
                                 self.tray.mute_until = 0  # Clear timer if any
-                                stt_engine.load()  # Preload model before listening
+                                self._preload_stt_async()
                                 if self.audio_cue_manager:
                                     self.audio_cue_manager.play_cue(CueType.WAKE)
-                                if hasattr(self.tts_engine, "clear_queue"):
-                                    self.tts_engine.clear_queue()
-                                self.tts_engine.speak(self.response_phrase)
-                                state_manager.set_state(JarvisState.LISTENING)
-                                self.command_frames = []
-                                self.confirmation_frames = []
-                                self.silence_start = None
-                                self.command_start_time = context.timestamp
+                                self._enter_listening_state()
                         continue
 
                     if current_state == JarvisState.SUSPENDED:
@@ -216,6 +229,9 @@ class JarvisController:
                             self.confirmation_frames = []
                             self._pending_plan = None
                             state_manager.set_state(JarvisState.SUSPENDED)
+                            continue
+                        if self._is_tts_busy():
+                            self.ui.update(status="Aguardando Confirmação...")
                             continue
                         self._handle_confirmation(pcm, rms, now)
                         continue
@@ -245,6 +261,10 @@ class JarvisController:
                             == ActivationActionType.TRIGGER_PTT_STOP
                         ):
                             self._stop_listening_and_process(now)
+                            continue
+
+                        if self._is_tts_busy():
+                            self.ui.update(status="Ignoring Audio (Self-Feedback)")
                             continue
 
                         self._handle_listening(pcm, rms, now)
@@ -388,8 +408,43 @@ class JarvisController:
         }
         self.ui.update(status=status_map.get(current_state, "Ocupado"))
 
+    @staticmethod
+    def _preload_stt_async() -> None:
+        """Preloads Faster-Whisper in a background thread without stalling audio capture."""
+        if stt_engine.model is None:
+            threading.Thread(target=stt_engine.load, daemon=True).start()
+
+    def _is_tts_busy(self) -> bool:
+        """Returns True while TTS is speaking or actively synthesizing/queued."""
+        return bool(self.tts_engine.is_speaking) or (
+            getattr(self.tts_engine, "has_pending_speech", False) is True
+        )
+
+    def _reset_capture_windows(self) -> None:
+        """Clears partial pre-prompt audio buffers and timers after Jarvis finishes speaking."""
+        self.command_frames.clear()
+        self.command_start_time = None
+        self.silence_start = None
+        self.confirmation_frames.clear()
+        self.confirmation_silence_start = None
+        self.confirmation_start_time = None
+
+    def _enter_listening_state(self) -> None:
+        """Transitions cleanly into LISTENING and speaks the configured response phrase."""
+        if hasattr(self.tts_engine, "clear_queue"):
+            self.tts_engine.clear_queue()
+        self.tts_engine.speak(self.response_phrase)
+        state_manager.set_state(JarvisState.LISTENING)
+        self.command_frames = []
+        self.confirmation_frames = []
+        self.silence_start = None
+        # Anchor command_start_time on the first un-ignored listening frame
+        self.command_start_time = None
+
     def _handle_listening(self, pcm: np.ndarray, rms: float, now: float) -> None:
         self.ui.update(status="Gravando...")
+        if self.command_start_time is None:
+            self.command_start_time = now
         self.command_frames.append(pcm.tobytes())
 
         stop_recording = False
@@ -444,17 +499,10 @@ class JarvisController:
         action_obj = self.activation_manager.evaluate(context)
         if action_obj.action_type == ActivationActionType.TRIGGER_PTT_START:
             logger.info("Waking up from Suspended via PTT!")
-            stt_engine.load()
+            self._preload_stt_async()
             if self.audio_cue_manager:
                 self.audio_cue_manager.play_cue(CueType.WAKE)
-            if hasattr(self.tts_engine, "clear_queue"):
-                self.tts_engine.clear_queue()
-            self.tts_engine.speak(self.response_phrase)
-            state_manager.set_state(JarvisState.LISTENING)
-            self.command_frames = []
-            self.confirmation_frames = []
-            self.silence_start = None
-            self.command_start_time = context.timestamp
+            self._enter_listening_state()
             self.cooldown = context.timestamp + self.cooldown_seconds
         elif action_obj.action_type == ActivationActionType.RESUME:
             logger.info("Resuming from suspend to IDLE.")
@@ -528,12 +576,7 @@ class JarvisController:
                     .get("keyword", "hey_jarvis")
                 )
                 if ww_name_clean == configured_keyword:
-                    self.tts_engine.speak(self.response_phrase)
-                    state_manager.set_state(JarvisState.LISTENING)
-                    self.command_frames = []
-                    self.confirmation_frames = []
-                    self.silence_start = None
-                    self.command_start_time = context.timestamp
+                    self._enter_listening_state()
                 else:
                     self.tts_engine.speak(self.response_phrase)
                     self.task_queue.put(
@@ -548,12 +591,7 @@ class JarvisController:
                 logger.info("PTT Activation triggered!")
                 if self.audio_cue_manager:
                     self.audio_cue_manager.play_cue(CueType.WAKE)
-                self.tts_engine.speak(self.response_phrase)
-                state_manager.set_state(JarvisState.LISTENING)
-                self.command_frames = []
-                self.confirmation_frames = []
-                self.silence_start = None
-                self.command_start_time = context.timestamp
+                self._enter_listening_state()
 
             self.cooldown = context.timestamp + self.cooldown_seconds
 

@@ -268,3 +268,107 @@ def test_handle_idle_updates_ui_status_to_pronto(mock_deps):
 
     controller._handle_idle(pcm, rms=5.0, context=context)
     mock_deps["ui"].update.assert_any_call(status="Pronto")
+
+
+def test_post_speech_guard_resets_model_and_anchors_command_start_time(mock_deps):
+    controller = JarvisController(**mock_deps)
+    controller.post_speech_guard_seconds = 0.05
+    controller._enter_listening_state()
+
+    pcm = np.zeros(1280, dtype=np.int16)
+    step = 0
+
+    def frame_gen():
+        nonlocal step
+        step += 1
+        if step in (1, 2):
+            # Simulate cold ONNX loading/synthesis (>0s) while is_speaking is still False
+            mock_deps["tts_engine"].is_speaking = False
+            mock_deps["tts_engine"].has_pending_speech = True
+        elif step == 3:
+            # Playback starts
+            mock_deps["tts_engine"].is_speaking = True
+            mock_deps["tts_engine"].has_pending_speech = True
+        elif step == 4:
+            # Playback ends: _was_speaking edge must refresh ignore_audio_until & clear buffers
+            mock_deps["tts_engine"].is_speaking = False
+            mock_deps["tts_engine"].has_pending_speech = False
+        elif step == 5:
+            # Guard window has now elapsed; first true listening frame starts capture
+            time.sleep(0.06)
+        else:
+            mock_deps["stop_event"].set()
+            return None, 0.0
+        return pcm, 5.0
+
+    controller.audio_manager.read_frame = MagicMock(side_effect=frame_gen)
+    controller.start()
+
+    assert controller.command_start_time is not None
+    assert len(controller.command_frames) == 1
+    assert mock_deps["model"].reset.call_count >= 2
+
+
+def test_confirming_dry_run_skips_stt_while_tts_synthesizing(mock_deps):
+    controller = JarvisController(**mock_deps)
+    state_manager.set_state(JarvisState.CONFIRMING_DRY_RUN)
+    controller.ignore_audio_until = 0.0
+
+    pcm = np.zeros(1280, dtype=np.int16)
+    step = 0
+
+    def frame_gen():
+        nonlocal step
+        step += 1
+        if step <= 3:
+            mock_deps["tts_engine"].is_speaking = False
+            mock_deps["tts_engine"].has_pending_speech = True
+            controller.confirmation_silence_start = time.time() - 2.0
+        else:
+            mock_deps["stop_event"].set()
+        return pcm, 5.0
+
+    controller.audio_manager.read_frame = MagicMock(side_effect=frame_gen)
+    with patch("core.controller.stt_engine.transcribe") as mock_transcribe:
+        controller.start()
+
+    mock_transcribe.assert_not_called()
+    assert controller.confirmation_frames == []
+
+
+@pytest.mark.parametrize("initial_state", [JarvisState.SLEEPING, JarvisState.SUSPENDED])
+def test_wake_from_sleeping_or_suspended_preloads_stt_async(mock_deps, initial_state):
+    from core.activation import ActivationAction, ActivationActionType
+
+    controller = JarvisController(**mock_deps)
+    state_manager.set_state(initial_state)
+
+    pcm = np.zeros(1280, dtype=np.int16)
+    controller.audio_manager.read_frame = MagicMock(return_value=(pcm, 5.0))
+    controller.activation_manager.evaluate = MagicMock(
+        return_value=ActivationAction(ActivationActionType.TRIGGER_PTT_START, "PTT")
+    )
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_stt_load():
+        started.set()
+        release.wait(timeout=2.0)
+
+    def stop_on_enter():
+        mock_deps["stop_event"].set()
+        state_manager.set_state(JarvisState.LISTENING)
+
+    with (
+        patch("core.controller.stt_engine.model", None),
+        patch(
+            "core.controller.stt_engine.load", side_effect=slow_stt_load
+        ) as mock_load,
+        patch.object(controller, "_enter_listening_state", side_effect=stop_on_enter),
+    ):
+        # controller.start() must return immediately even while slow_stt_load blocks
+        controller.start()
+        assert started.wait(timeout=1.0)
+        release.set()
+        mock_load.assert_called_once()
