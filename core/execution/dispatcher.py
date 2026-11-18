@@ -623,7 +623,16 @@ class ActionDispatcher:
             params["authorized"] = True
 
         explanation = action_json.get("explanation", "Consultando ferramenta...")
-        if notifier:
+        notif_cfg = (
+            self.config.get("notifications", {})
+            if isinstance(self.config, dict)
+            else {}
+        )
+        if (
+            notifier
+            and isinstance(notif_cfg, dict)
+            and notif_cfg.get("voice_progress_toasts", False)
+        ):
             notifier.notify("Jarvis", explanation)
 
         tool_result = tool_registry.execute_tool(tool_name, **params)

@@ -11,17 +11,13 @@ try:
 except ImportError:
     win32gui = None
 
-try:
-    from plyer import notification
-except ImportError:
-    notification = None
-
 from core.execution.execution_plan import ExecutionStep, RiskLevel, StepType
 from core.execution.window_manager import WindowInfo, WindowLayoutManager, WindowManager
 from core.infra.logger_config import logger
 from core.shared.constants import AppRegistry
 from core.tools.dev_port_tool import DevPortTool
 from core.tools.tool_registry import tool_registry
+from core.ui.notifications import JarvisNotifier
 
 
 def find_window_handle(title_or_process: str) -> int:
@@ -62,15 +58,13 @@ def poll_window_handle(
 
 
 def notify_partial_failure(app_name: str, reason: str) -> None:
-    """Displays a Windows toast notification on partial execution failure."""
-    if not notification:
-        return
+    """Displays a localized notification on partial execution failure."""
     try:
-        notification.notify(
-            title="Jarvis - Warning",
-            message=f"Could not prepare '{app_name}': {reason}",
-            app_name="Jarvis",
-            timeout=4,
+        JarvisNotifier().notify(
+            title="Jarvis — Aviso de Execução",
+            message=f"Não foi possível preparar '{app_name}': {reason}",
+            duration=4,
+            level="warning",
         )
     except Exception as e:
         logger.warning(f"Failed to send toast notification: {e}")

@@ -127,14 +127,19 @@ class JarvisTrayAdapter:
             state_manager.set_state(JarvisState.IDLE)
             logger.info("Jarvis unmuted.")
             if self.notifier:
-                self.notifier.notify("Jarvis", "Bem-vindo de volta! Estou ouvindo.")
+                self.notifier.notify(
+                    "Jarvis",
+                    "Bem-vindo de volta! Estou ouvindo.",
+                    level="success",
+                )
         else:
             self.mute_until = time.time() + (minutes * 60)
             state_manager.set_state(JarvisState.MUTED)
-            msg = f"Jarvis em repouso. Retornarei às {(datetime.now() + timedelta(minutes=minutes)).strftime('%H:%M:%S')}."
+            resume_at = (datetime.now() + timedelta(minutes=minutes)).strftime("%H:%M")
+            msg = f"Jarvis silenciado. Voltarei a ouvir às {resume_at}."
             logger.info(msg)
             if self.notifier:
-                self.notifier.notify("Jarvis", msg)
+                self.notifier.notify("Jarvis", msg, level="info")
 
     def is_muted(self) -> bool:
         if self.mute_until == 0.0:
@@ -148,6 +153,10 @@ class JarvisTrayAdapter:
             state_manager.set_state(JarvisState.IDLE)
             logger.info("Auto-resuming: Jarvis is listening again.")
             if self.notifier:
-                self.notifier.notify("Jarvis", "Estou de volta! Ouvindo novamente.")
+                self.notifier.notify(
+                    "Jarvis",
+                    "Estou de volta! Ouvindo novamente.",
+                    level="success",
+                )
             return False
         return True

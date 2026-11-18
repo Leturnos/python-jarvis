@@ -11,6 +11,7 @@ from core.ai.llm_agent import llm_agent
 from core.audio.stt_engine import stt_engine
 from core.execution.execution_plan import ExecutionPlan
 from core.execution.job_queue import Job, JobStatus, JobType, job_manager
+from core.infra.config import config as global_config
 from core.infra.logger_config import logger
 from core.llm import LLMAuthenticationError, LLMRateLimitError
 from core.plugins.plugin_manager import plugin_manager
@@ -35,12 +36,26 @@ def _call_dispatcher(
     return bool(cls_method(dispatcher, *args, **kwargs))
 
 
+def _should_notify_voice_progress(dispatcher: Any) -> bool:
+    """Returns True only when intermediate voice progress toasts are enabled."""
+    cfg = getattr(dispatcher, "config", None)
+    if not isinstance(cfg, dict):
+        cfg = global_config
+    notif_cfg = cfg.get("notifications", {})
+    return bool(
+        isinstance(notif_cfg, dict) and notif_cfg.get("voice_progress_toasts", False)
+    )
+
+
 def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
     """Handles LLM-based dynamic commands with one-shot STT and CommandResolver."""
+    notify_progress = _should_notify_voice_progress(dispatcher)
+
     # 1. Performance: One-shot STT (use cached text if retrying)
     if not job.payload_text:
         audio_bytes = job.payload
-        notifier.notify("Jarvis", "Processando áudio...")
+        if notify_progress:
+            notifier.notify("Jarvis", "Processando áudio...")
 
         pcm = np.frombuffer(audio_bytes, dtype=np.int16)
         if len(pcm) == 0 or np.max(np.abs(pcm)) < 50:
@@ -83,7 +98,8 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
             dispatcher.tts_engine.speak(not_understood_phrase)
             return True
 
-        notifier.notify("Jarvis", f"Entendi: '{job.payload_text}'.")
+        if notify_progress:
+            notifier.notify("Jarvis", f"Entendi: '{job.payload_text}'.")
 
     dispatcher.last_input_text = job.payload_text
     dispatcher.last_input_source = (
@@ -137,7 +153,8 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
         return True
 
     # 3. LLM Fallback (Technical Error aware)
-    notifier.notify("Jarvis", "Pensando...")
+    if notify_progress:
+        notifier.notify("Jarvis", "Pensando...")
     dispatcher.last_confidence = 1.0
     context_commands = resolver.get_available_intent_names()
 
@@ -188,9 +205,8 @@ def _handle_wakeword(job: Job, dispatcher: Any, notifier: Any) -> bool:
         score = job.payload if isinstance(job.payload, (int, float)) else 0.0
 
     logger.info(f"Worker starting execution for '{wakeword_name}' (Score: {score:.2f})")
-    notifier.notify(
-        "Jarvis", f"Comando '{wakeword_name}' detectado! (Score: {score:.2f})"
-    )
+    if _should_notify_voice_progress(dispatcher):
+        notifier.notify("Jarvis", "Ativação por voz detectada.")
     dispatcher.handle(wakeword_name, confidence=score)
     return True
 
