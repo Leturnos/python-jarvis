@@ -11,6 +11,7 @@ from core.execution.worker import _handle_llm
 @patch("core.tools.tool_registry.tool_registry.execute_tool")
 def test_llm_tools_flow_web_search(mock_execute_tool, mock_synthesize, mock_process):
     dispatcher = MagicMock()
+    dispatcher.config = {"notifications": {"voice_progress_toasts": False}}
     notifier = MagicMock()
 
     # Step 1: LLM returns a tool_call for web_search
@@ -43,7 +44,8 @@ def test_llm_tools_flow_web_search(mock_execute_tool, mock_synthesize, mock_proc
     success = _handle_llm(job, dispatcher, notifier)
     assert success is True
 
-    notifier.notify.assert_any_call("Jarvis", "Pesquisando versão do Python na web")
+    # Silent by default when voice_progress_toasts is disabled
+    notifier.notify.assert_not_called()
     mock_execute_tool.assert_called_once_with(
         "web_search", query="qual a versão mais recente do Python"
     )
@@ -54,6 +56,12 @@ def test_llm_tools_flow_web_search(mock_execute_tool, mock_synthesize, mock_proc
             "message": "A versão mais recente do Python é a 3.13.",
         }
     )
+
+    # When verbose progress notifications are enabled, notifies intermediate progress
+    notifier.reset_mock()
+    dispatcher.config = {"notifications": {"voice_progress_toasts": True}}
+    assert _handle_llm(job, dispatcher, notifier) is True
+    notifier.notify.assert_any_call("Jarvis", "Pensando...")
 
 
 @patch("core.ai.llm_agent.llm_agent.process_instruction")

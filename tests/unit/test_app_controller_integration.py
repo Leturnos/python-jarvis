@@ -69,18 +69,22 @@ def test_switch_provider_missing_key_notification_in_portuguese():
     app = QApplication.instance() or QApplication([])
     controller = QtAppController(app, MagicMock(), MagicMock())
     controller.tray_adapter.mute_until = 0.0
-    controller.tray_icon.showMessage = MagicMock()
 
-    with patch(
-        "core.ui.app_controller.KeyringManager.validate_provider_key",
-        return_value=False,
+    with (
+        patch(
+            "core.ui.app_controller.KeyringManager.validate_provider_key",
+            return_value=False,
+        ),
+        patch("core.ui.app_controller.JarvisNotifier") as mock_notifier_cls,
     ):
         controller._switch_provider("openai")
 
-    controller.tray_icon.showMessage.assert_called_once()
-    args, _ = controller.tray_icon.showMessage.call_args
-    assert args[0] == "Jarvis"
-    assert args[1] == "Chave de API do Openai não configurada."
+    mock_notifier_cls.return_value.notify.assert_called_once_with(
+        "Jarvis",
+        "Chave de API de OpenAI não configurada.",
+        duration=3,
+        level="warning",
+    )
 
 
 def test_start_command_palette_uses_configured_hotkey():
@@ -104,7 +108,7 @@ def test_app_controller_onboarding_mode():
     ui_adapter.visual_state_updated.connect = MagicMock()
     tray_adapter = MagicMock()
 
-    with patch("core.ui.app_controller.InfoBar.warning") as mock_warning:
+    with patch("core.ui.app_controller.show_warning") as mock_warning:
         controller = QtAppController(app, ui_adapter, tray_adapter, onboarding=True)
 
         assert controller.main_window.isVisible() is True

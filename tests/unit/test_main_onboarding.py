@@ -12,7 +12,7 @@ def test_onboarding_mode_triggers_settings_tab_focus():
     ui_adapter.visual_state_updated.connect = MagicMock()
     tray_adapter = MagicMock()
 
-    with patch("core.ui.app_controller.InfoBar.warning") as mock_warning:
+    with patch("core.ui.app_controller.show_warning") as mock_warning:
         with patch(
             "core.ui.app_controller.config", {"llm": {"active_provider": "gemini"}}
         ):
@@ -26,6 +26,7 @@ def test_onboarding_mode_triggers_settings_tab_focus():
             mock_warning.assert_called_once()
             args, kwargs = mock_warning.call_args
             assert "Gemini" in args[1]
+            assert kwargs["parent"] == controller.main_window.settings_tab
 
 
 def test_first_run_with_existing_key_shows_welcome_success():
@@ -35,7 +36,7 @@ def test_first_run_with_existing_key_shows_welcome_success():
     ui_adapter.visual_state_updated.connect = MagicMock()
     tray_adapter = MagicMock()
 
-    with patch("core.ui.app_controller.InfoBar.success") as mock_success:
+    with patch("core.ui.app_controller.show_success") as mock_success:
         with patch(
             "core.ui.app_controller.config", {"llm": {"active_provider": "gemini"}}
         ):
@@ -48,3 +49,4 @@ def test_first_run_with_existing_key_shows_welcome_success():
             args, kwargs = mock_success.call_args
             assert args[0] == "Bem-vindo ao Jarvis!"
             assert "Gemini" in args[1]
+            assert kwargs["parent"] == controller.main_window.status_tab
