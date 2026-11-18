@@ -13,7 +13,6 @@ from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
     FluentIcon,
-    InfoBar,
     PushButton,
     SimpleCardWidget,
     SmoothScrollArea,
@@ -25,6 +24,7 @@ from qfluentwidgets import (
 
 from core.infra.logger_config import logger
 from core.plugins.plugin_manager import plugin_manager
+from core.ui.feedback import show_error, show_info, show_success
 
 
 class PluginCard(SimpleCardWidget):
@@ -155,19 +155,18 @@ class PluginCard(SimpleCardWidget):
             plugin_manager.set_plugin_enabled(self.plugin_id, checked)
             status_str = "ativado" if checked else "desativado"
             p_name = self.plugin_info.get("name", self.plugin_id)
-            InfoBar.success(
-                title="Preset Atualizado",
-                content=f"O plugin '{p_name}' foi {status_str}.",
+            show_success(
+                "Preset atualizado",
+                f"O plugin '{p_name}' foi {status_str}.",
                 parent=self.window(),
-                duration=2500,
+                duration=2600,
             )
         except Exception as e:
             logger.error(f"Failed to toggle plugin {self.plugin_id}: {e}")
-            InfoBar.error(
-                title="Erro",
-                content=f"Falha ao alterar status do plugin: {e}",
+            show_error(
+                "Erro ao alterar plugin",
+                f"Falha ao alterar status do plugin: {e}",
                 parent=self.window(),
-                duration=3500,
             )
 
     def _toggle_details(self) -> None:
@@ -250,11 +249,11 @@ class PluginsTab(QWidget):
         """Reloads plugin files from disk and refreshes the cards."""
         plugin_manager.load_plugins()
         self._populate_plugin_cards()
-        InfoBar.info(
-            title="Plugins Recarregados",
-            content=f"{len(plugin_manager.get_available_plugins())} plugins encontrados.",
+        show_info(
+            "Plugins recarregados",
+            f"{len(plugin_manager.get_available_plugins())} plugins disponíveis.",
             parent=self.window(),
-            duration=2000,
+            duration=2500,
         )
 
     def _on_external_change(self) -> None:

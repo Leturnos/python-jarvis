@@ -21,7 +21,6 @@ from qfluentwidgets import (
     CaptionLabel,
     ComboBox,
     FluentIcon,
-    InfoBar,
     PasswordLineEdit,
     PrimaryPushButton,
     ProgressBar,
@@ -69,6 +68,14 @@ from core.runtime.state import JarvisState, state_manager
 from core.shared.constants import DEFAULT_PROVIDER
 from core.shared.paths import get_app_version, get_user_config_path
 from core.shared.utils import is_autostart_enabled_check, manage_autostart
+from core.ui.feedback import (
+    format_proactivity_label,
+    format_provider_name,
+    show_error,
+    show_info,
+    show_success,
+    show_warning,
+)
 from core.ui.screen_position import SCREEN_POSITION_LABELS, SCREEN_POSITIONS_ORDER
 from core.ui.widgets.audio_calibration_dialog import AudioCalibrationDialog
 from core.ui.widgets.hotkey_recorder import HotkeyRecorder
@@ -898,7 +905,7 @@ class SettingsTab(QWidget):
             "deepseek",
             "openrouter",
         ]
-        self.provider_combo.addItems([p.capitalize() for p in self.providers])
+        self.provider_combo.addItems([format_provider_name(p) for p in self.providers])
         active = config.get("llm", {}).get("active_provider", DEFAULT_PROVIDER)
         if active in self.providers:
             self.provider_combo.setCurrentIndex(self.providers.index(active))
@@ -1455,9 +1462,9 @@ class SettingsTab(QWidget):
         except Exception as e:
             logger.debug(f"Could not update app_controller hotkey: {e}")
 
-        InfoBar.success(
-            title="Atalhos Salvos",
-            content="Atalhos e palavra de ativação atualizados com sucesso!",
+        show_success(
+            "Atalhos salvos",
+            "Atalhos globais e palavra de ativação atualizados.",
             parent=self.window(),
             duration=3000,
         )
@@ -1473,8 +1480,8 @@ class SettingsTab(QWidget):
             JarvisState.EXECUTING,
             JarvisState.CONFIRMING_DRY_RUN,
         ):
-            InfoBar.warning(
-                "Jarvis Ocupado",
+            show_warning(
+                "Jarvis ocupado",
                 "Aguarde a conclusão do comando atual para calibrar o microfone.",
                 parent=self.window(),
                 duration=3500,
@@ -1498,9 +1505,9 @@ class SettingsTab(QWidget):
             self.ui_adapter, "apply_calibration"
         ):
             self.ui_adapter.apply_calibration(threshold, volume_multiplier, speech_rms)
-        InfoBar.success(
-            "Calibração Concluída!",
-            f"Sensibilidade definida para {threshold:.2f} e ganho para {volume_multiplier:.1f}x.",
+        show_success(
+            "Calibração concluída",
+            f"Sensibilidade: {threshold:.2f} • Ganho: {volume_multiplier:.1f}x.",
             parent=self.window(),
             duration=3500,
         )
@@ -1531,17 +1538,26 @@ class SettingsTab(QWidget):
             ):
                 self.ui_adapter.apply_calibration(th_val, gain_val)
 
-            dev_name = "Padrão" if dev_data is None else f"ID {dev_data}"
-            dev_suffix = " (ativo ao reiniciar)" if dev_data is not None else ""
-            InfoBar.success(
-                "Ajustes de Áudio Salvos!",
-                f"Dispositivo: {dev_name}{dev_suffix} | Sensibilidade: {th_val:.2f} | Ganho: {gain_val:.1f}x.",
+            dev_name = (
+                "Padrão do Windows"
+                if dev_data is None
+                else (self.input_device_combo.currentText().strip() or f"ID {dev_data}")
+            )
+            dev_suffix = " (aplica ao reiniciar)" if dev_data is not None else ""
+            show_success(
+                "Ajustes de áudio salvos",
+                f"Microfone: {dev_name}{dev_suffix} • Sensib.: {th_val:.2f} • Ganho: {gain_val:.1f}x.",
                 parent=self.window(),
                 duration=3500,
             )
         except Exception as e:
             logger.error(f"Error saving audio settings: {e}")
-            InfoBar.error("Erro ao Salvar", str(e), parent=self.window(), duration=3500)
+            show_error(
+                "Erro ao salvar áudio",
+                str(e),
+                parent=self.window(),
+                duration=4500,
+            )
 
     def _toggle_hotkey_recording(self, field: str) -> None:
         if self._active_recorder and self._active_recorder.is_active:
@@ -1579,9 +1595,9 @@ class SettingsTab(QWidget):
         def _on_captured(combo: str) -> None:
             target_input.setText(combo)
             self._cleanup_recording(target_input, target_btn)
-            InfoBar.success(
-                title="Atalho Detectado",
-                content=f"Atalho definido para '{combo}'. Clique em 'Salvar Atalhos' para aplicar.",
+            show_success(
+                "Atalho detectado",
+                f"Combinação '{combo}' capturada. Clique em Salvar Atalhos para aplicar.",
                 parent=self.window(),
                 duration=3500,
             )
@@ -1593,11 +1609,11 @@ class SettingsTab(QWidget):
         def _on_timeout() -> None:
             target_input.setText(self._prev_recorded_val)
             self._cleanup_recording(target_input, target_btn)
-            InfoBar.warning(
-                title="Tempo Esgotado",
-                content="Nenhuma tecla pressionada nos 5 segundos. Atalho anterior mantido.",
+            show_warning(
+                "Tempo esgotado",
+                "Nenhuma tecla pressionada nos 5 segundos. Atalho anterior mantido.",
                 parent=self.window(),
-                duration=3000,
+                duration=3500,
             )
 
         recorder.tick.connect(_on_tick)
@@ -1683,11 +1699,12 @@ class SettingsTab(QWidget):
         except Exception as e:
             logger.warning(f"Could not persist AI preferences to yaml: {e}")
 
-        InfoBar.success(
-            title="Preferências Salvas",
-            content=f"Configurações de IA e frases salvas com sucesso (Cidade: '{city}', Proatividade: '{proact}').",
+        proact_label = format_proactivity_label(proact)
+        show_success(
+            "Preferências da IA salvas",
+            f"Cidade: {city} • Postura: {proact_label}.",
             parent=self.window(),
-            duration=3000,
+            duration=3200,
         )
         logger.info(
             f"Saved AI preferences: proactivity='{proact}', phrase='{phrase}', completion='{comp_phrase}', web_search='{ws_prov}', city='{city}'."
@@ -1753,15 +1770,15 @@ class SettingsTab(QWidget):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(cfg_path.resolve())))
                 logger.info(f"Opening config file: {cfg_path}")
             else:
-                InfoBar.warning(
+                show_warning(
                     "Arquivo não encontrado",
                     f"O arquivo {cfg_path.name} não foi encontrado.",
                     parent=self.window(),
                 )
         except Exception as e:
             logger.error(f"Failed to open config file: {e}")
-            InfoBar.error(
-                "Erro",
+            show_error(
+                "Erro ao abrir arquivo",
                 f"Não foi possível abrir o arquivo: {e}",
                 parent=self.window(),
             )
@@ -1775,8 +1792,8 @@ class SettingsTab(QWidget):
             logger.info(f"Opening config folder: {folder}")
         except Exception as e:
             logger.error(f"Failed to open config folder: {e}")
-            InfoBar.error(
-                "Erro",
+            show_error(
+                "Erro ao abrir pasta",
                 f"Não foi possível abrir a pasta: {e}",
                 parent=self.window(),
             )
@@ -1813,33 +1830,38 @@ class SettingsTab(QWidget):
             update_yaml_performance_profile(new_prof)
             config["performance_profile"] = new_prof
 
-            InfoBar.success(
-                "Configuração Salva",
-                "Reiniciando o Jarvis...",
-                parent=self,
+            show_success(
+                "Configuração salva",
+                "Reiniciando o Jarvis com o novo perfil...",
+                parent=self.window(),
             )
             self.restart_requested.emit()
         except Exception as e:
-            InfoBar.error("Erro", f"Falha ao salvar configuração: {e}", parent=self)
+            show_error(
+                "Erro ao salvar perfil",
+                f"Falha ao salvar configuração: {e}",
+                parent=self.window(),
+            )
 
     def _save_key(self) -> None:
         idx = self.provider_combo.currentIndex()
         prov = self.providers[idx]
+        prov_label = format_provider_name(prov)
         key_val = self.api_key_input.text().strip()
         if not key_val:
-            InfoBar.warning(
-                "Chave Vazia",
-                "Por favor, digite ou cole uma chave válida.",
-                parent=self,
+            show_warning(
+                "Chave vazia",
+                "Digite ou cole uma chave de API válida antes de salvar.",
+                parent=self.window(),
             )
             return
         secret_name = f"{prov.upper()}_API_KEY"
         KeyringManager.set_secret("python-jarvis", secret_name, key_val)
         self.api_key_input.clear()
-        InfoBar.success(
-            "Chave Salva",
-            f"A chave para {prov.capitalize()} foi salva no Keyring com sucesso!",
-            parent=self,
+        show_success(
+            "Chave salva",
+            f"A chave de {prov_label} foi salva no Keyring com sucesso.",
+            parent=self.window(),
         )
 
         active_prov = config.get("llm", {}).get("active_provider", DEFAULT_PROVIDER)
@@ -1855,29 +1877,31 @@ class SettingsTab(QWidget):
     def _validate_key(self) -> None:
         idx = self.provider_combo.currentIndex()
         prov = self.providers[idx]
+        prov_label = format_provider_name(prov)
         has_key = KeyringManager.validate_provider_key(prov)
         if has_key:
-            InfoBar.success(
-                "Chave de API",
-                f"A chave para {prov.capitalize()} está configurada.",
-                parent=self,
+            show_success(
+                "Chave de API configurada",
+                f"A chave de {prov_label} está configurada no Keyring.",
+                parent=self.window(),
             )
         else:
-            InfoBar.warning(
-                "Chave de API",
-                f"A chave para {prov.capitalize()} não foi configurada.",
-                parent=self,
+            show_warning(
+                "Chave de API ausente",
+                f"A chave de {prov_label} não foi configurada.",
+                parent=self.window(),
             )
 
     def _set_active_provider(self) -> None:
         idx = self.provider_combo.currentIndex()
         prov = self.providers[idx]
+        prov_label = format_provider_name(prov)
         has_key = KeyringManager.validate_provider_key(prov)
         if not has_key:
-            InfoBar.warning(
-                "Chave Não Configurada",
-                f"Configure e salve a chave de API para {prov.capitalize()} antes de ativá-lo.",
-                parent=self,
+            show_warning(
+                "Chave não configurada",
+                f"Salve a chave de API de {prov_label} antes de ativá-lo.",
+                parent=self.window(),
             )
             return
 
@@ -1894,10 +1918,10 @@ class SettingsTab(QWidget):
             logger.warning(f"Could not reinitialize LLM provider immediately: {e}")
 
         self.provider_changed.emit(prov)
-        InfoBar.success(
-            "Provedor Ativo",
-            f"Provedor alterado para {prov.capitalize()}.",
-            parent=self,
+        show_success(
+            "Provedor ativo alterado",
+            f"Provedor alterado para {prov_label}.",
+            parent=self.window(),
         )
 
     def _on_check_update_clicked(self) -> None:
@@ -1947,18 +1971,18 @@ class SettingsTab(QWidget):
     def _on_snooze_clicked(self) -> None:
         self.pref_mgr.snooze(24.0)
         self.snooze_btn.setVisible(False)
-        InfoBar.info(
-            "Lembrete Adiado",
-            "Aviso de atualização adiado por 24 horas.",
-            parent=self,
+        show_info(
+            "Lembrete adiado",
+            "O aviso de atualização foi adiado por 24 horas.",
+            parent=self.window(),
         )
 
     def _download_and_apply_update(self) -> None:
         if not self._latest_release or not self._latest_release.download_url:
-            InfoBar.warning(
-                "Atualização",
+            show_warning(
+                "Atualização indisponível",
                 "Nenhum pacote de atualização disponível para download.",
-                parent=self,
+                parent=self.window(),
             )
             return
 
@@ -2012,7 +2036,7 @@ class SettingsTab(QWidget):
         self.apply_update_btn.setEnabled(True)
         self.update_progress_bar.setVisible(False)
         self.update_status_label.setText(f"Falha na atualização: {err_msg}")
-        InfoBar.error("Erro na Atualização", err_msg, parent=self)
+        show_error("Erro na atualização", err_msg, parent=self.window())
 
     def focus_update_section(self) -> None:
         """Switches to the System sub-tab, scrolls to the bottom, and pulses the update section."""
@@ -2197,9 +2221,9 @@ class SettingsTab(QWidget):
             logger.warning(f"Could not persist TTS settings to yaml: {e}")
 
         self._refresh_voice_selector_ui(select_voice_id=preset.voice_id)
-        InfoBar.success(
-            title="Voz Atualizada!",
-            content=f"Voz ativa: {preset.display_name} (Velocidade: {rate_val:+d}, Volume: {vol_val}%).",
+        show_success(
+            "Voz atualizada",
+            f"{preset.display_name} • Velocidade: {rate_val:+d} • Volume: {vol_val}%.",
             parent=self.window(),
             duration=3500,
         )
@@ -2269,9 +2293,9 @@ class SettingsTab(QWidget):
         self.voice_dl_status_lbl.setText(f"⚠️ {friendly}")
         self.voice_dl_status_lbl.setVisible(True)
         self._update_voice_action_controls()
-        InfoBar.error(
-            title="Não foi possível baixar a voz",
-            content=friendly,
+        show_error(
+            "Não foi possível baixar a voz",
+            friendly,
             parent=self.window(),
             duration=5000,
         )
@@ -2299,11 +2323,11 @@ class SettingsTab(QWidget):
         if tts_engine is not None and hasattr(tts_engine, "speak_preview"):
             tts_engine.speak_preview(clean, voice_id=voice_id)
         else:
-            InfoBar.info(
-                "Amostra de Voz",
+            show_info(
+                "Amostra de voz",
                 f'"{clean}"',
                 parent=self.window(),
-                duration=2500,
+                duration=2600,
             )
 
     def _on_cleanup_unused_voices(self) -> None:
@@ -2317,16 +2341,16 @@ class SettingsTab(QWidget):
 
         if removed_count > 0:
             freed_mb = freed_bytes / (1024 * 1024)
-            InfoBar.success(
-                title="Limpeza Concluída!",
-                content=f"{removed_count} pacote(s) não usado(s) removido(s) ({freed_mb:.1f} MB liberados).",
+            show_success(
+                "Limpeza concluída",
+                f"{removed_count} pacote(s) não usado(s) removido(s) ({freed_mb:.1f} MB liberados).",
                 parent=self.window(),
                 duration=4000,
             )
         else:
-            InfoBar.info(
-                title="Nada para Limpar",
-                content="Nenhum pacote de voz não utilizado foi encontrado em disco.",
+            show_info(
+                "Nada para limpar",
+                "Nenhum pacote de voz não utilizado foi encontrado em disco.",
                 parent=self.window(),
                 duration=3000,
             )
@@ -2340,9 +2364,9 @@ class SettingsTab(QWidget):
         self.completion_phrase_input.setText(kit["completion_phrase"])
         self.no_speech_phrase_input.setText(kit["no_speech_phrase"])
         self.not_understood_phrase_input.setText(kit["not_understood_phrase"])
-        InfoBar.info(
-            title=f"Kit '{kit_name}' Aplicado",
-            content="Clique em 'Salvar Preferências da IA' para gravar as frases.",
+        show_info(
+            f"Kit '{kit_name}' carregado",
+            "Clique em Salvar Preferências da IA para gravar as frases.",
             parent=self.window(),
             duration=2800,
         )
