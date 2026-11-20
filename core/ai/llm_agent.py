@@ -1,10 +1,13 @@
 import json
 import threading
+import unicodedata
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from typing import Any
 
 from core.ai.conversation_memory import conversation_memory
 from core.ai.prompt_guard import PromptGuard
+from core.ai.sentence_buffer import SentenceStreamBuffer
 from core.cache import llm_cache
 from core.infra.config import config
 from core.infra.logger_config import logger
@@ -14,8 +17,63 @@ from core.plugins.plugin_manager import plugin_manager
 from core.runtime.rate_limiter import rate_limiter
 from core.shared.constants import DEFAULT_MODELS, DEFAULT_PROVIDER
 from core.shared.errors import TechnicalError
-from core.shared.utils import time_it
+from core.shared.utils import normalize_text, time_it
 from core.tools.tool_registry import tool_registry
+
+# Informative tools whose synthesis always produces a spoken 'chat' response
+# (excludes 'git' because git diff synthesis may return an executable 'action' plan).
+STREAMABLE_CHAT_TOOLS: frozenset[str] = frozenset(
+    {
+        "weather",
+        "finance",
+        "web_search",
+        "calculator",
+        "calendar",
+        "clipboard",
+        "notes",
+        "timer",
+        "youtube",
+        "github",
+        "dev_port",
+        "project_inspect",
+    }
+)
+
+# Read-only tools whose routing decision (tool_name + parameters) can be safely
+# cached for self-contained queries while the tool itself still executes live.
+CACHEABLE_TOOL_CALL_TOOLS: frozenset[str] = frozenset(
+    {"weather", "finance", "calculator", "calendar"}
+)
+
+# Normalized tokens/phrases indicating the query depends on prior conversation context.
+_CONTEXTUAL_REFERENCE_TOKENS: frozenset[str] = frozenset(
+    {
+        "la",
+        "nisso",
+        "disso",
+        "isso",
+        "isto",
+        "aquilo",
+        "dele",
+        "dela",
+        "deles",
+        "delas",
+        "nele",
+        "nela",
+        "mesmo",
+        "mesma",
+        "outro",
+        "outra",
+        "tambem",
+        "novamente",
+    }
+)
+_CONTEXTUAL_REFERENCE_PREFIXES: tuple[str, ...] = (
+    "e ",
+    "mas ",
+    "entao ",
+    "de novo",
+)
 
 
 class LLMAgent:
@@ -90,6 +148,82 @@ class LLMAgent:
                 last_err = e
 
         raise TechnicalError(f"All LLM providers failed. Last error: {last_err}")
+
+    def _stream_with_fallback(self, prompt: str) -> Iterator[str]:
+        """Streams LLM text chunks with multi-provider fallback before the first chunk is emitted."""
+        llm_cfg = config.get("llm", {})
+        configured_providers = list(llm_cfg.get("providers", {}).keys())
+        default_order = ["gemini", "openai", "anthropic", "deepseek", "openrouter"]
+
+        candidates = [self.provider.provider]
+        for p in configured_providers + default_order:
+            if p not in candidates:
+                candidates.append(p)
+
+        last_err: Exception | None = None
+        for prov_name in candidates:
+            emitted_any = False
+            try:
+                if prov_name == self.provider.provider:
+                    prov_instance = self.provider
+                else:
+                    logger.info(
+                        f"Attempting fallback streaming LLM Provider '{prov_name}'..."
+                    )
+                    model_name = llm_cfg.get("providers", {}).get(prov_name, {}).get(
+                        "model"
+                    ) or DEFAULT_MODELS.get(prov_name, "gemini-2.5-flash")
+                    prov_instance = LiteLLMProvider(
+                        provider=prov_name, model=model_name
+                    )
+
+                logger.info(f"Streaming from LLM Provider ({prov_name})...")
+                for chunk in prov_instance.stream_content(prompt=prompt):
+                    if chunk:
+                        emitted_any = True
+                        yield chunk
+                return
+            except Exception as e:
+                logger.warning(f"Streaming LLM Provider '{prov_name}' failed: {e}")
+                last_err = e
+                if emitted_any:
+                    # Do not switch providers mid-sentence after audio started streaming
+                    raise TechnicalError(
+                        f"Streaming interrupted mid-response on '{prov_name}': {e}"
+                    ) from e
+
+        raise TechnicalError(
+            f"All streaming LLM providers failed. Last error: {last_err}"
+        )
+
+    @staticmethod
+    def _is_cacheable_tool_call(text: str, decision: dict[str, Any]) -> bool:
+        """Returns True when a tool_call routing decision is safe to cache across calls."""
+        if not isinstance(decision, dict) or decision.get("type") != "tool_call":
+            return False
+
+        tool_name = str(decision.get("tool_name", "")).strip()
+        if tool_name not in CACHEABLE_TOOL_CALL_TOOLS:
+            return False
+
+        norm = normalize_text(text)
+        if not norm:
+            return False
+
+        ascii_norm = "".join(
+            ch
+            for ch in unicodedata.normalize("NFKD", norm)
+            if unicodedata.category(ch) != "Mn"
+        )
+        words = [w for w in ascii_norm.split("_") if w]
+        if len(words) < 2:
+            return False
+
+        spaced = " ".join(words)
+        if any(spaced.startswith(prefix) for prefix in _CONTEXTUAL_REFERENCE_PREFIXES):
+            return False
+
+        return not any(word in _CONTEXTUAL_REFERENCE_TOKENS for word in words)
 
     def _get_operational_context(self) -> dict[str, str]:
         """Gathers dynamic operational context: date/time, active window, and recent history."""
@@ -404,7 +538,10 @@ class LLMAgent:
             json_data = PromptGuard.sanitize_output(json_data)
 
             # 3. Save to cache
-            if json_data.get("type") in ["action", "media"]:
+            if json_data.get("type") in [
+                "action",
+                "media",
+            ] or self._is_cacheable_tool_call(text, json_data):
                 llm_cache.set(text, json_data)
 
             return json_data
@@ -502,10 +639,9 @@ class LLMAgent:
             logger.warning(f"Error in plan_action_steps: {e}")
             return []
 
-    def synthesize_tool_response(
-        self, original_query: str, tool_name: str, tool_result: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Synthesizes a human-readable response or next action based on tool execution results."""
+    @staticmethod
+    def _build_tool_synthesis_guidelines() -> str:
+        """Builds shared direct-answer and proactivity guidelines for tool synthesis prompts."""
         proactivity_mode = config.get("ai", {}).get("proactivity", "objective")
         if proactivity_mode == "proactive":
             proactivity_guideline = (
@@ -518,17 +654,7 @@ class LLMAgent:
                 "sem adicionar conselhos ou sugestões não solicitadas."
             )
 
-        prompt = f"""
-        Você é o Jarvis, o assistente pessoal inteligente do usuário no Windows.
-        Sua resposta falada será sintetizada via Text-to-Speech (TTS) e também exibida na tela.
-        O usuário perguntou: "{original_query}"
-        A ferramenta '{tool_name}' foi executada e retornou o seguinte resultado estruturado do mundo real:
-        {json.dumps(tool_result, ensure_ascii=False, indent=2)}
-
-        Sua tarefa:
-        1. Se a ferramenta retornou dados informativos (como clima, cotação monetária, cálculo, pesquisa na web, status do git ou arquivos):
-           retorne um JSON com type "chat" contendo uma resposta concisa, inteligente e fluida em Português para ser falada via TTS.
-
+        return f"""
            DIRETRIZES FUNDAMENTAIS DE INTELIGÊNCIA:
            - RACIOCÍNIO DINÂMICO BASEADO NOS DADOS REAIS:
              Analise com atenção os dados retornados pela ferramenta e formule uma resposta genuína, espontânea e personalizada para a situação real.
@@ -549,6 +675,124 @@ class LLMAgent:
            - SÍNTESE QUALITATIVA: Traduza números e telemetria em significado humano prático (nunca leia nomes de variáveis como 'bid', 'precipitation_mm', 'weather_code' ou chaves JSON).
            - LINGUAGEM FALADA (TTS): No máximo 1 a 2 frases concisas, naturais e fluidas para serem ouvidas com facilidade.
            {proactivity_guideline}
+        """
+
+    @staticmethod
+    def _clean_spoken_sentence(sentence: str) -> str:
+        """Removes residual markdown wrappers so TTS receives clean spoken text."""
+        cleaned = sentence.replace("**", "").replace("`", "").strip()
+        if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in ('"', "'"):
+            cleaned = cleaned[1:-1].strip()
+        return cleaned
+
+    def _synthesize_tool_response_stream(
+        self,
+        original_query: str,
+        tool_name: str,
+        tool_result: dict[str, Any],
+        on_sentence: Callable[[str], None],
+    ) -> dict[str, Any] | None:
+        """Streams a spoken tool response sentence-by-sentence directly into TTS.
+
+        Returns a sanitized chat dict marked with '_streamed': True on success,
+        or None if streaming failed before emitting any sentence (allowing JSON fallback).
+        """
+        guidelines = self._build_tool_synthesis_guidelines()
+        prompt = f"""
+        Você é o Jarvis, o assistente pessoal inteligente do usuário no Windows.
+        Sua resposta falada será sintetizada via Text-to-Speech (TTS) em tempo real e exibida na tela.
+        O usuário perguntou: "{original_query}"
+        A ferramenta '{tool_name}' foi executada e retornou o seguinte resultado estruturado do mundo real:
+        {json.dumps(tool_result, ensure_ascii=False, indent=2)}
+
+        {guidelines}
+
+        Retorne APENAS o texto falado em Português, sem JSON, sem markdown, sem asteriscos e sem aspas externas.
+        """
+
+        buffer = SentenceStreamBuffer()
+        emitted_sentences: list[str] = []
+
+        try:
+            with self._lock:
+                for delta in self._stream_with_fallback(prompt=prompt):
+                    for raw_sentence in buffer.push(delta):
+                        sentence = self._clean_spoken_sentence(raw_sentence)
+                        if sentence:
+                            emitted_sentences.append(sentence)
+                            on_sentence(sentence)
+
+                for raw_sentence in buffer.flush():
+                    sentence = self._clean_spoken_sentence(raw_sentence)
+                    if sentence:
+                        emitted_sentences.append(sentence)
+                        on_sentence(sentence)
+        except Exception as e:
+            logger.warning(f"Streaming tool synthesis failed for '{tool_name}': {e}")
+            # Flush any partial buffered text if we already started speaking
+            if emitted_sentences:
+                for raw_sentence in buffer.flush():
+                    sentence = self._clean_spoken_sentence(raw_sentence)
+                    if sentence:
+                        emitted_sentences.append(sentence)
+                        on_sentence(sentence)
+            else:
+                return None
+
+        full_message = " ".join(emitted_sentences).strip()
+        if not full_message:
+            return None
+
+        # Streaming responses often omit provider usage metadata; estimate conservatively
+        est_tokens = max(1, (len(prompt) + len(full_message)) // 4)
+        rate_limiter.log_usage(token_count=est_tokens)
+
+        sanitized = PromptGuard.sanitize_output(
+            {"type": "chat", "message": full_message}
+        )
+        sanitized["_streamed"] = True
+        return sanitized
+
+    def synthesize_tool_response(
+        self,
+        original_query: str,
+        tool_name: str,
+        tool_result: dict[str, Any],
+        on_sentence: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
+        """Synthesizes a human-readable response or next action based on tool execution results.
+
+        When on_sentence is provided for purely informative tools, streams plain-text
+        sentences directly to the callback for minimal time-to-first-speech.
+        """
+        if (
+            on_sentence is not None
+            and tool_name in STREAMABLE_CHAT_TOOLS
+            and bool(tool_result.get("success", True))
+        ):
+            streamed = self._synthesize_tool_response_stream(
+                original_query=original_query,
+                tool_name=tool_name,
+                tool_result=tool_result,
+                on_sentence=on_sentence,
+            )
+            if streamed is not None:
+                return streamed
+
+        guidelines = self._build_tool_synthesis_guidelines()
+
+        prompt = f"""
+        Você é o Jarvis, o assistente pessoal inteligente do usuário no Windows.
+        Sua resposta falada será sintetizada via Text-to-Speech (TTS) e também exibida na tela.
+        O usuário perguntou: "{original_query}"
+        A ferramenta '{tool_name}' foi executada e retornou o seguinte resultado estruturado do mundo real:
+        {json.dumps(tool_result, ensure_ascii=False, indent=2)}
+
+        Sua tarefa:
+        1. Se a ferramenta retornou dados informativos (como clima, cotação monetária, cálculo, pesquisa na web, status do git ou arquivos):
+           retorne um JSON com type "chat" contendo uma resposta concisa, inteligente e fluida em Português para ser falada via TTS.
+
+           {guidelines}
 
            {{
                "type": "chat",

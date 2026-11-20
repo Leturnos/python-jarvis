@@ -77,6 +77,7 @@ class ActionDispatcher:
         )
         self.last_plan: ExecutionPlan | None = None
         self._active_tool_replay: dict[str, Any] | None = None
+        self._skip_tts_for_current_dynamic = False
         self._callbacks_bound = False
         self._bind_tool_callbacks()
 
@@ -545,7 +546,8 @@ class ActionDispatcher:
         type_hint = action_config.get("type", "action")
         if type_hint == "chat":
             msg = action_config.get("message", "Sem resposta.")
-            self.tts_engine.speak(msg)
+            if not getattr(self, "_skip_tts_for_current_dynamic", False):
+                self.tts_engine.speak(msg)
 
             active_tool = getattr(self, "_active_tool_replay", None)
             if isinstance(active_tool, dict):
@@ -635,17 +637,30 @@ class ActionDispatcher:
         ):
             notifier.notify("Jarvis", explanation)
 
+        if hasattr(self.tts_engine, "warmup_async"):
+            self.tts_engine.warmup_async()
+
         tool_result = tool_registry.execute_tool(tool_name, **params)
+
+        stream_callback = None
+        if hasattr(self.tts_engine, "speak_stream_chunk"):
+            stream_callback = self.tts_engine.speak_stream_chunk
+        elif hasattr(self.tts_engine, "speak"):
+            stream_callback = self.tts_engine.speak
+
         synthesized = llm_agent.synthesize_tool_response(
             original_query=original_query,
             tool_name=tool_name,
             tool_result=tool_result,
+            on_sentence=stream_callback,
         )
 
         if synthesized.get("type") == "action":
             plan = ExecutionPlan.from_dict(synthesized)
             self.handle_plan(plan)
             return True
+
+        already_streamed = bool(synthesized.pop("_streamed", False))
 
         tool_replay_payload = {
             "schema_version": "1.0",
@@ -658,9 +673,11 @@ class ActionDispatcher:
             "message": synthesized.get("message", ""),
         }
         self._active_tool_replay = tool_replay_payload
+        self._skip_tts_for_current_dynamic = already_streamed
         try:
             self.handle_dynamic(synthesized)
         finally:
+            self._skip_tts_for_current_dynamic = False
             self._active_tool_replay = None
         return True
 
@@ -819,6 +836,8 @@ class ActionDispatcher:
                 return True
 
             # LLM Fallback
+            if hasattr(self.tts_engine, "warmup_async"):
+                self.tts_engine.warmup_async()
             state_manager.set_state(JarvisState.THINKING)
             llm_res = llm_agent.process_instruction(text)
             if llm_res:

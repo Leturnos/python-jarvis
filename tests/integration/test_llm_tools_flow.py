@@ -488,3 +488,56 @@ def test_conversation_memory_integration_in_operational_context():
     assert "conversation_history" in ctx
     assert 'Usuário: "Como está o tempo em Itamonte?"' in ctx["conversation_history"]
     assert 'Jarvis: "Está fechando para chuva' in ctx["conversation_history"]
+
+
+@patch("core.execution.dispatcher.history_manager.log_execution")
+@patch("core.ai.llm_agent.llm_agent._stream_with_fallback")
+@patch("core.tools.tool_registry.tool_registry.execute_tool")
+def test_handle_tool_call_streams_without_duplicate_tts_speak(
+    mock_execute_tool, mock_stream, mock_log_execution
+):
+    from core.ai.conversation_memory import conversation_memory
+
+    conversation_memory.clear()
+    mock_execute_tool.return_value = {
+        "success": True,
+        "city": "Itamonte, Minas Gerais, Brasil",
+        "today_forecast": {"rain_probability_percent": 60, "rain_expected": True},
+    }
+    mock_stream.return_value = iter(
+        [
+            "Sim, deve chover hoje em Itamonte. ",
+            "Há 60% de chance de garoa.",
+        ]
+    )
+
+    tts_mock = MagicMock()
+    dispatcher = ActionDispatcher(
+        config={"notifications": {"voice_progress_toasts": False}},
+        step_executor=MagicMock(),
+        tts_engine=tts_mock,
+        plan_builder=MagicMock(),
+    )
+
+    ok = dispatcher.handle_tool_call(
+        original_query="vai chover hoje?",
+        action_json={
+            "type": "tool_call",
+            "tool_name": "weather",
+            "parameters": {},
+            "explanation": "Consultando clima.",
+        },
+    )
+
+    assert ok is True
+    tts_mock.warmup_async.assert_called()
+    assert [c.args[0] for c in tts_mock.speak_stream_chunk.call_args_list] == [
+        "Sim, deve chover hoje em Itamonte.",
+        "Há 60% de chance de garoa.",
+    ]
+    # Must NOT speak the full response a second time via handle_dynamic
+    tts_mock.speak.assert_not_called()
+    mock_log_execution.assert_called_once()
+    last_turn = conversation_memory.get_last_turn()
+    assert last_turn is not None
+    assert "Itamonte" in last_turn.assistant_response

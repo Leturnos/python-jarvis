@@ -281,3 +281,118 @@ def test_normalize_media_vs_youtube_routing_redirects_spotify_requests():
     assert was_corrected_yt is False
     assert unchanged["type"] == "tool_call"
     assert unchanged["tool_name"] == "youtube"
+
+
+def test_is_cacheable_tool_call_filters_contextual_and_non_cacheable_queries():
+    weather_decision = {
+        "type": "tool_call",
+        "tool_name": "weather",
+        "parameters": {},
+    }
+    git_decision = {
+        "type": "tool_call",
+        "tool_name": "git",
+        "parameters": {"action": "status"},
+    }
+
+    assert (
+        LLMAgent._is_cacheable_tool_call("vai chover hoje?", weather_decision) is True
+    )
+    assert (
+        LLMAgent._is_cacheable_tool_call(
+            "qual a cotação do dólar?", {"type": "tool_call", "tool_name": "finance"}
+        )
+        is True
+    )
+    # Context-dependent follow-ups must NOT be cached
+    assert LLMAgent._is_cacheable_tool_call("e amanhã?", weather_decision) is False
+    assert LLMAgent._is_cacheable_tool_call("e lá no Rio?", weather_decision) is False
+    assert LLMAgent._is_cacheable_tool_call("como está lá?", weather_decision) is False
+    assert LLMAgent._is_cacheable_tool_call("clima", weather_decision) is False
+    # Mutating or workspace-sensitive tools must NOT be cached
+    assert LLMAgent._is_cacheable_tool_call("ver status do git", git_decision) is False
+
+
+@patch.object(LLMAgent, "_stream_with_fallback")
+def test_synthesize_tool_response_streams_sentences_for_weather(mock_stream):
+    mock_stream.return_value = iter(
+        [
+            "Sim, deve chover ",
+            "hoje em Itamonte. ",
+            "Há 59% de chance ",
+            "de garoa leve de 0.4 milímetros.",
+        ]
+    )
+
+    emitted: list[str] = []
+    agent = LLMAgent()
+    result = agent.synthesize_tool_response(
+        original_query="vai chover hoje?",
+        tool_name="weather",
+        tool_result={"success": True, "city": "Itamonte"},
+        on_sentence=emitted.append,
+    )
+
+    assert emitted == [
+        "Sim, deve chover hoje em Itamonte.",
+        "Há 59% de chance de garoa leve de 0.4 milímetros.",
+    ]
+    assert result["type"] == "chat"
+    assert result["_streamed"] is True
+    assert "Itamonte" in result["message"]
+
+
+@patch.object(LLMAgent, "_execute_with_fallback")
+@patch.object(
+    LLMAgent, "_stream_with_fallback", side_effect=RuntimeError("stream fail")
+)
+def test_synthesize_tool_response_falls_back_to_json_on_stream_error(
+    mock_stream, mock_execute
+):
+    from unittest.mock import MagicMock
+
+    resp = MagicMock()
+    resp.content = '{"type": "chat", "message": "Sem chuva prevista hoje."}'
+    resp.usage = {"total_tokens": 25}
+    mock_execute.return_value = resp
+
+    emitted: list[str] = []
+    agent = LLMAgent()
+    result = agent.synthesize_tool_response(
+        original_query="vai chover hoje?",
+        tool_name="weather",
+        tool_result={"success": True, "city": "Itamonte"},
+        on_sentence=emitted.append,
+    )
+
+    assert emitted == []
+    assert result["type"] == "chat"
+    assert result["message"] == "Sem chuva prevista hoje."
+    assert result.get("_streamed") is not True
+    mock_execute.assert_called_once()
+
+
+@patch.object(LLMAgent, "_execute_with_fallback")
+@patch.object(LLMAgent, "_stream_with_fallback")
+def test_synthesize_tool_response_keeps_git_on_structured_json(
+    mock_stream, mock_execute
+):
+    from unittest.mock import MagicMock
+
+    resp = MagicMock()
+    resp.content = '{"type": "chat", "message": "Sem alterações pendentes."}'
+    resp.usage = {"total_tokens": 20}
+    mock_execute.return_value = resp
+
+    emitted: list[str] = []
+    agent = LLMAgent()
+    result = agent.synthesize_tool_response(
+        original_query="como está o git?",
+        tool_name="git",
+        tool_result={"success": True, "output": ""},
+        on_sentence=emitted.append,
+    )
+
+    mock_stream.assert_not_called()
+    mock_execute.assert_called_once()
+    assert result["message"] == "Sem alterações pendentes."

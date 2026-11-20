@@ -153,6 +153,10 @@ def _handle_llm(job: Job, dispatcher: Any, notifier: Any) -> bool:
         return True
 
     # 3. LLM Fallback (Technical Error aware)
+    tts_engine = getattr(dispatcher, "tts_engine", None)
+    if tts_engine is not None and hasattr(tts_engine, "warmup_async"):
+        tts_engine.warmup_async()
+
     if notify_progress:
         notifier.notify("Jarvis", "Pensando...")
     dispatcher.last_confidence = 1.0
