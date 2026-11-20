@@ -1,5 +1,7 @@
 import json
 import re
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -75,10 +77,13 @@ class WeatherTool(BaseTool):
         "TO",
     }
 
+    GEOCODE_CACHE_TTL_SECONDS = 86400.0  # 24 hours
+
     def __init__(
         self,
         default_city: str | None = None,
         timeout_seconds: float | None = None,
+        geocode_cache_ttl_seconds: float | None = None,
     ) -> None:
         self._custom_default_city = default_city
         cfg = config.get("tools", {}).get("weather", {})
@@ -92,6 +97,13 @@ class WeatherTool(BaseTool):
             if timeout_seconds is not None
             else cfg.get("timeout_seconds", 5.0)
         )
+        self._geocode_cache_ttl = (
+            geocode_cache_ttl_seconds
+            if geocode_cache_ttl_seconds is not None
+            else self.GEOCODE_CACHE_TTL_SECONDS
+        )
+        self._geocode_cache: dict[str, tuple[float, tuple[float, float, str]]] = {}
+        self._geocode_lock = threading.Lock()
 
     @property
     def configured_city(self) -> str:
@@ -241,13 +253,35 @@ class WeatherTool(BaseTool):
 
     def _geocode(self, city: str) -> tuple[float, float, str] | None:
         candidate = self._sanitize_city_name(city)
+        cache_key = candidate.lower()
+        now = time.monotonic()
+
+        with self._geocode_lock:
+            cached = self._geocode_cache.get(cache_key)
+            if cached is not None:
+                expires_at, cached_coords = cached
+                if now < expires_at:
+                    return cached_coords
+                self._geocode_cache.pop(cache_key, None)
+
         coords = self._query_geocoding(candidate)
         if coords:
+            with self._geocode_lock:
+                self._geocode_cache[cache_key] = (
+                    now + self._geocode_cache_ttl,
+                    coords,
+                )
             return coords
 
-        if candidate != city.strip():
-            coords = self._query_geocoding(city.strip())
+        raw_clean = city.strip()
+        if candidate != raw_clean:
+            coords = self._query_geocoding(raw_clean)
             if coords:
+                with self._geocode_lock:
+                    self._geocode_cache[cache_key] = (
+                        now + self._geocode_cache_ttl,
+                        coords,
+                    )
                 return coords
 
         return None

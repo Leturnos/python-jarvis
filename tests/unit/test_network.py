@@ -1,6 +1,16 @@
 import time
 
-from core.infra.network import check_internet_connection_async
+import pytest
+
+from core.infra import network
+from core.infra.network import check_internet_connection_async, reset_connectivity_cache
+
+
+@pytest.fixture(autouse=True)
+def _reset_network_cache():
+    reset_connectivity_cache()
+    yield
+    reset_connectivity_cache()
 
 
 def test_check_internet_connection_async_returns_bool_without_blocking():
@@ -43,3 +53,30 @@ def test_check_internet_connection_all_fail(monkeypatch):
 
     is_online = network.check_internet_connection_async(timeout=0.5)
     assert is_online is False
+
+
+def test_check_internet_connection_caches_positive_result_only(monkeypatch):
+    calls = 0
+
+    def mock_check_socket(host: str, port: int, timeout: float) -> bool:
+        nonlocal calls
+        calls += 1
+        return True
+
+    monkeypatch.setattr(network, "_check_socket", mock_check_socket)
+
+    assert network.check_internet_connection_async(timeout=0.5) is True
+    assert calls == 1
+
+    # Second call within TTL reuses cached positive result without opening sockets
+    assert network.check_internet_connection_async(timeout=0.5) is True
+    assert calls == 1
+
+    # Negative results must never be cached so recovery is immediate
+    reset_connectivity_cache()
+    monkeypatch.setattr(network, "_check_socket", lambda h, p, t: False)
+    assert network.check_internet_connection_async(timeout=0.5) is False
+
+    monkeypatch.setattr(network, "_check_socket", mock_check_socket)
+    assert network.check_internet_connection_async(timeout=0.5) is True
+    assert calls == 2
