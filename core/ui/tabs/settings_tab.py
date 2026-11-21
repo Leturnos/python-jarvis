@@ -76,6 +76,7 @@ from core.ui.feedback import (
     show_success,
     show_warning,
 )
+from core.ui.notifications import JarvisNotifier
 from core.ui.screen_position import SCREEN_POSITION_LABELS, SCREEN_POSITIONS_ORDER
 from core.ui.widgets.audio_calibration_dialog import AudioCalibrationDialog
 from core.ui.widgets.hotkey_recorder import HotkeyRecorder
@@ -216,6 +217,17 @@ class SettingsTab(QWidget):
         "economic": "Econômico (PC Entrada)",
         "balanced": "Equilibrado (Recomendado)",
         "performance": "Alto Desempenho (PC Gamer/Workstation)",
+    }
+
+    NOTIFICATION_MODES_ORDER = [
+        "hybrid",
+        "desktop_hud",
+        "tray",
+    ]
+    NOTIFICATION_MODE_LABELS = {
+        "hybrid": "Híbrido (HUD + Bandeja em Tela Cheia)",
+        "desktop_hud": "HUD Obsidian (Área de Trabalho)",
+        "tray": "Bandeja do Windows (Nativo)",
     }
 
     def __init__(self, parent: QWidget | None = None, ui_adapter: Any = None) -> None:
@@ -418,6 +430,78 @@ class SettingsTab(QWidget):
         split_row.addLayout(selectors_col, 1)
         pos_layout.addLayout(split_row)
         layout.addWidget(pos_card)
+
+        # Card 1.5: Desktop & Tray Notifications
+        notif_card = SimpleCardWidget(scroll_content)
+        self._style_card(notif_card)
+        notif_layout = QVBoxLayout(notif_card)
+        notif_layout.setContentsMargins(16, 12, 16, 12)
+        notif_layout.setSpacing(10)
+
+        notif_title = StrongBodyLabel("🔔 Notificações na Área de Trabalho", notif_card)
+        notif_layout.addWidget(notif_title)
+
+        notif_desc = CaptionLabel(
+            "Escolha como os avisos do Jarvis aparecem fora do painel principal.",
+            notif_card,
+        )
+        notif_desc.setWordWrap(True)
+        notif_desc.setStyleSheet("color: #82828e;")
+        notif_layout.addWidget(notif_desc)
+
+        raw_notif = config.get("notifications")
+        notif_cfg = raw_notif if isinstance(raw_notif, dict) else {}
+        cur_notif_mode = str(notif_cfg.get("mode", "hybrid")).strip().lower()
+        if cur_notif_mode not in self.NOTIFICATION_MODES_ORDER:
+            cur_notif_mode = "hybrid"
+
+        notif_mode_row = QHBoxLayout()
+        notif_mode_row.setSpacing(8)
+        notif_mode_lbl = BodyLabel("Estilo:", notif_card)
+        notif_mode_lbl.setFixedWidth(56)
+        notif_mode_row.addWidget(notif_mode_lbl)
+
+        self.notification_mode_combo = ComboBox(notif_card)
+        self.notification_mode_combo.setMaximumWidth(320)
+        self.notification_mode_combo.addItems(
+            [self.NOTIFICATION_MODE_LABELS[k] for k in self.NOTIFICATION_MODES_ORDER]
+        )
+        self.notification_mode_combo.setCurrentIndex(
+            self.NOTIFICATION_MODES_ORDER.index(cur_notif_mode)
+        )
+        self.notification_mode_combo.currentIndexChanged.connect(
+            self._on_notification_mode_changed
+        )
+        notif_mode_row.addWidget(self.notification_mode_combo, 1)
+
+        self.test_notification_btn = PushButton("🔔 Testar", notif_card)
+        self.test_notification_btn.setFixedWidth(96)
+        self.test_notification_btn.setToolTip(
+            "Enviar uma notificação de teste com o estilo selecionado"
+        )
+        self.test_notification_btn.clicked.connect(self._on_test_notification_clicked)
+        notif_mode_row.addWidget(self.test_notification_btn)
+        notif_layout.addLayout(notif_mode_row)
+
+        voice_prog_row = QHBoxLayout()
+        voice_prog_row.addWidget(
+            BodyLabel("Notificar etapas intermediárias da fala:", notif_card),
+            1,
+        )
+        self.voice_progress_toasts_switch = SwitchButton(notif_card)
+        self.voice_progress_toasts_switch.setOnText("Ativo")
+        self.voice_progress_toasts_switch.setOffText("Inativo")
+        self.voice_progress_toasts_switch.setFixedWidth(102)
+        self.voice_progress_toasts_switch.setChecked(
+            bool(notif_cfg.get("voice_progress_toasts", False))
+        )
+        self.voice_progress_toasts_switch.checkedChanged.connect(
+            self._on_voice_progress_toasts_toggled
+        )
+        voice_prog_row.addWidget(self.voice_progress_toasts_switch)
+        notif_layout.addLayout(voice_prog_row)
+
+        layout.addWidget(notif_card)
 
         # Card 2: Hotkeys & Wake Word Keyword
         keys_card = SimpleCardWidget(scroll_content)
@@ -1713,6 +1797,49 @@ class SettingsTab(QWidget):
     def _save_city(self) -> None:
         """Alias for backwards compatibility with tests and callers expecting _save_city."""
         self._save_ai_preferences()
+
+    def _on_notification_mode_changed(self, index: int) -> None:
+        if not (0 <= index < len(self.NOTIFICATION_MODES_ORDER)):
+            return
+        mode = self.NOTIFICATION_MODES_ORDER[index]
+        config.setdefault("notifications", {})["mode"] = mode
+        try:
+            update_yaml_str_setting("notifications", "mode", mode)
+        except Exception as e:
+            logger.warning(f"Could not persist notifications.mode: {e}")
+
+        label = self.NOTIFICATION_MODE_LABELS.get(mode, mode)
+        show_success(
+            "Estilo de notificação atualizado",
+            f"Modo ativo: {label}.",
+            parent=self.window(),
+            duration=2800,
+        )
+        logger.info(f"Notification mode updated to '{mode}' via SettingsTab.")
+
+    def _on_voice_progress_toasts_toggled(self, checked: bool) -> None:
+        config.setdefault("notifications", {})["voice_progress_toasts"] = checked
+        try:
+            update_yaml_bool_setting("notifications", "voice_progress_toasts", checked)
+        except Exception as e:
+            logger.warning(
+                f"Could not persist notifications.voice_progress_toasts: {e}"
+            )
+
+    def _on_test_notification_clicked(self) -> None:
+        idx = self.notification_mode_combo.currentIndex()
+        mode = (
+            self.NOTIFICATION_MODES_ORDER[idx]
+            if 0 <= idx < len(self.NOTIFICATION_MODES_ORDER)
+            else "hybrid"
+        )
+        label = self.NOTIFICATION_MODE_LABELS.get(mode, mode)
+        JarvisNotifier().notify(
+            "Jarvis — Teste de Notificação",
+            f"Estilo ativo: {label}.",
+            duration=4,
+            level="info",
+        )
 
     def _on_audio_cues_toggled(self, checked: bool) -> None:
         config.setdefault("audio_cues", {})["enabled"] = checked

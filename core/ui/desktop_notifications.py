@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import (
@@ -43,16 +44,21 @@ class DesktopNotificationToast(QWidget):
         duration_ms: int = 3500,
         level: str = "info",
         parent: QWidget | None = None,
+        on_click: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.level = level.lower()
         self.style_spec = get_severity_style(self.level)
         self.duration_ms = max(1200, int(duration_ms))
         self._remaining_ms = self.duration_ms
+        self._on_click = on_click
         self._is_closing = False
         self._pos_anim: QPropertyAnimation | None = None
         self._fade_anim: QPropertyAnimation | None = None
         self._exit_group: QParallelAnimationGroup | None = None
+
+        if on_click is not None:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -261,6 +267,20 @@ class DesktopNotificationToast(QWidget):
         self.dismissed.emit(self)
         self.deleteLater()
 
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802
+        if (
+            self._on_click is not None
+            and not self._is_closing
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            callback = self._on_click
+            self._on_click = None
+            self.dismiss()
+            callback()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
     def enterEvent(self, event: Any) -> None:  # noqa: N802
         if self._tick_timer.isActive() and not self._is_closing:
             self._tick_timer.stop()
@@ -291,6 +311,7 @@ class DesktopNotificationManager(QObject):
         message: str,
         duration_ms: int = 3500,
         level: str = "info",
+        on_click: Callable[[], None] | None = None,
     ) -> DesktopNotificationToast:
         while len(self._active) >= self.MAX_VISIBLE:
             oldest = self._active.pop(0)
@@ -301,6 +322,7 @@ class DesktopNotificationManager(QObject):
             message=message,
             duration_ms=duration_ms,
             level=level,
+            on_click=on_click,
         )
         self._active.append(toast)
         toast.dismissed.connect(self._on_dismissed)

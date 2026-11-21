@@ -305,3 +305,20 @@ def test_app_controller_applies_update_and_quits(tmp_path):
             source_dir=extracted_dir,
             exit_callback=controller.quit_app,
         )
+
+
+def test_minimized_to_tray_message_routes_through_jarvis_notifier():
+    app = QApplication.instance() or QApplication([])
+    with patch.object(QtAppController, "_start_boot_update_check"):
+        controller = QtAppController(app, MagicMock(), MagicMock())
+        with patch("core.ui.app_controller.JarvisNotifier") as mock_notifier_cls:
+            controller._show_minimized_message()
+            # Calling twice must only notify once
+            controller._show_minimized_message()
+
+        mock_notifier_cls.return_value.notify.assert_called_once_with(
+            "Jarvis",
+            "O Jarvis continua rodando em segundo plano.",
+            duration=3,
+            level="info",
+        )

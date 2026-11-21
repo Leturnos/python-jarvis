@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
@@ -31,7 +32,7 @@ _TRAY_ICON_MAP: dict[str, QSystemTrayIcon.MessageIcon] = {
 class NotificationBridge(QObject):
     """Thread-safe GUI bridge routing backend notifications to Desktop HUD or Tray."""
 
-    notify_requested = Signal(str, str, int, str, bool)
+    notify_requested = Signal(str, str, int, str, bool, object)
 
     def __init__(
         self,
@@ -64,6 +65,7 @@ class NotificationBridge(QObject):
         duration_sec: int,
         level: str,
         force_tray: bool,
+        on_click: Any = None,
     ) -> None:
         try:
             if is_screen_locked():
@@ -81,13 +83,23 @@ class NotificationBridge(QObject):
             if use_tray:
                 if self._tray_icon is not None and self._tray_icon.isVisible():
                     try:
-                        icon_type = _TRAY_ICON_MAP.get(
-                            level.lower(), QSystemTrayIcon.MessageIcon.Information
+                        tray_icon_obj = self._tray_icon.icon()
+                        use_brand_icon = (
+                            level.lower() in ("info", "success")
+                            and tray_icon_obj is not None
+                            and not tray_icon_obj.isNull()
+                        )
+                        icon_arg: Any = (
+                            tray_icon_obj
+                            if use_brand_icon
+                            else _TRAY_ICON_MAP.get(
+                                level.lower(), QSystemTrayIcon.MessageIcon.Information
+                            )
                         )
                         self._tray_icon.showMessage(
                             title,
                             message,
-                            icon_type,
+                            icon_arg,
                             max(1500, duration_sec * 1000),
                         )
                         return
@@ -98,12 +110,15 @@ class NotificationBridge(QObject):
                 if mode == "tray" or is_fullscreen:
                     return
 
-            self._desktop_mgr.show_notification(
-                title=title,
-                message=message,
-                duration_ms=max(1500, duration_sec * 1000),
-                level=level,
-            )
+            hud_kwargs: dict[str, Any] = {
+                "title": title,
+                "message": message,
+                "duration_ms": max(1500, duration_sec * 1000),
+                "level": level,
+            }
+            if callable(on_click):
+                hud_kwargs["on_click"] = on_click
+            self._desktop_mgr.show_notification(**hud_kwargs)
         except Exception as e:
             logger.error(f"Error handling notification '{title}': {e}")
 
@@ -194,6 +209,7 @@ class JarvisNotifier:
         *,
         level: str = "info",
         force_tray: bool = False,
+        on_click: Callable[[], None] | None = None,
     ) -> None:
         """Sends a desktop HUD or system tray notification in a thread-safe manner."""
         bridge = _notification_bridge
@@ -205,6 +221,7 @@ class JarvisNotifier:
                     int(duration),
                     str(level),
                     bool(force_tray),
+                    on_click,
                 )
                 return
             except Exception as e:

@@ -468,11 +468,11 @@ class QtAppController(QObject):
 
     def _show_minimized_message(self) -> None:
         if hasattr(self, "tray_icon") and not self._has_shown_tray_message:
-            self.tray_icon.showMessage(
+            JarvisNotifier().notify(
                 "Jarvis",
                 "O Jarvis continua rodando em segundo plano.",
-                QSystemTrayIcon.MessageIcon.Information,
-                2000,
+                duration=3,
+                level="info",
             )
             self._has_shown_tray_message = True
 
@@ -679,13 +679,7 @@ class QtAppController(QObject):
             except Exception as e:
                 logger.debug(f"Could not update settings tab on notification: {e}")
 
-        if hasattr(self, "tray_icon") and self.tray_icon and self.tray_icon.isVisible():
-            self.tray_icon.showMessage(
-                f"Jarvis - Nova Versão {info.version}",
-                "Uma nova versão está disponível. Clique para abrir as configurações e atualizar.",
-                QSystemTrayIcon.MessageIcon.Information,
-                8000,
-            )
+        if hasattr(self, "tray_icon") and self.tray_icon:
             try:
                 self.tray_icon.messageClicked.connect(
                     self._on_update_tray_message_clicked,
@@ -704,6 +698,14 @@ class QtAppController(QObject):
                 f"{info.title}. Acesse Configurações → Sistema para atualizar.",
                 parent=self.main_window,
                 duration=9000,
+            )
+        else:
+            JarvisNotifier().notify(
+                f"Jarvis — Nova Versão {info.version}",
+                "Uma nova versão está disponível. Clique para abrir as configurações e atualizar.",
+                duration=8,
+                level="info",
+                on_click=self._on_update_tray_message_clicked,
             )
 
     def _on_update_tray_message_clicked(self) -> None:
