@@ -12,7 +12,7 @@ import win32con
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
-from qfluentwidgets import InfoBar, Theme, setTheme
+from qfluentwidgets import Theme, setTheme
 
 from core.activation import is_screen_locked
 from core.ai.llm_agent import llm_agent
@@ -30,7 +30,18 @@ from core.shared.utils import (
     manage_autostart,
 )
 from core.ui.command_palette_qt import QtCommandPalette
+from core.ui.feedback import (
+    format_provider_name,
+    show_info,
+    show_success,
+    show_warning,
+)
 from core.ui.main_window import MainWindow
+from core.ui.notifications import (
+    JarvisNotifier,
+    clear_notification_bridge,
+    register_notification_bridge,
+)
 from core.ui.voice_overlay import VoiceOverlayHUD
 
 
@@ -97,6 +108,7 @@ class QtAppController(QObject):
                 self.main_window.setStyleSheet(f.read())
 
         self._setup_tray()
+        register_notification_bridge(tray_icon=self.tray_icon, parent=self.app)
 
         if onboarding:
             self.show_window()
@@ -105,20 +117,22 @@ class QtAppController(QObject):
                 self.main_window.settings_tab
             )
             active_provider = config.get("llm", {}).get("active_provider", "gemini")
-            InfoBar.warning(
+            prov_label = format_provider_name(active_provider)
+            show_warning(
                 "Bem-vindo ao Jarvis!",
-                f"Configure sua chave de API para o provedor '{active_provider.capitalize()}' para ativar o assistente.",
+                f"Configure sua chave de API para {prov_label} para ativar o assistente.",
                 parent=self.main_window.settings_tab,
-                duration=10000,
+                duration=9000,
             )
         elif first_run:
             self.show_window()
             active_provider = config.get("llm", {}).get("active_provider", "gemini")
-            InfoBar.success(
+            prov_label = format_provider_name(active_provider)
+            show_success(
                 "Bem-vindo ao Jarvis!",
-                f"Assistente pronto para uso! Chave para '{active_provider.capitalize()}' configurada com sucesso.",
+                f"Assistente pronto para uso! Chave de {prov_label} configurada com sucesso.",
                 parent=self.main_window.status_tab,
-                duration=10000,
+                duration=9000,
             )
 
         self._start_boot_update_check()
@@ -228,6 +242,32 @@ class QtAppController(QObject):
             )
 
         self.tray_menu = QMenu()
+        self.tray_menu.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
+        self.tray_menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.tray_menu.setStyleSheet(
+            """
+            QMenu {
+                background-color: #18191f;
+                color: #ededf0;
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 8px;
+                padding: 6px;
+            }
+            QMenu::item {
+                padding: 6px 24px 6px 12px;
+                border-radius: 6px;
+            }
+            QMenu::item:selected {
+                background-color: rgba(0, 120, 212, 0.28);
+                color: #ffffff;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: rgba(255, 255, 255, 0.08);
+                margin: 5px 8px;
+            }
+            """
+        )
         self.tray_menu.aboutToShow.connect(self._update_menu_states)
 
         # Dashboard Action
@@ -276,15 +316,8 @@ class QtAppController(QObject):
         # LLM Provider Submenu
         self.provider_menu = self.tray_menu.addMenu("Provedor de IA")
         self.provider_actions = {}
-        provider_labels = {
-            "gemini": "Gemini",
-            "openai": "OpenAI",
-            "anthropic": "Anthropic",
-            "deepseek": "DeepSeek",
-            "openrouter": "OpenRouter",
-        }
         for prov in ["gemini", "openai", "anthropic", "deepseek", "openrouter"]:
-            label = provider_labels.get(prov, prov.capitalize())
+            label = format_provider_name(prov)
             action = QAction(label, self)
             action.setCheckable(True)
             action.triggered.connect(lambda checked, p=prov: self._switch_provider(p))
@@ -369,13 +402,14 @@ class QtAppController(QObject):
         self.autostart_action.setChecked(checked)
 
     def _switch_provider(self, provider: str) -> None:
+        prov_label = format_provider_name(provider)
         # Pre-check existence
         if not KeyringManager.validate_provider_key(provider):
-            self.tray_icon.showMessage(
+            JarvisNotifier().notify(
                 "Jarvis",
-                f"Chave de API do {provider.capitalize()} não configurada.",
-                QSystemTrayIcon.MessageIcon.Warning,
-                3000,
+                f"Chave de API de {prov_label} não configurada.",
+                duration=3,
+                level="warning",
             )
             self._update_menu_states()
             return
@@ -400,6 +434,7 @@ class QtAppController(QObject):
         threading.Thread(target=run_test, daemon=True).start()
 
     def _on_provider_switch_done(self, success: bool, provider: str) -> None:
+        prov_label = format_provider_name(provider)
         if success:
             config["llm"]["active_provider"] = provider
             update_yaml_active_provider(provider)
@@ -411,18 +446,18 @@ class QtAppController(QObject):
                 if provider in self.main_window.settings_tab.providers:
                     idx = self.main_window.settings_tab.providers.index(provider)
                     self.main_window.settings_tab.provider_combo.setCurrentIndex(idx)
-            self.tray_icon.showMessage(
+            JarvisNotifier().notify(
                 "Jarvis",
-                f"Provedor alterado para {provider.capitalize()}.",
-                QSystemTrayIcon.MessageIcon.Information,
-                3000,
+                f"Provedor alterado para {prov_label}.",
+                duration=3,
+                level="success",
             )
         else:
-            self.tray_icon.showMessage(
+            JarvisNotifier().notify(
                 "Jarvis",
-                f"Falha na conexão ou chave inválida para {provider.capitalize()}.",
-                QSystemTrayIcon.MessageIcon.Warning,
-                3000,
+                f"Falha na conexão ou chave inválida para {prov_label}.",
+                duration=4,
+                level="warning",
             )
         self._update_menu_states()
 
@@ -433,11 +468,11 @@ class QtAppController(QObject):
 
     def _show_minimized_message(self) -> None:
         if hasattr(self, "tray_icon") and not self._has_shown_tray_message:
-            self.tray_icon.showMessage(
+            JarvisNotifier().notify(
                 "Jarvis",
                 "O Jarvis continua rodando em segundo plano.",
-                QSystemTrayIcon.MessageIcon.Information,
-                2000,
+                duration=3,
+                level="info",
             )
             self._has_shown_tray_message = True
 
@@ -455,6 +490,7 @@ class QtAppController(QObject):
                 self.tray_icon.hide()
         except Exception:
             pass
+        clear_notification_bridge()
 
         try:
             if self.stop_event:
@@ -503,6 +539,7 @@ class QtAppController(QObject):
                 self.tray_icon.hide()
         except Exception:
             pass
+        clear_notification_bridge()
 
         try:
             if self.stop_event:
@@ -627,7 +664,7 @@ class QtAppController(QObject):
         return True
 
     def _show_update_notification(self, info: ReleaseInfo) -> None:
-        """Shows unobtrusive tray balloon or InfoBar notification when an update is available."""
+        """Shows unobtrusive tray balloon or JarvisToast notification when an update is available."""
         if is_screen_locked():
             logger.info(
                 "Screen is locked; deferring update notification until desktop is unlocked."
@@ -642,13 +679,7 @@ class QtAppController(QObject):
             except Exception as e:
                 logger.debug(f"Could not update settings tab on notification: {e}")
 
-        if hasattr(self, "tray_icon") and self.tray_icon and self.tray_icon.isVisible():
-            self.tray_icon.showMessage(
-                f"Jarvis - Nova Versão {info.version}",
-                "Uma nova versão está disponível. Clique para abrir as configurações e atualizar.",
-                QSystemTrayIcon.MessageIcon.Information,
-                8000,
-            )
+        if hasattr(self, "tray_icon") and self.tray_icon:
             try:
                 self.tray_icon.messageClicked.connect(
                     self._on_update_tray_message_clicked,
@@ -662,11 +693,19 @@ class QtAppController(QObject):
             and self.main_window
             and self.main_window.isVisible()
         ):
-            InfoBar.info(
+            show_info(
                 f"Nova Versão {info.version} Disponível",
-                f"{info.title}. Acesse a aba Configurações para atualizar.",
+                f"{info.title}. Acesse Configurações → Sistema para atualizar.",
                 parent=self.main_window,
-                duration=10000,
+                duration=9000,
+            )
+        else:
+            JarvisNotifier().notify(
+                f"Jarvis — Nova Versão {info.version}",
+                "Uma nova versão está disponível. Clique para abrir as configurações e atualizar.",
+                duration=8,
+                level="info",
+                on_click=self._on_update_tray_message_clicked,
             )
 
     def _on_update_tray_message_clicked(self) -> None:

@@ -7,6 +7,7 @@ from PySide6.QtGui import QCursor, QGuiApplication, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
@@ -88,32 +89,50 @@ class QtCommandPaletteDialog(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.resize(680, 460)
 
-        layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.shell_frame = QFrame(self)
+        self.shell_frame.setObjectName("CommandPaletteShell")
+        self.shell_frame.setStyleSheet(
+            """
+            QFrame#CommandPaletteShell {
+                background-color: #141416;
+                border: 1px solid rgba(255, 255, 255, 0.09);
+                border-radius: 12px;
+            }
+            """
+        )
+        outer_layout.addWidget(self.shell_frame)
+
+        layout = QVBoxLayout(self.shell_frame)
         layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
 
         search_layout = QHBoxLayout()
         search_layout.setSpacing(8)
 
-        self.search_bar = LineEdit(self)
+        self.search_bar = LineEdit(self.shell_frame)
         self.search_bar.setPlaceholderText(
             "Buscar comando ou usar @dev, @sys, @web, @midia, @prod..."
         )
         self.search_bar.textChanged.connect(self._on_text_changed)
         search_layout.addWidget(self.search_bar, stretch=1)
 
-        self.send_ai_btn = QPushButton("Enviar para IA 🚀", self)
+        self.send_ai_btn = QPushButton("Enviar para IA", self.shell_frame)
+        self.send_ai_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.send_ai_btn.setStyleSheet(
             """
             QPushButton {
                 background-color: #0078d4;
-                color: white;
-                font-weight: bold;
+                color: #ffffff;
+                font-weight: 600;
                 border: none;
                 border-radius: 6px;
                 padding: 6px 14px;
             }
             QPushButton:hover {
-                background-color: #106ebe;
+                background-color: #1084df;
             }
             """
         )
@@ -122,23 +141,27 @@ class QtCommandPaletteDialog(QDialog):
 
         layout.addLayout(search_layout)
 
-        self.list_widget = QListWidget(self)
+        self.list_widget = QListWidget(self.shell_frame)
         self.list_widget.setStyleSheet(
             """
             QListWidget {
-                background-color: #1f1f1f;
-                color: #ffffff;
-                border: 1px solid #333333;
+                background-color: #19191d;
+                color: #ededf0;
+                border: 1px solid rgba(255, 255, 255, 0.06);
                 border-radius: 8px;
                 padding: 6px;
             }
             QListWidget::item {
                 padding: 8px 12px;
-                border-radius: 4px;
+                border-radius: 6px;
                 margin-bottom: 2px;
             }
+            QListWidget::item:hover {
+                background-color: rgba(255, 255, 255, 0.05);
+            }
             QListWidget::item:selected {
-                background-color: #0078d4;
+                background-color: rgba(0, 120, 212, 0.28);
+                border-left: 3px solid #4cc2ff;
                 color: #ffffff;
             }
             """

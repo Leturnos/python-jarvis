@@ -330,3 +330,143 @@ def test_tts_worker_handles_null_runtime_and_tts_config():
         patch("core.audio.tts_engine.terminate_pyaudio"),
     ):
         engine._tts_worker()
+
+
+def test_warmup_async_loads_neural_voice_and_espeak_once():
+    import threading
+
+    cfg = {
+        "tts": {"active_voice_id": "jarvis_mk3"},
+        "runtime": {"memory_optimization": {"lazy_load_secondary_modules": True}},
+    }
+    with patch("core.audio.tts_engine.threading.Thread"):
+        engine = TTSEngine(cfg)
+
+    fake_piper = MagicMock()
+    fake_piper.config = {"espeak": {"voice": "pt-br"}}
+    done = threading.Event()
+
+    def fake_load(model_key, onnx_path, json_path):
+        engine._piper_cache[model_key] = fake_piper
+        return fake_piper
+
+    def fake_phonemize(*_args, **_kwargs):
+        done.set()
+        return "a"
+
+    engine.voice_manager = MagicMock()
+    engine.voice_manager.get_model_paths.return_value = (
+        Path("jarvis_mk3.onnx"),
+        Path("jarvis_mk3.onnx.json"),
+    )
+
+    with (
+        patch.object(engine, "_get_or_load_piper", side_effect=fake_load) as mock_load,
+        patch("core.audio.tts_engine.phonemize", side_effect=fake_phonemize) as mock_ph,
+    ):
+        engine.warmup_async()
+        assert done.wait(timeout=2.0)
+        # Wait briefly for warmup thread finally block to release _warming_up
+        import time
+
+        time.sleep(0.05)
+        # Second call after cache + espeak warmed is a no-op
+        engine.warmup_async()
+
+    mock_load.assert_called_once_with(
+        "jarvis_mk3", "jarvis_mk3.onnx", "jarvis_mk3.onnx.json"
+    )
+    mock_ph.assert_called_once()
+
+
+def test_tts_pipeline_prefetches_next_sentence_and_discards_stale_generation():
+    import threading
+
+    cfg = {"tts": {"active_voice_id": "jarvis_mk3", "rate": 0, "volume": 100}}
+    with patch("core.audio.tts_engine.threading.Thread"):
+        engine = TTSEngine(cfg)
+
+    synth_started_second = threading.Event()
+    allow_play_first_finish = threading.Event()
+    drain_flags: list[bool] = []
+    played_texts: list[str] = []
+
+    def fake_synth(*, text, **_kwargs):
+        if text == "Segunda frase.":
+            synth_started_second.set()
+        return np.ones(100, dtype=np.int16), 22050
+
+    def fake_play(pcm, sr, pa=None, drain=True):
+        drain_flags.append(drain)
+        if len(drain_flags) == 1:
+            # Wait for synth thread to prefetch Sentence 2 while Sentence 1 is playing!
+            assert synth_started_second.wait(timeout=2.0)
+            allow_play_first_finish.set()
+        else:
+            engine._stop_tts.set()
+
+    orig_play_prepared = engine._play_prepared_utterance
+
+    def track_play(item, voice, pa, drain=True):
+        played_texts.append(item.text)
+        return orig_play_prepared(item, voice, pa, drain=drain)
+
+    engine.speak_stream_chunk("Primeira frase.")
+    engine.speak_stream_chunk("Segunda frase.")
+
+    with (
+        patch("core.audio.tts_engine.pythoncom.CoInitialize"),
+        patch("core.audio.tts_engine.pythoncom.CoUninitialize"),
+        patch("core.audio.tts_engine.win32com.client.Dispatch"),
+        patch("core.audio.tts_engine.create_pyaudio", return_value=MagicMock()),
+        patch("core.audio.tts_engine.terminate_pyaudio"),
+        patch.object(engine, "_synthesize_neural", side_effect=fake_synth),
+        patch.object(engine, "_play_pcm_int16", side_effect=fake_play),
+        patch.object(engine, "_play_prepared_utterance", side_effect=track_play),
+    ):
+        t_synth = threading.Thread(target=engine._synth_worker, daemon=True)
+        t_play = threading.Thread(target=engine._playback_worker, daemon=True)
+        t_synth.start()
+        t_play.start()
+        t_play.join(timeout=3.0)
+        engine._stop_tts.set()
+        t_synth.join(timeout=3.0)
+
+    assert allow_play_first_finish.is_set()
+    assert played_texts == ["Primeira frase.", "Segunda frase."]
+    # Sentence 1 skips output latency drain because Sentence 2 is already prefetched;
+    # Sentence 2 drains because it ends the turn.
+    assert drain_flags == [False, True]
+
+
+def test_speak_stream_chunk_bypasses_duplicate_debounce_and_clear_queue_drops_prepared():
+    from core.audio.tts_engine import _PreparedUtterance
+
+    cfg = {"tts": {"voice_keyword": "maria", "cooldown_seconds": 5.0}}
+    with patch("core.audio.tts_engine.threading.Thread"):
+        engine = TTSEngine(cfg)
+
+    engine.speak_stream_chunk("Sim.")
+    engine.speak_stream_chunk("Sim.")
+    assert engine._speech_queue.qsize() == 2
+
+    # Inject a pre-synthesized item into _playback_queue and verify clear_queue drains both
+    stale = _PreparedUtterance(
+        generation=engine._queue_generation,
+        text="Antiga.",
+        voice_id="jarvis_mk3",
+        rate=0,
+        volume=100,
+        synth=(np.ones(10, dtype=np.int16), 22050),
+        synth_ms=10.0,
+    )
+    engine._playback_queue.put(stale)
+    engine._prepared_count += 1
+    prev_gen = engine._queue_generation
+
+    engine.clear_queue()
+
+    assert engine._queue_generation == prev_gen + 1
+    assert engine._speech_queue.empty()
+    assert engine._playback_queue.empty()
+    assert engine.has_pending_speech is False

@@ -485,6 +485,8 @@ class JarvisController:
     def _stop_listening_and_process(self, now: float) -> None:
         if self.audio_cue_manager:
             self.audio_cue_manager.play_cue(CueType.COMMAND_RECOGNIZED)
+        if hasattr(self.tts_engine, "warmup_async"):
+            self.tts_engine.warmup_async()
         audio_bytes = b"".join(self.command_frames)
         state_manager.set_state(JarvisState.THINKING)
         self.task_queue.put(Job(type=JobType.LLM_DYNAMIC, payload=audio_bytes))
@@ -511,9 +513,13 @@ class JarvisController:
     def _handle_idle(
         self, pcm: np.ndarray, rms: float, context: ActivationContext
     ) -> None:
-        self.ui.update(
-            status="Pronto" if context.timestamp > self.cooldown else "Cooldown"
-        )
+        tts_busy = self._is_tts_busy()
+        if tts_busy:
+            self.ui.update(status="Respondendo...")
+        else:
+            self.ui.update(
+                status="Pronto" if context.timestamp > self.cooldown else "Cooldown"
+            )
 
         highest_score = 0.0
         detected_wakeword = None
@@ -551,6 +557,8 @@ class JarvisController:
         action_obj = self.activation_manager.evaluate(context)
 
         if action_obj.action_type == ActivationActionType.SUSPEND:
+            if tts_busy and not context.is_screen_locked:
+                return
             if state_manager.get_state() == JarvisState.IDLE:
                 state_manager.set_state(JarvisState.SUSPENDED)
             return

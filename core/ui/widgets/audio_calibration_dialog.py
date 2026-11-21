@@ -24,6 +24,7 @@ from qfluentwidgets import (
 from core.infra.config import config, update_yaml_float_setting
 from core.infra.logger_config import logger
 from core.runtime.state import JarvisState, state_manager
+from core.ui.widgets.title_bar import CustomTitleBar
 
 
 class AudioCalibrationDialog(QDialog):
@@ -78,35 +79,65 @@ class AudioCalibrationDialog(QDialog):
 
     def _setup_ui(self) -> None:
         self.setWindowTitle("Jarvis - Calibração de Microfone & Wake Word")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedWidth(560)
-        self.setMinimumHeight(490)
+        self.setMinimumHeight(510)
         self.setModal(True)
-        self.setStyleSheet(
-            "QDialog { background-color: #202023; color: #ffffff; border-radius: 8px; }"
-        )
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.shell_frame = QFrame(self)
+        self.shell_frame.setObjectName("CalibrationShellFrame")
+        self.shell_frame.setStyleSheet(
+            """
+            QFrame#CalibrationShellFrame {
+                background-color: #141416;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+            }
+            """
+        )
+        outer_layout.addWidget(self.shell_frame)
+
+        shell_layout = QVBoxLayout(self.shell_frame)
+        shell_layout.setContentsMargins(1, 1, 1, 1)
+        shell_layout.setSpacing(0)
+
+        self.title_bar = CustomTitleBar(
+            self.shell_frame,
+            title="Calibração de Microfone",
+            close_tooltip="Cancelar e fechar",
+            bar_height=38,
+        )
+        self.title_bar.close_clicked.connect(self.reject)
+        shell_layout.addWidget(self.title_bar)
+
+        body_widget = QWidget(self.shell_frame)
+        layout = QVBoxLayout(body_widget)
+        layout.setContentsMargins(20, 16, 20, 18)
+        layout.setSpacing(12)
 
         # Header
         header_layout = QVBoxLayout()
-        header_layout.setSpacing(4)
-        title = StrongBodyLabel("🎙️ Calibração de Microfone & Ativação", self)
-        title.setStyleSheet("font-size: 16px; font-weight: 600; color: #ffffff;")
+        header_layout.setSpacing(3)
+        title = StrongBodyLabel("Calibração de Microfone & Ativação", body_widget)
+        title.setStyleSheet("font-size: 15.5px; font-weight: 600; color: #ffffff;")
         header_layout.addWidget(title)
 
         subtitle = CaptionLabel(
-            "Ajuste automático de sensibilidade e ganho do microfone em 3 passos.", self
+            "Ajuste automático de sensibilidade e ganho do microfone em 3 passos.",
+            body_widget,
         )
         subtitle.setStyleSheet("color: #8e8e99; font-size: 12px;")
         header_layout.addWidget(subtitle)
         layout.addLayout(header_layout)
 
         # Main Card
-        self.main_card = SimpleCardWidget(self)
+        self.main_card = SimpleCardWidget(body_widget)
         self.main_card.setStyleSheet(
-            "SimpleCardWidget { background-color: #28282c; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; }"
+            "SimpleCardWidget { background-color: #19191d; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; }"
         )
         card_layout = QVBoxLayout(self.main_card)
         card_layout.setContentsMargins(18, 16, 18, 16)
@@ -246,17 +277,18 @@ class AudioCalibrationDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
 
-        self.secondary_btn = PushButton("Cancelar", self)
+        self.secondary_btn = PushButton("Cancelar", body_widget)
         self.secondary_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.secondary_btn)
 
         btn_layout.addStretch(1)
 
-        self.primary_btn = PrimaryPushButton("Começar Calibração", self)
+        self.primary_btn = PrimaryPushButton("Começar Calibração", body_widget)
         self.primary_btn.clicked.connect(self._on_primary_action)
         btn_layout.addWidget(self.primary_btn)
 
         layout.addLayout(btn_layout)
+        shell_layout.addWidget(body_widget, 1)
 
     def _connect_signals(self) -> None:
         if hasattr(self.ui_adapter, "calibration_data_updated"):
@@ -492,7 +524,7 @@ class AudioCalibrationDialog(QDialog):
         self.current_step = 4
         recs = self.calculate_recommendations(self.samples)
 
-        self.step_label.setText("🎉 Calibração Concluída!")
+        self.step_label.setText("Calibração Concluída!")
         self.step_label.setStyleSheet("color: #57d9a3; font-size: 14px;")
         self.instruction_label.setText(
             "Configurações ideais calculadas com sucesso! Teste o comando 'Hey Jarvis' abaixo ou salve para aplicar."

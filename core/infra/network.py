@@ -1,6 +1,7 @@
 import logging
 import socket
 import ssl
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,6 +17,17 @@ DEFAULT_ENDPOINTS: list[tuple[str, int]] = [
     ("1.1.1.1", 443),
     ("8.8.8.8", 443),
 ]
+
+POSITIVE_CACHE_TTL_SECONDS: float = 10.0
+_cache_lock = threading.Lock()
+_last_online_monotonic: float = 0.0
+
+
+def reset_connectivity_cache() -> None:
+    """Clears the cached positive connectivity timestamp."""
+    global _last_online_monotonic
+    with _cache_lock:
+        _last_online_monotonic = 0.0
 
 
 def _check_socket(host: str, port: int, timeout: float) -> bool:
@@ -41,14 +53,31 @@ def _check_endpoints(
 
 
 def check_internet_connection_async(
-    host: str | None = None, port: int | None = None, timeout: float = 0.5
+    host: str | None = None,
+    port: int | None = None,
+    timeout: float = 0.5,
+    use_cache: bool = True,
 ) -> bool:
     """Checks internet connectivity asynchronously using a background thread.
 
     If host and port are explicitly specified, tests only that target.
-    Otherwise, tests redundant public DNS and HTTPS endpoints (Google & Cloudflare).
+    Otherwise, tests redundant public DNS and HTTPS endpoints (Google & Cloudflare)
+    and reuses recent positive results for POSITIVE_CACHE_TTL_SECONDS to avoid
+    redundant socket handshakes across consecutive LLM requests.
     Guarantees non-blocking execution for caller threads.
     """
+    global _last_online_monotonic
+    is_default_probe = host is None and port is None
+
+    if use_cache and is_default_probe:
+        with _cache_lock:
+            if (
+                _last_online_monotonic > 0.0
+                and (time.monotonic() - _last_online_monotonic)
+                < POSITIVE_CACHE_TTL_SECONDS
+            ):
+                return True
+
     if host is not None and port is not None:
         endpoints = [(host, port)]
     elif host is not None:
@@ -64,9 +93,16 @@ def check_internet_connection_async(
         future = _executor.submit(
             _check_endpoints, endpoints, per_endpoint_timeout, timeout
         )
-        return future.result(timeout=timeout + 0.15)
+        is_online = future.result(timeout=timeout + 0.15)
+        if is_default_probe:
+            with _cache_lock:
+                _last_online_monotonic = time.monotonic() if is_online else 0.0
+        return is_online
     except Exception as e:
         logger.debug(f"Network check exception: {e}")
+        if is_default_probe:
+            with _cache_lock:
+                _last_online_monotonic = 0.0
         return False
 
 

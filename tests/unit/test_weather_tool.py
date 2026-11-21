@@ -296,3 +296,47 @@ def test_weather_tool_sanitizer_variations() -> None:
     assert tool._sanitize_city_name("Curitiba/PR") == "Curitiba"
     assert tool._sanitize_city_name("Rio de Janeiro - RJ - Brasil") == "Rio de Janeiro"
     assert tool._sanitize_city_name("Paris") == "Paris"
+
+
+@patch("urllib.request.urlopen")
+def test_weather_tool_caches_geocoding_across_calls(mock_urlopen: MagicMock) -> None:
+    geo_response = MagicMock()
+    geo_response.read.return_value = json.dumps(
+        {
+            "results": [
+                {
+                    "name": "Itamonte",
+                    "admin1": "Minas Gerais",
+                    "country": "Brasil",
+                    "latitude": -22.28,
+                    "longitude": -44.87,
+                }
+            ]
+        }
+    ).encode("utf-8")
+
+    forecast_response_1 = MagicMock()
+    forecast_response_1.read.return_value = json.dumps(
+        {"current": {"temperature_2m": 20.0, "weather_code": 0}}
+    ).encode("utf-8")
+    forecast_response_2 = MagicMock()
+    forecast_response_2.read.return_value = json.dumps(
+        {"current": {"temperature_2m": 21.0, "weather_code": 1}}
+    ).encode("utf-8")
+
+    mock_urlopen.side_effect = [
+        MagicMock(__enter__=MagicMock(return_value=geo_response)),
+        MagicMock(__enter__=MagicMock(return_value=forecast_response_1)),
+        MagicMock(__enter__=MagicMock(return_value=forecast_response_2)),
+    ]
+
+    tool = WeatherTool(default_city="Itamonte", geocode_cache_ttl_seconds=3600.0)
+    res1 = tool.execute(city="Itamonte")
+    res2 = tool.execute(city="Itamonte-MG")
+
+    assert res1["success"] is True
+    assert res2["success"] is True
+    assert res1["temperature"] == 20.0
+    assert res2["temperature"] == 21.0
+    # 1 geocoding call + 2 live forecast calls (second geocode served from cache)
+    assert mock_urlopen.call_count == 3

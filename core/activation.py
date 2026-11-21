@@ -38,6 +38,90 @@ def is_screen_locked() -> bool:
         return False
 
 
+def is_foreground_fullscreen() -> bool:
+    """Detects if the foreground window is in true borderless/fullscreen mode (skipping standard maximized windows)."""
+    try:
+        hwnd = win32gui.GetForegroundWindow()
+        if not hwnd:
+            return False
+
+        # Skip desktop, shell, taskbar, and wallpaper host classes
+        cls_name = win32gui.GetClassName(hwnd)
+        if cls_name in (
+            "Progman",
+            "WorkerW",
+            "Shell_TrayWnd",
+            "Shell_SecondaryTrayWnd",
+            "XamlExplorerHostIslandWindow",
+            "Windows.UI.Core.CoreWindow",
+        ):
+            return False
+
+        # Standard or maximized/resizable desktop windows have WS_CAPTION, WS_THICKFRAME, or WS_MAXIMIZE
+        style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+        if (style & win32con.WS_CAPTION) == win32con.WS_CAPTION:
+            return False
+        if isinstance(style, int) and (
+            (style & win32con.WS_THICKFRAME) != 0 or (style & win32con.WS_MAXIMIZE) != 0
+        ):
+            return False
+
+        rect = win32gui.GetWindowRect(hwnd)
+        width = rect[2] - rect[0]
+        height = rect[3] - rect[1]
+
+        screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
+        screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
+
+        if not (width >= screen_width and height >= screen_height):
+            return False
+
+        # Exclude known non-game background/wallpaper/IDE/shell processes
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            if isinstance(pid, int) and pid > 0:
+                proc_name = psutil.Process(pid).name().lower().removesuffix(".exe")
+                non_game_procs = (
+                    "explorer",
+                    "lively",
+                    "livelywpf",
+                    "livelycefsharp",
+                    "mpv",
+                    "wallpaper32",
+                    "wallpaper64",
+                    "webwallpaper32",
+                    "warp",
+                    "code",
+                    "antigravity",
+                    "cursor",
+                    "windsurf",
+                    "windowsterminal",
+                    "discord",
+                    "spotify",
+                    "obsidian",
+                    "slack",
+                    "notion",
+                    "jarvis",
+                    "searchhost",
+                    "shellexperiencehost",
+                    "startmenuexperiencehost",
+                    "applicationframehost",
+                    "textinputhost",
+                    "lockapp",
+                    "snippingtool",
+                    "screenclippinghost",
+                )
+                if proc_name in non_game_procs or proc_name.startswith("lively"):
+                    return False
+        except Exception:
+            pass
+
+        return True
+    except Exception as e:
+        logger.error(f"Error detecting fullscreen window: {e}")
+        return False
+
+
 class ActivationActionType(Enum):
     TRIGGER_WAKE = auto()
     TRIGGER_PTT_START = auto()
@@ -248,87 +332,7 @@ class ActivationManager:
 
     def is_fullscreen(self) -> bool:
         """Detects if the foreground window is in true borderless/fullscreen mode (skipping standard maximized windows)."""
-        try:
-            hwnd = win32gui.GetForegroundWindow()
-            if not hwnd:
-                return False
-
-            # Skip desktop, shell, taskbar, and wallpaper host classes
-            cls_name = win32gui.GetClassName(hwnd)
-            if cls_name in (
-                "Progman",
-                "WorkerW",
-                "Shell_TrayWnd",
-                "Shell_SecondaryTrayWnd",
-                "XamlExplorerHostIslandWindow",
-                "Windows.UI.Core.CoreWindow",
-            ):
-                return False
-
-            # Standard or maximized/resizable desktop windows have WS_CAPTION, WS_THICKFRAME, or WS_MAXIMIZE
-            style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
-            if (style & win32con.WS_CAPTION) == win32con.WS_CAPTION:
-                return False
-            if isinstance(style, int) and (
-                (style & win32con.WS_THICKFRAME) != 0
-                or (style & win32con.WS_MAXIMIZE) != 0
-            ):
-                return False
-
-            rect = win32gui.GetWindowRect(hwnd)
-            width = rect[2] - rect[0]
-            height = rect[3] - rect[1]
-
-            screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
-            screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
-
-            if not (width >= screen_width and height >= screen_height):
-                return False
-
-            # Exclude known non-game background/wallpaper/IDE/shell processes
-            try:
-                _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                if isinstance(pid, int) and pid > 0:
-                    proc_name = psutil.Process(pid).name().lower().removesuffix(".exe")
-                    non_game_procs = (
-                        "explorer",
-                        "lively",
-                        "livelywpf",
-                        "livelycefsharp",
-                        "mpv",
-                        "wallpaper32",
-                        "wallpaper64",
-                        "webwallpaper32",
-                        "warp",
-                        "code",
-                        "antigravity",
-                        "cursor",
-                        "windsurf",
-                        "windowsterminal",
-                        "discord",
-                        "spotify",
-                        "obsidian",
-                        "slack",
-                        "notion",
-                        "jarvis",
-                        "searchhost",
-                        "shellexperiencehost",
-                        "startmenuexperiencehost",
-                        "applicationframehost",
-                        "textinputhost",
-                        "lockapp",
-                        "snippingtool",
-                        "screenclippinghost",
-                    )
-                    if proc_name in non_game_procs or proc_name.startswith("lively"):
-                        return False
-            except Exception:
-                pass
-
-            return True
-        except Exception as e:
-            logger.error(f"Error detecting fullscreen window: {e}")
-            return False
+        return is_foreground_fullscreen()
 
     def is_hotkey_pressed(self) -> bool:
         """Checks if the configured PTT hotkey is currently pressed."""

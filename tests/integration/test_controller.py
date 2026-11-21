@@ -372,3 +372,48 @@ def test_wake_from_sleeping_or_suspended_preloads_stt_async(mock_deps, initial_s
         assert started.wait(timeout=1.0)
         release.set()
         mock_load.assert_called_once()
+
+
+def test_idle_shows_responding_and_defers_fullscreen_suspend_while_tts_busy(mock_deps):
+    from core.activation import (
+        ActivationAction,
+        ActivationActionType,
+        ActivationContext,
+    )
+
+    controller = JarvisController(**mock_deps)
+    state_manager.set_state(JarvisState.IDLE)
+    mock_deps["tts_engine"].is_speaking = False
+    mock_deps["tts_engine"].has_pending_speech = True
+
+    controller.activation_manager.evaluate = MagicMock(
+        return_value=ActivationAction(ActivationActionType.SUSPEND, "FULLSCREEN")
+    )
+
+    pcm = np.zeros(1280, dtype=np.int16)
+    ctx_fullscreen = ActivationContext(
+        wakeword_score=0.0,
+        wakeword_detected=None,
+        is_fullscreen=True,
+        is_hotkey_pressed=False,
+        current_state=JarvisState.IDLE,
+        timestamp=time.time(),
+        is_screen_locked=False,
+    )
+
+    controller._handle_idle(pcm, 1.0, ctx_fullscreen)
+    assert state_manager.get_state() == JarvisState.IDLE
+    mock_deps["ui"].update.assert_any_call(status="Respondendo...")
+
+    # Lock screen must still suspend immediately even when TTS is busy
+    ctx_locked = ActivationContext(
+        wakeword_score=0.0,
+        wakeword_detected=None,
+        is_fullscreen=False,
+        is_hotkey_pressed=False,
+        current_state=JarvisState.IDLE,
+        timestamp=time.time(),
+        is_screen_locked=True,
+    )
+    controller._handle_idle(pcm, 1.0, ctx_locked)
+    assert state_manager.get_state() == JarvisState.SUSPENDED

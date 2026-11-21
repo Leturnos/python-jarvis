@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from typing import Any
 
 import litellm
@@ -117,10 +118,96 @@ class LiteLLMProvider(BaseLLMProvider):
                 f"Error from LLM provider {self.provider}: {e}"
             ) from e
 
+    @staticmethod
+    def _extract_chunk_delta(chunk: Any) -> str:
+        """Extracts incremental text delta from a LiteLLM streaming chunk."""
+        choices = (
+            chunk.get("choices")
+            if isinstance(chunk, dict)
+            else getattr(chunk, "choices", None)
+        )
+        if not choices:
+            return ""
+        first = choices[0]
+        delta = (
+            first.get("delta")
+            if isinstance(first, dict)
+            else getattr(first, "delta", None)
+        )
+        if not delta:
+            return ""
+        content = (
+            delta.get("content")
+            if isinstance(delta, dict)
+            else getattr(delta, "content", None)
+        )
+        return str(content) if content else ""
+
+    def stream_content(
+        self, prompt: str, system_instruction: str | None = None
+    ) -> Iterator[str]:
+        """Streams content deltas using LiteLLM with stream=True."""
+        if not self.api_key:
+            raise LLMAuthenticationError(
+                f"Chave de API para '{self.provider}' não está configurada no python-jarvis."
+            )
+
+        if not check_internet_connection_async(timeout=0.5):
+            logger.warning("Internet offline detected before LLM streaming request.")
+            raise LLMProviderError(
+                "Desculpe, estou sem acesso à internet no momento. Verifique sua conexão com a internet."
+            )
+
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
+
+        try:
+            timeout_val = float(config.get("llm", {}).get("timeout_seconds", 5.0))
+            retries_val = int(config.get("llm", {}).get("num_retries", 0))
+            kwargs: dict[str, Any] = {
+                "timeout": timeout_val,
+                "num_retries": retries_val,
+                "api_key": self.api_key,
+                "stream": True,
+            }
+
+            stream = litellm.completion(
+                model=self.full_model_name,
+                messages=messages,
+                **kwargs,
+            )
+
+            for chunk in stream:
+                text_delta = self._extract_chunk_delta(chunk)
+                if text_delta:
+                    yield text_delta
+
+        except litellm.exceptions.AuthenticationError as e:
+            raise LLMAuthenticationError(
+                f"Authentication failed for {self.provider}: {e}"
+            ) from e
+        except litellm.exceptions.RateLimitError as e:
+            raise LLMRateLimitError(
+                f"Rate limit exceeded for {self.provider}: {e}"
+            ) from e
+        except (litellm.exceptions.Timeout, litellm.exceptions.APIConnectionError) as e:
+            logger.error(f"LiteLLM streaming timeout or connection error: {e}")
+            raise LLMProviderError(
+                "Desculpe, não consegui conectar ao provedor de IA no momento. Verifique sua conexão com a internet."
+            ) from e
+        except Exception as e:
+            logger.error(f"LiteLLM streaming error: {e}")
+            raise LLMProviderError(
+                f"Error from LLM provider {self.provider}: {e}"
+            ) from e
+
     def get_capabilities(self) -> dict:
         """Returns provider capabilities."""
         return {
             "supports_system_instructions": True,
+            "supports_streaming": True,
             "provider": self.provider,
             "model": self.model,
         }

@@ -6,6 +6,7 @@ import threading
 import time
 import wave
 import winsound
+from dataclasses import dataclass
 from typing import Any
 
 import espeakng_loader
@@ -37,6 +38,19 @@ except Exception as e:
     logger.debug(f"Failed to configure espeakng library paths: {e}")
 
 
+@dataclass(frozen=True)
+class _PreparedUtterance:
+    """Synthesized (or SAPI5-deferred) speech item ready for playback."""
+
+    generation: int
+    text: str
+    voice_id: str
+    rate: int
+    volume: int
+    synth: tuple[NDArray[np.int16], int] | None
+    synth_ms: float
+
+
 class TTSEngine:
     def __init__(
         self,
@@ -50,24 +64,44 @@ class TTSEngine:
         self.last_enqueued_time = 0.0
         self.is_speaking = False
         self._speech_queue: queue.Queue[str] = queue.Queue()
+        self._playback_queue: queue.Queue[_PreparedUtterance] = queue.Queue(maxsize=2)
         self._stop_tts = threading.Event()
         self._abort_current = threading.Event()
         self._preview_voice_override: str | None = None
         self._piper_cache: dict[str, Any] = {}
         self._cache_lock = threading.Lock()
+        self._phonemize_lock = threading.Lock()
+        self._warmup_lock = threading.Lock()
+        self._warming_up = False
+        self._espeak_warmed = False
         self._speech_state_lock = threading.Lock()
+        self._queue_generation: int = 0
         self._queued_count: int = 0
+        self._prepared_count: int = 0
         self._active_utterance: bool = False
+        self._active_playback: bool = False
         self._output_stream: Any = None
         self._output_stream_rate: int = 0
-        self._tts_thread = threading.Thread(target=self._tts_worker, daemon=True)
+        self._synth_thread = threading.Thread(
+            target=self._synth_worker, daemon=True, name="TTSSynthWorker"
+        )
+        self._tts_thread = threading.Thread(
+            target=self._playback_worker, daemon=True, name="TTSPlaybackWorker"
+        )
+        self._synth_thread.start()
         self._tts_thread.start()
 
     @property
     def has_pending_speech(self) -> bool:
         """Returns True while any speech item is queued, synthesizing, or playing."""
         with self._speech_state_lock:
-            return self.is_speaking or self._active_utterance or self._queued_count > 0
+            return (
+                self.is_speaking
+                or self._active_utterance
+                or self._active_playback
+                or self._queued_count > 0
+                or self._prepared_count > 0
+            )
 
     def evict_cached_models(self, model_key: str | None = None) -> None:
         """Releases cached ONNX sessions so model files can be safely deleted on Windows."""
@@ -90,7 +124,10 @@ class TTSEngine:
                 self._piper_cache.clear()
                 gc.collect()
 
+            t0 = time.perf_counter()
             instance = Piper(model_path=onnx_path, config_path=json_path)
+            load_ms = (time.perf_counter() - t0) * 1000.0
+            logger.info(f"Loaded Piper ONNX model '{model_key}' in {load_ms:.0f}ms.")
             self._piper_cache[model_key] = instance
             return instance
 
@@ -113,6 +150,25 @@ class TTSEngine:
         start = max(0, int(active_indices[0]) - margin_samples)
         end = min(pcm_int16.size, int(active_indices[-1]) + 1 + margin_samples)
         return pcm_int16[start:end]
+
+    def _warm_espeak_if_needed(self, espeak_voice: str = "pt-br") -> None:
+        """Initializes the espeak-ng native library once to avoid first-utterance cold delay."""
+        if self._espeak_warmed:
+            return
+        with self._phonemize_lock:
+            if self._espeak_warmed:
+                return
+            try:
+                phonemize(
+                    "a",
+                    language=espeak_voice,
+                    backend="espeak",
+                    preserve_punctuation=True,
+                    with_stress=True,
+                )
+                self._espeak_warmed = True
+            except Exception as e:
+                logger.debug(f"Failed to pre-warm espeak-ng phonemizer: {e}")
 
     def _prewarm_active_voice_if_configured(self) -> None:
         """Preloads the active neural TTS model on startup only when lazy loading is disabled."""
@@ -137,9 +193,15 @@ class TTSEngine:
             return
         onnx_path, json_path = paths
         try:
-            self._get_or_load_piper(
+            piper = self._get_or_load_piper(
                 preset.model_asset.model_key, str(onnx_path), str(json_path)
             )
+            espeak_voice = (
+                piper.config.get("espeak", {}).get("voice", "pt-br")
+                if isinstance(getattr(piper, "config", None), dict)
+                else "pt-br"
+            )
+            self._warm_espeak_if_needed(espeak_voice)
             logger.info(
                 f"Pre-warmed neural TTS model '{preset.voice_id}' (performance profile)."
             )
@@ -147,6 +209,68 @@ class TTSEngine:
             logger.debug(
                 f"Failed to pre-warm neural TTS model '{preset.voice_id}': {e}"
             )
+
+    def warmup_async(self) -> None:
+        """Just-in-time background warm-up of the active neural voice during LLM/network wait.
+
+        Avoids idle RAM usage on boot while hiding ONNX + espeak-ng cold load (~4s)
+        behind concurrent network requests.
+        """
+        if not isinstance(self.config, dict) or self._stop_tts.is_set():
+            return
+
+        raw_tts = self.config.get("tts")
+        tts_conf = raw_tts if isinstance(raw_tts, dict) else {}
+        active_voice_id = str(
+            self._preview_voice_override
+            or tts_conf.get("active_voice_id", DEFAULT_VOICE_ID)
+        )
+        preset = get_voice_preset(active_voice_id)
+        if preset.provider != "piper_onnx" or preset.model_asset is None:
+            return
+
+        model_key = preset.model_asset.model_key
+        with self._cache_lock:
+            already_cached = model_key in self._piper_cache
+        if already_cached and self._espeak_warmed:
+            return
+
+        paths = self.voice_manager.get_model_paths(preset.voice_id)
+        if paths is None:
+            return
+
+        with self._warmup_lock:
+            if self._warming_up:
+                return
+            self._warming_up = True
+
+        onnx_path, json_path = paths
+
+        def _run_warmup() -> None:
+            t0 = time.perf_counter()
+            try:
+                piper = self._get_or_load_piper(
+                    model_key, str(onnx_path), str(json_path)
+                )
+                espeak_voice = (
+                    piper.config.get("espeak", {}).get("voice", "pt-br")
+                    if isinstance(getattr(piper, "config", None), dict)
+                    else "pt-br"
+                )
+                self._warm_espeak_if_needed(espeak_voice)
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
+                logger.info(
+                    f"JIT warmed neural TTS voice '{preset.voice_id}' in {elapsed_ms:.0f}ms."
+                )
+            except Exception as e:
+                logger.debug(
+                    f"JIT warm-up skipped for neural TTS voice '{preset.voice_id}': {e}"
+                )
+            finally:
+                with self._warmup_lock:
+                    self._warming_up = False
+
+        threading.Thread(target=_run_warmup, daemon=True, name="TTSVoiceWarmup").start()
 
     @staticmethod
     def rate_to_length_scale(rate: int, base_scale: float = 1.0) -> float:
@@ -177,13 +301,15 @@ class TTSEngine:
             if isinstance(piper.config, dict)
             else "pt-br"
         )
-        phonemes = phonemize(
-            text,
-            language=espeak_voice,
-            backend="espeak",
-            preserve_punctuation=True,
-            with_stress=True,
-        )
+        with self._phonemize_lock:
+            phonemes = phonemize(
+                text,
+                language=espeak_voice,
+                backend="espeak",
+                preserve_punctuation=True,
+                with_stress=True,
+            )
+            self._espeak_warmed = True
         phonemes_str = str(phonemes).strip() if phonemes else ""
         if not phonemes_str:
             return None
@@ -263,6 +389,7 @@ class TTSEngine:
         pcm_int16: NDArray[np.int16],
         sample_rate: int,
         pa: Any = None,
+        drain: bool = True,
     ) -> None:
         """Plays 16-bit mono PCM audio with chunked interruption support and stream reuse."""
         if pcm_int16.size == 0:
@@ -331,9 +458,10 @@ class TTSEngine:
                     idx += chunk_samples
 
                 # Reusable streams skip stop_stream(), so wait for the OS output buffer
-                # to finish draining before clearing is_speaking.
+                # to finish draining at the end of a turn before clearing is_speaking.
                 if (
-                    reusable
+                    drain
+                    and reusable
                     and not self._stop_tts.is_set()
                     and not self._abort_current.is_set()
                 ):
@@ -395,7 +523,203 @@ class TTSEngine:
         except Exception as e:
             logger.debug(f"Default SAPI5 voice will be used: {e}")
 
+    def _prepare_utterance(self, text: str, generation: int) -> _PreparedUtterance:
+        """Synthesizes neural PCM (if active voice is neural) and measures synthesis latency."""
+        raw_tts = self.config.get("tts") if isinstance(self.config, dict) else {}
+        tts_conf = raw_tts if isinstance(raw_tts, dict) else {}
+        rate = int(tts_conf.get("rate", DEFAULT_TTS_RATE))
+        volume = int(tts_conf.get("volume", DEFAULT_TTS_VOLUME))
+        active_voice_id = str(
+            self._preview_voice_override
+            or tts_conf.get("active_voice_id", DEFAULT_VOICE_ID)
+        )
+
+        synth: tuple[NDArray[np.int16], int] | None = None
+        synth_ms = 0.0
+        preset = get_voice_preset(active_voice_id)
+        if preset.provider == "piper_onnx":
+            t0 = time.perf_counter()
+            try:
+                synth = self._synthesize_neural(
+                    text=text,
+                    voice_id=preset.voice_id,
+                    rate=rate,
+                    volume=volume,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Neural/DSP TTS synthesis error for '{active_voice_id}', falling back to SAPI5: {e}"
+                )
+            synth_ms = (time.perf_counter() - t0) * 1000.0
+
+        return _PreparedUtterance(
+            generation=generation,
+            text=text,
+            voice_id=active_voice_id,
+            rate=rate,
+            volume=volume,
+            synth=synth,
+            synth_ms=synth_ms,
+        )
+
+    def _has_more_queued_audio(self) -> bool:
+        """Returns True if another sentence is already synthesized or waiting in the pipeline."""
+        with self._speech_state_lock:
+            return (
+                self._prepared_count > 0
+                or self._queued_count > 0
+                or self._active_utterance
+            )
+
+    def _play_prepared_utterance(
+        self,
+        item: _PreparedUtterance,
+        voice: Any,
+        pa: Any,
+        drain: bool = True,
+    ) -> None:
+        """Logs actual speech start with synthesis timing and plays prepared audio."""
+        with self._speech_state_lock:
+            if item.generation != self._queue_generation:
+                return
+            self._abort_current.clear()
+
+        if self._stop_tts.is_set():
+            return
+
+        if item.synth is not None:
+            logger.info(
+                f"Jarvis is speaking ({item.voice_id}) [synth={item.synth_ms:.0f}ms]: '{item.text}'"
+            )
+        else:
+            logger.info(f"Jarvis is speaking ({item.voice_id}): '{item.text}'")
+
+        self.is_speaking = True
+        try:
+            if item.synth is not None:
+                pcm_int16, sample_rate = item.synth
+                self._play_pcm_int16(pcm_int16, sample_rate, pa=pa, drain=drain)
+            else:
+                voice.Rate = item.rate
+                voice.Volume = item.volume
+                voice.Speak(item.text, 0)
+        finally:
+            self.is_speaking = False
+
+        self.last_spoken_time = time.time()
+
+    def _synth_worker(self) -> None:
+        """Producer thread: synthesizes upcoming sentences ahead of playback."""
+        self._prewarm_active_voice_if_configured()
+
+        while not self._stop_tts.is_set():
+            try:
+                text = self._speech_queue.get(timeout=Timing.UI_STABILIZATION_LONG)
+                with self._speech_state_lock:
+                    self._queued_count = max(0, self._queued_count - 1)
+                    self._active_utterance = True
+                    generation = self._queue_generation
+                try:
+                    item = self._prepare_utterance(text, generation)
+
+                    enqueued = False
+                    while not self._stop_tts.is_set():
+                        with self._speech_state_lock:
+                            if generation != self._queue_generation:
+                                break
+                            try:
+                                self._playback_queue.put_nowait(item)
+                                self._prepared_count += 1
+                                enqueued = True
+                                break
+                            except queue.Full:
+                                pass
+                        self._stop_tts.wait(0.05)
+
+                    if not enqueued:
+                        logger.debug(
+                            f"Discarded stale synthesized utterance: '{text[:40]}'"
+                        )
+                finally:
+                    with self._speech_state_lock:
+                        self._active_utterance = False
+                        if self._queued_count == 0:
+                            self._preview_voice_override = None
+                    self._speech_queue.task_done()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"TTS synth worker error: {e}")
+
+        logger.info("TTS Synth worker thread finishing.")
+
+    def _playback_worker(self) -> None:
+        """Consumer thread: plays pre-synthesized utterances continuously without synth gaps."""
+        pa = None
+        try:
+            pythoncom.CoInitialize()
+            voice = win32com.client.Dispatch("SAPI.SpVoice")
+            raw_tts_init = (
+                self.config.get("tts") if isinstance(self.config, dict) else {}
+            )
+            tts_init = raw_tts_init if isinstance(raw_tts_init, dict) else {}
+            voice_keyword = str(
+                tts_init.get("voice_keyword", DEFAULT_SAPI5_VOICE)
+                or DEFAULT_SAPI5_VOICE
+            ).lower()
+            self._configure_sapi_voice(voice, voice_keyword)
+
+            try:
+                pa = create_pyaudio()
+            except Exception as e:
+                logger.debug(f"PyAudio unavailable in TTS playback worker: {e}")
+
+            while not self._stop_tts.is_set():
+                try:
+                    item = self._playback_queue.get(
+                        timeout=Timing.UI_STABILIZATION_LONG
+                    )
+                    with self._speech_state_lock:
+                        self._prepared_count = max(0, self._prepared_count - 1)
+                        self._active_playback = True
+                    try:
+                        should_drain = not self._has_more_queued_audio()
+                        self._play_prepared_utterance(
+                            item=item,
+                            voice=voice,
+                            pa=pa,
+                            drain=should_drain,
+                        )
+                    finally:
+                        with self._speech_state_lock:
+                            self._active_playback = False
+                            no_more_pending = (
+                                self._queued_count == 0
+                                and self._prepared_count == 0
+                                and not self._active_utterance
+                            )
+                        self._playback_queue.task_done()
+                        if no_more_pending:
+                            self._preview_voice_override = None
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    self.is_speaking = False
+                    logger.error(f"TTS playback worker error: {e}")
+        except Exception as e:
+            logger.error(f"Failed to initialize TTS playback worker: {e}")
+        finally:
+            self._close_output_stream()
+            if pa is not None:
+                try:
+                    terminate_pyaudio(pa)
+                except Exception:
+                    pass
+            pythoncom.CoUninitialize()
+            logger.info("TTS Playback worker thread finishing.")
+
     def _tts_worker(self) -> None:
+        """Synchronous single-thread worker kept for direct unit-test invocation."""
         pa = None
         try:
             pythoncom.CoInitialize()
@@ -423,56 +747,20 @@ class TTSEngine:
                     with self._speech_state_lock:
                         self._queued_count = max(0, self._queued_count - 1)
                         self._active_utterance = True
+                        generation = self._queue_generation
                     try:
-                        self._abort_current.clear()
-
-                        raw_tts = (
-                            self.config.get("tts")
-                            if isinstance(self.config, dict)
-                            else {}
-                        )
-                        tts_conf = raw_tts if isinstance(raw_tts, dict) else {}
-                        rate = int(tts_conf.get("rate", DEFAULT_TTS_RATE))
-                        volume = int(tts_conf.get("volume", DEFAULT_TTS_VOLUME))
-                        active_voice_id = str(
-                            self._preview_voice_override
-                            or tts_conf.get("active_voice_id", DEFAULT_VOICE_ID)
-                        )
-
-                        logger.info(f"Jarvis is speaking ({active_voice_id}): '{text}'")
-
-                        synth: tuple[NDArray[np.int16], int] | None = None
-                        preset = get_voice_preset(active_voice_id)
-                        if preset.provider == "piper_onnx":
-                            try:
-                                synth = self._synthesize_neural(
-                                    text=text,
-                                    voice_id=preset.voice_id,
-                                    rate=rate,
-                                    volume=volume,
-                                )
-                            except Exception as e:
-                                logger.error(
-                                    f"Neural/DSP TTS synthesis error for '{active_voice_id}', falling back to SAPI5: {e}"
-                                )
-
+                        item = self._prepare_utterance(text, generation)
                         if (
                             not self._abort_current.is_set()
                             and not self._stop_tts.is_set()
                         ):
-                            self.is_speaking = True
-                            try:
-                                if synth is not None:
-                                    pcm_int16, sample_rate = synth
-                                    self._play_pcm_int16(pcm_int16, sample_rate, pa=pa)
-                                else:
-                                    voice.Rate = rate
-                                    voice.Volume = volume
-                                    voice.Speak(text, 0)
-                            finally:
-                                self.is_speaking = False
-
-                        self.last_spoken_time = time.time()
+                            should_drain = self._speech_queue.empty()
+                            self._play_prepared_utterance(
+                                item=item,
+                                voice=voice,
+                                pa=pa,
+                                drain=should_drain,
+                            )
                     finally:
                         with self._speech_state_lock:
                             self._active_utterance = False
@@ -506,20 +794,33 @@ class TTSEngine:
         return [p.strip() for p in parts if p.strip()]
 
     def clear_queue(self) -> None:
-        """Empties pending speech items to allow immediate interruption."""
+        """Empties pending speech and pre-synthesized playback items for immediate interruption."""
         self._abort_current.set()
         self._preview_voice_override = None
-        drained = 0
-        while not self._speech_queue.empty():
-            try:
-                self._speech_queue.get_nowait()
-                self._speech_queue.task_done()
-                drained += 1
-            except (queue.Empty, ValueError):
-                break
-        if drained:
-            with self._speech_state_lock:
-                self._queued_count = max(0, self._queued_count - drained)
+
+        with self._speech_state_lock:
+            self._queue_generation += 1
+
+            drained_speech = 0
+            while not self._speech_queue.empty():
+                try:
+                    self._speech_queue.get_nowait()
+                    self._speech_queue.task_done()
+                    drained_speech += 1
+                except (queue.Empty, ValueError):
+                    break
+
+            drained_prepared = 0
+            while not self._playback_queue.empty():
+                try:
+                    self._playback_queue.get_nowait()
+                    self._playback_queue.task_done()
+                    drained_prepared += 1
+                except (queue.Empty, ValueError):
+                    break
+
+            self._queued_count = max(0, self._queued_count - drained_speech)
+            self._prepared_count = max(0, self._prepared_count - drained_prepared)
 
     def _enqueue_sentences(self, sentences: list[str]) -> None:
         """Pushes prepared sentences onto the speech queue while tracking pending count."""
@@ -527,6 +828,15 @@ class TTSEngine:
             self._queued_count += len(sentences)
         for s in sentences:
             self._speech_queue.put(s)
+
+    def speak_stream_chunk(self, text: str) -> None:
+        """Enqueues a single streamed sentence immediately without duplicate debouncing."""
+        clean = text.strip()
+        if not clean:
+            return
+        self._preview_voice_override = None
+        self.last_enqueued_time = time.time()
+        self._enqueue_sentences([clean])
 
     def speak(self, text: str) -> None:
         now = time.time()
@@ -540,6 +850,7 @@ class TTSEngine:
         ):
             logger.debug(f"Skipping duplicate speech: {text}")
             return
+        self._preview_voice_override = None
         self.last_spoken_text = text
         self.last_enqueued_time = now
 
@@ -564,4 +875,5 @@ class TTSEngine:
     def stop(self) -> None:
         self._abort_current.set()
         self._stop_tts.set()
+        self._synth_thread.join(timeout=2.0)
         self._tts_thread.join(timeout=2.0)

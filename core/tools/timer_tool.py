@@ -258,10 +258,13 @@ class TimerTool(BaseTool):
         msg = f"Tempo esgotado para o timer: '{label}'!"
         logger.info(f"Timer triggered: {msg}")
 
-        # 1. Native Windows toast notification
+        # 1. Hybrid desktop / Windows toast notification
         try:
             self.notifier.notify(
-                title="⏱️ Jarvis - Timer Concluído", message=msg, duration=5
+                title="Timer Concluído",
+                message=f"Tempo esgotado para '{label}'.",
+                duration=6,
+                level="info",
             )
         except Exception as e:
             logger.warning(f"Failed to display timer toast notification: {e}")

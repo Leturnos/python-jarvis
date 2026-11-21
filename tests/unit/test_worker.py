@@ -53,19 +53,20 @@ def test_command_worker_lifecycle(
 def test_handle_wakeword_success(
     mock_dispatcher: MagicMock, mock_notifier: MagicMock
 ) -> None:
-    """Verifies that _handle_wakeword triggers dispatcher correctly."""
-    # Payload is tuple
+    """Verifies that _handle_wakeword triggers dispatcher and respects verbose toast config."""
+    # Payload is tuple (silent by default when voice_progress_toasts=False)
+    mock_dispatcher.config = {"notifications": {"voice_progress_toasts": False}}
     job = Job(type=JobType.WAKEWORD, payload=("hey_jarvis", 0.85))
     assert _handle_wakeword(job, mock_dispatcher, mock_notifier) is True
 
-    mock_notifier.notify.assert_called_with(
-        "Jarvis", "Comando 'hey_jarvis' detectado! (Score: 0.85)"
-    )
+    mock_notifier.notify.assert_not_called()
     mock_dispatcher.handle.assert_called_with("hey_jarvis", confidence=0.85)
 
-    # Payload is float
+    # When verbose progress notifications are enabled, emits polished message without telemetry score
+    mock_dispatcher.config = {"notifications": {"voice_progress_toasts": True}}
     job_float = Job(type=JobType.WAKEWORD, payload=0.72)
     assert _handle_wakeword(job_float, mock_dispatcher, mock_notifier) is True
+    mock_notifier.notify.assert_called_with("Jarvis", "Ativação por voz detectada.")
     mock_dispatcher.handle.assert_called_with("unknown", confidence=0.72)
 
 

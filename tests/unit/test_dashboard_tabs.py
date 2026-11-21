@@ -41,7 +41,7 @@ def test_history_tab_headers_and_buttons_in_portuguese():
     assert headers == ["ID", "Horário", "Comando / Pergunta", "Resultado"]
 
 
-@patch("core.ui.tabs.settings_tab.InfoBar.success")
+@patch("core.ui.tabs.settings_tab.show_success")
 @patch(
     "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key",
     return_value=True,
@@ -54,19 +54,18 @@ def test_settings_tab_validate_key_success(mock_validate, mock_success):
 
     window = MainWindow(ui_adapter)
     window.settings_tab.provider_combo.setCurrentIndex(0)
-    provider_name = window.settings_tab.providers[0].capitalize()
 
     window.settings_tab.check_key_btn.click()
 
     mock_validate.assert_called_once_with(window.settings_tab.providers[0])
     mock_success.assert_called_once_with(
-        "Chave de API",
-        f"A chave para {provider_name} está configurada.",
-        parent=window.settings_tab,
+        "Chave de API configurada",
+        "A chave de Gemini está configurada no Keyring.",
+        parent=window,
     )
 
 
-@patch("core.ui.tabs.settings_tab.InfoBar.warning")
+@patch("core.ui.tabs.settings_tab.show_warning")
 @patch(
     "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key",
     return_value=False,
@@ -79,19 +78,18 @@ def test_settings_tab_validate_key_missing(mock_validate, mock_warning):
 
     window = MainWindow(ui_adapter)
     window.settings_tab.provider_combo.setCurrentIndex(0)
-    provider_name = window.settings_tab.providers[0].capitalize()
 
     window.settings_tab.check_key_btn.click()
 
     mock_validate.assert_called_once_with(window.settings_tab.providers[0])
     mock_warning.assert_called_once_with(
-        "Chave de API",
-        f"A chave para {provider_name} não foi configurada.",
-        parent=window.settings_tab,
+        "Chave de API ausente",
+        "A chave de Gemini não foi configurada.",
+        parent=window,
     )
 
 
-@patch("core.ui.tabs.settings_tab.InfoBar.success")
+@patch("core.ui.tabs.settings_tab.show_success")
 @patch("core.ui.tabs.settings_tab.KeyringManager.set_secret")
 def test_settings_tab_save_key_to_keyring(mock_set_secret, mock_success):
     _ = QApplication.instance() or QApplication([])
@@ -114,13 +112,13 @@ def test_settings_tab_save_key_to_keyring(mock_set_secret, mock_success):
     )
     assert tab.api_key_input.text() == ""
     mock_success.assert_called_once_with(
-        "Chave Salva",
-        f"A chave para {prov.capitalize()} foi salva no Keyring com sucesso!",
-        parent=tab,
+        "Chave salva",
+        "A chave de Gemini foi salva no Keyring com sucesso.",
+        parent=window,
     )
 
 
-@patch("core.ui.tabs.settings_tab.InfoBar.warning")
+@patch("core.ui.tabs.settings_tab.show_warning")
 @patch("core.ui.tabs.settings_tab.KeyringManager.set_secret")
 def test_settings_tab_save_key_empty(mock_set_secret, mock_warning):
     _ = QApplication.instance() or QApplication([])
@@ -135,14 +133,14 @@ def test_settings_tab_save_key_empty(mock_set_secret, mock_warning):
 
     mock_set_secret.assert_not_called()
     mock_warning.assert_called_once_with(
-        "Chave Vazia",
-        "Por favor, digite ou cole uma chave válida.",
-        parent=tab,
+        "Chave vazia",
+        "Digite ou cole uma chave de API válida antes de salvar.",
+        parent=window,
     )
 
 
 @patch("core.ai.llm_agent.llm_agent.reinit_provider")
-@patch("core.ui.tabs.settings_tab.InfoBar.success")
+@patch("core.ui.tabs.settings_tab.show_success")
 @patch("core.ui.tabs.settings_tab.KeyringManager.set_secret")
 def test_settings_tab_save_key_reinitializes_active_provider(
     mock_set_secret, mock_success, mock_reinit
@@ -195,7 +193,7 @@ def test_settings_tab_save_key_reinitializes_active_provider(
 
 @patch("core.ui.tabs.settings_tab.update_yaml_active_provider")
 @patch("core.ai.llm_agent.llm_agent.reinit_provider")
-@patch("core.ui.tabs.settings_tab.InfoBar.success")
+@patch("core.ui.tabs.settings_tab.show_success")
 @patch(
     "core.ui.tabs.settings_tab.KeyringManager.validate_provider_key",
     return_value=True,
@@ -222,9 +220,9 @@ def test_settings_tab_set_active_provider_success(
         mock_update_yaml.assert_called_once_with("openai")
         mock_reinit.assert_called_once()
         mock_success.assert_called_once_with(
-            "Provedor Ativo",
-            "Provedor alterado para Openai.",
-            parent=tab,
+            "Provedor ativo alterado",
+            "Provedor alterado para OpenAI.",
+            parent=window,
         )
 
 
@@ -575,3 +573,54 @@ def test_settings_tab_ai_preferences_save():
         assert ("tools", "provider", "duckduckgo") in calls
         assert ("tools", "markdown_dir", "C:/Notes") in calls
         assert ("tools", "ics_url", "https://example.com/calendar.ics") in calls
+
+
+def test_settings_tab_notification_style_selector_and_preview():
+    from core.infra.config import config
+
+    _ = QApplication.instance() or QApplication([])
+    ui_adapter = MagicMock()
+    ui_adapter.wakeword_name = "Hey Jarvis"
+    ui_adapter.visual_state_updated.connect = MagicMock()
+
+    orig_notif = dict(config.get("notifications", {}))
+    config["notifications"] = {"mode": "hybrid", "voice_progress_toasts": False}
+    try:
+        window = MainWindow(ui_adapter)
+        tab = window.settings_tab
+
+        assert tab.notification_mode_combo.currentIndex() == 0
+        assert tab.voice_progress_toasts_switch.isChecked() is False
+
+        with (
+            patch(
+                "core.ui.tabs.settings_tab.update_yaml_str_setting"
+            ) as mock_str_setting,
+            patch(
+                "core.ui.tabs.settings_tab.update_yaml_bool_setting"
+            ) as mock_bool_setting,
+            patch("core.ui.tabs.settings_tab.show_success") as mock_success,
+            patch("core.ui.tabs.settings_tab.JarvisNotifier") as mock_notifier_cls,
+        ):
+            # Switch to tray-only mode
+            tab.notification_mode_combo.setCurrentIndex(2)
+            assert config["notifications"]["mode"] == "tray"
+            mock_str_setting.assert_called_once_with("notifications", "mode", "tray")
+            mock_success.assert_called_once()
+
+            # Toggle intermediate voice progress toasts
+            tab.voice_progress_toasts_switch.setChecked(True)
+            assert config["notifications"]["voice_progress_toasts"] is True
+            mock_bool_setting.assert_called_once_with(
+                "notifications", "voice_progress_toasts", True
+            )
+
+            # Click Test button
+            tab.test_notification_btn.click()
+            mock_notifier_cls.return_value.notify.assert_called_once()
+            args, kwargs = mock_notifier_cls.return_value.notify.call_args
+            assert "Teste" in args[0]
+            assert "Bandeja do Windows" in args[1]
+            assert kwargs.get("level") == "info"
+    finally:
+        config["notifications"] = orig_notif

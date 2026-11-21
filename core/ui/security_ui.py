@@ -100,7 +100,7 @@ class SecurityDialogWidget(QDialog):
         header_row.addStretch(1)
 
         self.badge_label = QLabel(
-            f"⚠️ Risco Elevado • {self.remaining_seconds}s", self.card_frame
+            f"● Risco Elevado • {self.remaining_seconds}s", self.card_frame
         )
         self._set_badge_style("warning")
         header_row.addWidget(self.badge_label)
@@ -276,7 +276,7 @@ class SecurityDialogWidget(QDialog):
         secs = (self._tick_count + 9) // 10
         if secs != self.remaining_seconds:
             self.remaining_seconds = secs
-            self.badge_label.setText(f"⚠️ Risco Elevado • {self.remaining_seconds}s")
+            self.badge_label.setText(f"● Risco Elevado • {self.remaining_seconds}s")
 
     def reposition_to_configured_spot(self) -> QPoint:
         pos_key = config.get("ui", {}).get("confirmation_position", "top_center")

@@ -41,6 +41,11 @@ ui:
   confirmation_position: "top_center"
   voice_hud_position: "bottom_center"   # top_left, top_center, top_right, center, bottom_left, bottom_center, bottom_right
 
+# Notificações na Área de Trabalho e Bandeja
+notifications:
+  mode: "hybrid"                        # hybrid (HUD no desktop + Tray em fullscreen/sistema), tray ou desktop_hud
+  voice_progress_toasts: false          # true para notificar cada etapa intermediária da fala (já visível no HUD de voz)
+
 # Sintetizador de Voz (TTS)
 tts:
   provider: "sapi5"

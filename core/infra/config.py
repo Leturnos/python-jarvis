@@ -96,6 +96,10 @@ def load_config() -> dict[str, Any]:
             "confirmation_position": "top_center",
             "voice_hud_position": "bottom_center",
         },
+        "notifications": {
+            "mode": "hybrid",
+            "voice_progress_toasts": False,
+        },
         "llm": {
             "active_provider": DEFAULT_PROVIDER,
             "timeout_seconds": 5.0,
